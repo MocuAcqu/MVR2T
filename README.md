@@ -58,7 +58,12 @@ npm run dev        # 啟動 Vite + Electron；Electron 會自動啟動與關閉�
 npm start          # 以正式版方式執行（打包後的 file:// 頁面 + 正式版 CSP）
 npm test           # 前端與 Electron 單元測試（vitest）
 npm run typecheck
-cd apps/backend && pytest   # 後端測試（需先啟用 .venv）
+```
+
+後端測試（PowerShell；Windows PowerShell 5.1 不支援 `&&`，請用 `;`）：
+
+```powershell
+cd apps\backend; .\.venv\Scripts\python.exe -m pytest; cd ..\..
 ```
 
 Phase 03 起**只需要一個終端機**。後端由 Electron 以 `apps/backend/.venv` 的 Python 啟動：

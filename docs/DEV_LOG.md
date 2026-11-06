@@ -79,6 +79,18 @@
   `AppInfo.backendUrl` 已移除，改由 `BackendState.url / token` 提供。
 - macOS：關閉視窗不結束程式（後端保留），Cmd+Q 才結束 — 依平台慣例。
 
+## 協作流程（2026-11-07 起，重要）
+
+同一份程式碼有兩個 Claude 在改：沙盒的 Cowork Claude（以 zip 交付整個專案）與使用者 VS Code 裡的 Claude Code（直接改本機檔案）。
+2026-11-07 使用者以依賴升級 zip 整包覆蓋後，**Claude Code 先前在本機做的修改被蓋掉**（根目錄 `start` 指令、它自己的 test_lifecycle 修法）。
+專案原本沒有 Git，所以覆蓋了什麼看不出來。今後規則：
+
+1. 使用者電腦上的專案資料夾以 Git 管理。**套用任何新檔案前先 commit**，套用後用 `git status` / `git diff` 檢查，
+   被蓋掉的本機修改可以從前一個 commit 找回。
+2. Cowork Claude 交付時只給「有變更的檔案」並列出檔案清單（或整包 zip 加變更清單），不再無說明地整包覆蓋。
+3. Claude Code 在本機做的修改，請使用者把 `git diff` 或檔案貼回 Cowork 對話，讓沙盒副本同步。
+4. 2026-11-07 已同步：根目錄 `"start": "npm run start -w @mvr2t/desktop"`、README 後端測試改為 PowerShell 寫法（`;` 而非 `&&`）。
+
 ## 使用者環境
 
 - Windows、VS Code（已安裝 Claude Code）、PowerShell，繁體中文系統（locale 編碼 cp950）。
@@ -128,6 +140,10 @@ Electron E2E 22/22（正式版 + 開發版）、SIGINT 優雅結束皆通過，�
 - npm 11.21 預設會擋套件的 install script（esbuild 的 postinstall 只是最佳化，不影響使用）。
 - Electron 44 不再有 postinstall：**第一次執行時才下載 Electron 執行檔**（約 100 MB，終端機顯示 `Downloading Electron binary...`）。
 - Vite 6 會把 CSP meta 的單引號寫成 `&#39;`，屬合法 HTML，實測 CSP 正常生效。
+- Windows 驗收時 `tests/test_lifecycle.py` 4 項失敗：測試假設「spawn 的 PID = 伺服器回報的 PID」，
+  但以 `.venv\Scripts\python.exe -m pytest` 執行時 `sys.executable` 是 venv 啟動器。已改為：Windows 不比對 PID，
+  改記錄伺服器 PID 並在結束後確認它真的消失（不使用 os.kill(pid, 0)，在 Windows 會終止行程），清理改用 taskkill /T。
+  **規則：任何牽涉 PID 的程式或測試，都要考慮 Windows venv 啟動器的兩層行程。**
 - Playwright 的 `electronApp.process()` 在 Electron 44 無法使用；E2E 改用 `app.evaluate(() => process.pid)` 取得主行程 PID。
 
 ## 套用到使用者電腦時（依賴升級版）

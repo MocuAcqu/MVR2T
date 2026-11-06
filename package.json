@@ -11,6 +11,7 @@
   ],
   "scripts": {
     "dev": "npm run dev -w @mvr2t/desktop",
+    "start": "npm run start -w @mvr2t/desktop",
     "build": "npm run build -w @mvr2t/desktop",
     "typecheck": "npm run typecheck -w @mvr2t/desktop",
     "test": "npm run test -w @mvr2t/desktop"
