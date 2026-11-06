@@ -1,0 +1,10 @@
+# Pinned versions (spec rule 19): avoid unverified latest releases across platforms.
+# NOTE: keep requirements files ASCII-only. pip on Windows decodes them with the
+# system locale (e.g. cp950 on Traditional Chinese Windows), so non-ASCII text breaks installs.
+fastapi==0.162.0
+# starlette is FastAPI's web framework. Pinned explicitly because it is security-relevant
+# (0.41.x had known advisories) and FastAPI only sets a lower bound.
+starlette==1.7.0
+uvicorn[standard]==0.54.0
+pydantic==2.13.5
+anyio==4.15.1

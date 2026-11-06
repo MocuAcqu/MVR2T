@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Build output
+dist/
+dist-electron/
+release/
+build/pyinstaller/
+
+# Models & runtime (規格第 18 條：不得將模型權重提交至 Git)
+*.gguf
+*.safetensors
+*.bin
+*.onnx
+*.pt
+*.pth
+models/
+runtime/
+
+# Session / temp（規格第 8 章：Session 資料不得持久化）
+temp/
+*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.env
+.env.*

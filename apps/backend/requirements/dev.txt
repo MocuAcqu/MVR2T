@@ -1,0 +1,4 @@
+-r base.txt
+pytest==9.1.1
+# httpx2: successor of httpx, used by starlette's TestClient (starlette >= 1.x warns about plain httpx).
+httpx2==2.13.1

@@ -1,0 +1,31 @@
+/**
+ * 跨 Electron main / preload / renderer 共用的常數。
+ * 注意：此檔案必須是「環境中立」的純 TS（不可使用 DOM 或 Node API），
+ * 因為三個環境都會引用它。
+ *
+ * 規格第 18 條：模型 ID / 版本 / 下載來源集中放在 shared/constants/models.ts。
+ */
+
+export const APP_NAME = 'MVR2T - Local Media Studio';
+export const APP_TAGLINE = 'Your Media. Your Machine. Your Knowledge.';
+
+/**
+ * 後端只監聽 127.0.0.1（規格 §3.3）。
+ * Phase 03 起由 Electron 啟動後端並使用作業系統分配的連接埠；
+ * 以下固定位址只用於「瀏覽器預覽 + 手動啟動後端」的開發情境。
+ */
+export const DEFAULT_BACKEND_HOST = '127.0.0.1';
+export const DEFAULT_BACKEND_PORT = 8765;
+export const DEFAULT_BACKEND_URL = `http://${DEFAULT_BACKEND_HOST}:${DEFAULT_BACKEND_PORT}`;
+
+/** 後端啟動後在 stdout 輸出的就緒標記（需與 apps/backend/app/core/config.py 的 READY_MARKER 一致）。 */
+export const BACKEND_READY_MARKER = 'MVR2T_BACKEND_READY';
+
+/** Electron IPC 頻道名稱（Renderer ↔ Main）。 */
+export const IPC_CHANNELS = {
+  getAppInfo: 'app:get-info',
+  getBackendState: 'backend:get-state',
+  restartBackend: 'backend:restart',
+  /** Main → Renderer 推送後端狀態變化。 */
+  backendStateChanged: 'backend:state-changed',
+} as const;
