@@ -103,6 +103,7 @@ def _fake_pair(d: Path) -> None:
 
 def test_locate_prefers_settings_then_runtime(tmp_path, monkeypatch):
     monkeypatch.setattr(ff.shutil, "which", lambda name: None)
+    monkeypatch.setattr(ff, "_winget_candidates", lambda: [])  # ignore a real winget install on this machine
     custom, runtime = tmp_path / "custom", tmp_path / "runtime"
     assert ff.locate_ffmpeg("", runtime) is None
     _fake_pair(runtime / "bin")
@@ -114,6 +115,7 @@ def test_locate_prefers_settings_then_runtime(tmp_path, monkeypatch):
 
 def test_locate_requires_both_binaries_from_same_place(tmp_path, monkeypatch):
     monkeypatch.setattr(ff.shutil, "which", lambda name: "/usr/bin/ffmpeg" if name == "ffmpeg" else None)
+    monkeypatch.setattr(ff, "_winget_candidates", lambda: [])  # ignore a real winget install on this machine
     half = tmp_path / "half"
     half.mkdir()
     (half / f"ffmpeg{ff.EXE_SUFFIX}").write_text("")
