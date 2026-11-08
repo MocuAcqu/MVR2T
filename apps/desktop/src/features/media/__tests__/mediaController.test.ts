@@ -17,7 +17,7 @@ vi.mock('@/services/api', async (importOriginal) => {
 import { AbortedError, ApiError } from '@/services/api';
 import { MAX_MEDIA_BYTES } from '@shared/constants/media';
 import { idleExtraction, useSessionStore } from '@/stores/sessionStore';
-import { __resetForTests, ensureSession, importFile, startExtraction, validateFile } from '../mediaController';
+import { __resetForTests, cancelImport, ensureSession, importFile, startExtraction, validateFile } from '../mediaController';
 
 const conn = { url: 'http://127.0.0.1:5000', token: 'a' };
 const file = (name: string, size = 10) => ({ name, size }) as File;
@@ -94,6 +94,39 @@ describe('importFile', () => {
     api.uploadMedia.mockRejectedValueOnce(new AbortedError());
     await importFile(file('a.mp4'));
     expect(useSessionStore.getState().import.status).toBe('idle');
+  });
+
+  /** Upload mock that reports some progress, then waits until its signal is aborted (like the real XHR). */
+  const hangingUpload = () =>
+    api.uploadMedia.mockImplementationOnce(
+      (_c, _s, _f, onProgress: (n: number) => void, signal: AbortSignal) =>
+        new Promise((_resolve, reject) => {
+          onProgress(0.15);
+          signal.addEventListener('abort', () => reject(new AbortedError()), { once: true });
+        }),
+    );
+  const uploadStarted = () => vi.waitFor(() => expect(api.uploadMedia).toHaveBeenCalled());
+
+  it('returns to idle when the user presses Cancel during upload (regression: stuck at 15%)', async () => {
+    hangingUpload();
+    const pending = importFile(file('a.mp4'));
+    await uploadStarted();
+    expect(useSessionStore.getState().import).toMatchObject({ status: 'uploading', progress: 0.15 });
+
+    cancelImport();
+    await pending;
+    expect(useSessionStore.getState().import.status).toBe('idle');
+  });
+
+  it('keeps showing the new file when another file is picked during upload', async () => {
+    hangingUpload();
+    const first = importFile(file('first.mp4'));
+    await uploadStarted();
+
+    api.uploadMedia.mockResolvedValueOnce(info);
+    await importFile(file('second.mp4'));
+    await first;
+    expect(useSessionStore.getState().import).toMatchObject({ status: 'ready', file: { name: 'second.mp4' } });
   });
 });
 

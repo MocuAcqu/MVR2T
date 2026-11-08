@@ -120,7 +120,12 @@ export async function importFile(file: File): Promise<void> {
 export function cancelImport(): void {
   const c = uploadController;
   uploadController = null;
-  c?.abort();
+  if (c) {
+    c.abort();
+    // importFile 的 catch 會因 uploadController 已不是自己的 controller 而略過，所以畫面要在這裡重設；
+    // 否則按「取消」後會停在上傳進度畫面。
+    store().resetMedia();
+  }
 }
 
 /** 移除目前的媒體：開一個新的 Session，後端會刪除舊 Session 的所有暫存檔。 */
