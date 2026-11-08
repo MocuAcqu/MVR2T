@@ -1,6 +1,6 @@
 # 開發紀錄（給接手的 Claude / Claude Code）
 
-最後更新：2026-11-07。Phase 02 / 03 已在 Windows 驗收；依賴升級已在沙盒完成驗證，待 Windows 驗收後開始 Phase 04。
+最後更新：2026-11-07。依賴升級已在 Windows 驗收；Phase 04 程式完成並在沙盒驗證，待 Windows 驗收。
 
 ## 目前進度
 
@@ -9,8 +9,9 @@
 | 01 專案初始化 | ✅ 使用者已在 Windows 驗收通過（Electron 視窗開啟、後端已連線、Python 3.11.6） |
 | 02 UI 設計系統 | ✅ 使用者已在 Windows 驗收通過（2026-11-06） |
 | 03 Electron 啟動 Python Backend | ✅ 使用者已在 Windows 驗收通過（2026-11-07；手動結束啟動器一項延後，見下方） |
-| 依賴升級 | 🟡 沙盒驗證通過，**待 Windows 驗收** |
-| 04 Media Processing | ⬜ 依賴升級驗收後開始 |
+| 依賴升級 | ✅ 使用者已在 Windows 驗收通過（2026-11-07） |
+| 04 Media Processing | 🟡 沙盒驗證通過，**待 Windows 驗收** |
+| 05 ASR Integration | ⬜ Phase 04 驗收後開始 |
 
 ## 沙盒驗證結果（2026-11-06）
 
@@ -106,6 +107,51 @@
 - `tsc` 只要有選項層級錯誤（例如缺型別套件）就會略過語意檢查，「沒有報錯」不代表通過。
 - 沙盒的 init 不會立即回收殭屍行程，`kill -0` 對殭屍也成功；判斷行程是否存活請看 `/proc/<pid>/stat` 狀態不是 `Z`。
 - 在沙盒跑 Electron：`xvfb-run -a`，並加 `--no-sandbox`（root）。
+
+## Phase 04 Media Processing（2026-11-07）
+
+### 使用者決定
+- FFmpeg：**程式自動尋找**（設定資料夾 → `<userData>/runtime/ffmpeg` → PATH → winget 安裝位置），開發時以 `winget install Gyan.FFmpeg` 安裝。
+  未選 imageio-ffmpeg：它只附 ffmpeg、沒有 ffprobe，且正式版大概率要換。正式安裝檔附哪個 FFmpeg（LGPL 組態）留到 Phase 11。
+- 匯入：**先複製一份到 Session 暫存**（規格 §8.3「原始媒體副本」），不直接讀原始檔。
+
+### 架構
+- 後端
+  - `engines/media/ffmpeg.py`：尋找 FFmpeg、ffprobe 解析、抽取指令（`-nostdin`、`-map 0:a:0`、16 kHz 單聲道 PCM、`silencedetect`、`-progress pipe:1`）。
+    子行程一律 `stdin=DEVNULL`（後端 stdin 是 Electron 的生命週期管線）、參數陣列、Windows `CREATE_NO_WINDOW`。
+  - `engines/media/segmenter.py`：目標 30 秒、±8 秒視窗內找**最長停頓的中點**下刀；找不到才硬切並重疊 1 秒；最短 5 秒。
+    以 PCM 取樣點從同一個 WAV 擷取，`start` / `end` 為原始時間軸秒數。參數集中在 `SegmentParams`，Phase 05 依實測調整。
+  - `services/tasks.py`：背景執行緒工作 + 取消（取消時 kill FFmpeg）。進度以輪詢 `GET /api/tasks/{id}?session_id=` 取得
+    （EventSource 不能帶 Authorization 標頭，所以第一版不用 SSE）。
+  - `session/manager.py`：`<userData>/temp/sessions/<id>/`。建立新 Session 會結束舊的（單一視窗；重新整理 = 清空）；
+    啟動時清除殘留、關閉時清除本次；刪除前檢查路徑必須在 sessions 根目錄內。
+  - `services/media.py`：上傳以 `application/octet-stream` 串流寫入（不用 multipart，避免多寫一次），
+    後端重新驗證副檔名、大小（10 GB，`MVR2T_MAX_UPLOAD_BYTES`）、磁碟空間；檔名只用於顯示，存成 `original.<ext>`。
+    抽取完成寫 `audio/manifest.json`（各段檔案與 start），給 Phase 05 使用。
+  - API：`POST /api/session`、`DELETE /api/session/{id}`、`POST /api/media/upload?session_id&filename`、
+    `POST /api/media/extract-audio`、`GET /api/tasks/{id}`、`POST /api/tasks/{id}/cancel`、`GET /api/system/ffmpeg`。
+  - 路由一律透過 `request.app.state.settings` 讀設定（曾誤用全域 settings，測試傳入的設定被忽略；已修正）。
+- 前端：`features/media/mediaController.ts`（流程）、`stores/sessionStore.ts`（只在記憶體）、XHR 上傳（有上傳進度與取消）、
+  工作區的影音資訊 / 抽取進度 / 切段表、「這台電腦」卡片的 FFmpeg 狀態與安裝說明。後端一上線就建立 Session（清掉上一次的暫存）；
+  偵測到後端換了行程（網址或憑證改變）時清空畫面上的媒體並重建 Session。
+- Electron：傳 `MVR2T_DATA_DIR = app.getPath('userData')`；`productName: "MVR2T"` → Windows 為 `%APPDATA%\MVR2T`。
+
+### 沙盒驗證（2026-11-07）
+- pytest 67（含真實 FFmpeg 整合測試 31 項）、vitest 111、typecheck、build、`npm audit` 0、`pip-audit` 0。
+- 驗收「指定格式」：MP4 / MOV / MKV / WEBM / MP3 / WAV / M4A / FLAC / AAC / OGG 全部可匯入、抽取。
+- 驗收「時間偏移」：在原始音訊的已知時間放入短促標記，經過上傳 → 抽取 → 切段後，從各段檔案找回標記：
+  `段.start + 段內位置 = 原始時間`。無損格式誤差 ≤ 3 ms，有損格式 ≤ 30 ms；硬切重疊區內的標記在兩段中都對回同一時間。
+- 30 分鐘音訊：抽取 + 切段 1.4 秒、49 段。4 小時音訊可在中途取消。
+- 損壞檔、沒有音訊軌的影片、超過大小上限、`../../` 檔名、FFmpeg 不存在：皆有清楚的繁中訊息且不留暫存。
+- 真實 Electron E2E 22/22（正式版）：啟動清除殘留、FFmpeg 狀態、中文檔名匯入、抽取與切段表、取消、換檔、重新整理清空、
+  關閉清空、找不到 FFmpeg 的說明；無 CSP 違規。Phase 03 E2E 22/22、Phase 02 截圖 26/26 未退步。
+
+### 已知限制 / 教訓
+- AAC 等有損格式的停頓邊界會偏移幾毫秒、結尾多約 19 ms padding，屬正常；測試以「切點落在停頓內」驗證。
+- **Playwright 在 Electron 中無法用 setInputFiles 傳入路徑含中文的檔案**（不觸發 change 事件）。這是測試工具限制，
+  App 本身已用拖放路徑驗證中文檔名可正常匯入；E2E 以「在頁面中建立同名 File 並拖放」測試。
+- Windows 上被終止的 FFmpeg 若因防毒軟體延遲釋放檔案，刪除暫存可能失敗；下次啟動會再清除。
+- 播放器、依時間戳記定位原始影音尚未實作（需要能帶憑證的媒體串流，與逐字稿一起在後續 Phase 處理）。
 
 ## Phase 03 驗收備註（2026-11-07）
 

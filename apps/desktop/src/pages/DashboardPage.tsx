@@ -12,12 +12,12 @@ export function DashboardPage() {
           <h1 className="text-h1 tracking-tight xl:text-display">
             Your Media.
             <br />
-            Your Machine.
+            Your Video.
             <br />
-            Your Knowledge.
+            Your Record.
           </h1>
           <p className="max-w-md text-base text-body-gray">
-            在這台電腦上把影片與錄音轉成逐字稿、摘要和心智圖。模型下載一次後即可離線使用，檔案不會上傳。
+            讓影音更方便地被解析。在這台電腦上把影片與錄音轉成逐字稿、摘要和心智圖。模型下載一次後即可離線使用，檔案不會上傳。
           </p>
         </div>
         <ImportCard />

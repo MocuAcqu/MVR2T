@@ -1,5 +1,6 @@
 {
   "name": "@mvr2t/desktop",
+  "productName": "MVR2T",
   "private": true,
   "version": "0.1.0",
   "description": "MVR2T - Local Media Studio desktop app (Electron + Vite + React + TypeScript)",

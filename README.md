@@ -1,6 +1,6 @@
 # MVR2T - Local Media Studio
 
-> Your Media. Your Machine. Your Knowledge.
+> Your Media. Your Video. Your Record.
 
 本機、離線優先的 AI 影音轉文字與知識整理桌面應用程式。完整規格請見 [`PROJECT_SPEC.md`](./PROJECT_SPEC.md)。
 
@@ -11,12 +11,17 @@
 | 01 | Project Initialization | ✅ 已在 Windows 驗收 |
 | 02 | UI Design System | ✅ 已在 Windows 驗收 |
 | 03 | Electron and Backend Integration | ✅ 已在 Windows 驗收 |
-| 04 – 12 | 媒體、ASR、LLM、心智圖、Session、Model Manager、硬體偵測、打包 | ⏳ |
+| 04 | Media Processing（FFmpeg、匯入、抽取音訊、切段） | 🟡 沙盒已驗證，待你在 Windows 驗收 |
+| 05 – 12 | ASR、LLM、心智圖、Session、Model Manager、硬體偵測、打包 | ⏳ |
 
 ## 環境需求
 
 - Node.js 20 以上（建議 22 LTS）
 - Python 3.11（後端以 3.11 作為開發與測試基準）
+- FFmpeg（Phase 04 起；含 ffprobe）
+  - Windows：`winget install Gyan.FFmpeg`，裝完**重開終端機與 VS Code** 才會吃到新的 PATH
+  - macOS：`brew install ffmpeg`
+  - 程式尋找順序：設定指定的資料夾 → 程式資料夾 `runtime\ffmpeg` → 系統 PATH → winget 安裝位置
 - Windows 10/11 或 macOS
 
 ## 第一次設定
@@ -107,6 +112,19 @@ Phase 03 起**只需要一個終端機**。後端由 Electron 以 `apps/backend/
 
 設計規範見 [`docs/DESIGN_SYSTEM.md`](./docs/DESIGN_SYSTEM.md)，開發進度與交接資訊見 [`docs/DEV_LOG.md`](./docs/DEV_LOG.md)。
 
+## Phase 04 驗收清單
+
+先確認 FFmpeg 已安裝：`ffmpeg -version`、`ffprobe -version` 都有輸出。
+
+- [ ] 首頁「這台電腦」卡片的 FFmpeg 列顯示「已安裝 x.x」
+- [ ] 匯入一個 MP4（**檔名含中文與空格**）：出現「正在複製到工作階段」進度條，完成後顯示格式、大小與**長度**
+- [ ] 匯入時按「取消」可以中止（大檔案比較容易測）
+- [ ] 匯入一個改了副檔名的假檔（例如把 .txt 改名成 .mp4）：顯示「檔案可能已損壞」
+- [ ] 工作區按「抽取音訊」：進度條與「x / y 秒」更新，完成後列出各段的開始 / 結束時間與切點
+- [ ] 一段約 1 小時的錄音：抽取中按「取消」會停止，顯示「已取消，暫存的音訊已刪除」
+- [ ] `%APPDATA%\MVR2T\temp\sessions\` 裡只有一個資料夾；重新整理（Ctrl+R）後換成新的資料夾；關閉程式後清空
+- [ ] `npm test`、`npm run typecheck`、後端 pytest 全數通過（pytest 需已安裝 FFmpeg，否則 FFmpeg 相關測試會顯示 skipped）
+
 ## 開發注意事項
 
 - `requirements/*.txt`、`pytest.ini` 等會被 pip / pytest 以「系統編碼」讀取的檔案，**必須只含 ASCII**（註解請用英文）。繁體中文 Windows 的系統編碼是 cp950，讀到 UTF-8 中文會安裝失敗。
@@ -125,5 +143,5 @@ shared/          前後端共用的常數與型別
 
 ## 已知待辦（刻意留到後續 Phase）
 
-- Phase 04：FFmpeg、媒體匯入 API（後端重新驗證格式與大小）、顯示影音長度
+- Phase 05：Qwen3-ASR 讀取 `audio/manifest.json` 的切段，時間戳記加上各段 `start` 對回原始時間
 - Phase 11：PyInstaller 打包後端（Electron 已預留 `resources/backend/mvr2t-backend(.exe)` 路徑）

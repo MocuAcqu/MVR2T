@@ -5,6 +5,9 @@ export const MEDIA_EXTENSIONS = [...VIDEO_EXTENSIONS, ...AUDIO_EXTENSIONS] as co
 
 export type MediaKind = 'video' | 'audio';
 
+/** 匯入大小上限 10 GB（規格 §11-9）。需與後端 Settings.max_upload_bytes 一致；後端會再次檢查。 */
+export const MAX_MEDIA_BYTES = 10 * 1024 ** 3;
+
 export function getExtension(filename: string): string {
   const i = filename.lastIndexOf('.');
   return i < 0 ? '' : filename.slice(i + 1).toLowerCase();

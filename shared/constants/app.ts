@@ -7,7 +7,7 @@
  */
 
 export const APP_NAME = 'MVR2T - Local Media Studio';
-export const APP_TAGLINE = 'Your Media. Your Machine. Your Knowledge.';
+export const APP_TAGLINE = 'Your Media. Your Video. Your Record.';
 
 /**
  * 後端只監聽 127.0.0.1（規格 §3.3）。

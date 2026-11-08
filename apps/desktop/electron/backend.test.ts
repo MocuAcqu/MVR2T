@@ -83,6 +83,13 @@ describe('createSessionToken / buildBackendEnv', () => {
     expect(a).not.toBe(b);
     expect(a).toMatch(/^[A-Za-z0-9_-]{43}$/);
   });
+  it('passes the app data directory when given', () => {
+    expect(buildBackendEnv({}, 't', ['null'], 'C:\\Users\\U\\AppData\\Roaming\\MVR2T').MVR2T_DATA_DIR).toBe(
+      'C:\\Users\\U\\AppData\\Roaming\\MVR2T',
+    );
+    expect(buildBackendEnv({}, 't', ['null']).MVR2T_DATA_DIR).toBeUndefined();
+  });
+
   it('overrides security-relevant variables from the parent env', () => {
     const env = buildBackendEnv({ PATH: '/bin', MVR2T_AUTH_TOKEN: 'old', MVR2T_BACKEND_PORT: '8765' }, 'new', ['null']);
     expect(env).toMatchObject({

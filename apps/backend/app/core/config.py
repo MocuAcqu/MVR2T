@@ -14,7 +14,9 @@
 from __future__ import annotations
 
 import os
+import tempfile
 from dataclasses import dataclass, field
+from pathlib import Path
 
 APP_NAME = "MVR2T - Local Media Studio"
 APP_VERSION = "0.1.0"
@@ -25,6 +27,11 @@ READY_MARKER = "MVR2T_BACKEND_READY"
 
 def _split_csv(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _default_data_dir() -> Path:
+    """手動啟動（沒有 Electron）時使用系統暫存區下的開發用資料夾。"""
+    return Path(tempfile.gettempdir()) / "mvr2t-dev"
 
 
 def _env_flag(name: str) -> bool:
@@ -52,6 +59,28 @@ class Settings:
 
     # Electron 用 stdin 管線綁定後端生命週期。
     exit_on_stdin_eof: bool = field(default_factory=lambda: _env_flag("MVR2T_EXIT_ON_STDIN_EOF"))
+
+    # 應用程式資料目錄（規格 §7.3）。Electron 傳入 app.getPath('userData')。
+    # Session 暫存放在 <data_dir>/temp/sessions/<session_id>/，結束 Session 或下次啟動時清除。
+    data_dir: Path = field(
+        default_factory=lambda: Path(os.environ["MVR2T_DATA_DIR"]) if os.environ.get("MVR2T_DATA_DIR") else _default_data_dir()
+    )
+
+    # 使用者在設定中指定的 FFmpeg 資料夾（含 ffmpeg 與 ffprobe）。空字串 = 自動尋找。
+    ffmpeg_dir: str = field(default_factory=lambda: os.environ.get("MVR2T_FFMPEG_DIR", ""))
+
+    # 匯入檔案大小上限（規格 §11-9）。需與 shared/constants/media.ts 的 MAX_MEDIA_BYTES 一致。
+    max_upload_bytes: int = field(
+        default_factory=lambda: int(os.environ.get("MVR2T_MAX_UPLOAD_BYTES", str(10 * 1024**3)))
+    )
+
+    @property
+    def sessions_root(self) -> Path:
+        return self.data_dir / "temp" / "sessions"
+
+    @property
+    def runtime_ffmpeg_dir(self) -> Path:
+        return self.data_dir / "runtime" / "ffmpeg"
 
     @property
     def auth_required(self) -> bool:

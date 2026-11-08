@@ -40,6 +40,8 @@ const backend = new BackendManager({
       pythonOverride: process.env.MVR2T_PYTHON,
     }),
   allowedOrigins: rendererOrigins(devServerUrl),
+  // 例如 Windows：%APPDATA%\\MVR2T；暫存在其下的 temp\\sessions\\
+  dataDir: app.getPath('userData'),
   onState: (state) => {
     console.log(`[backend] ${state.phase}${state.pid ? ` pid=${state.pid}` : ''}${state.url ? ` ${state.url}` : ''}${state.message ? ` - ${state.message}` : ''}`);
     broadcast(state);

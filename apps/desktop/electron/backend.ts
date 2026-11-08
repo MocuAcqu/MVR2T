@@ -98,9 +98,12 @@ export function buildBackendEnv(
   base: NodeJS.ProcessEnv,
   token: string,
   allowedOrigins: string[],
+  dataDir?: string,
 ): NodeJS.ProcessEnv {
   return {
     ...base,
+    // 應用程式資料目錄（規格 §7.3）：Session 暫存、之後的模型與設定都放在這裡
+    ...(dataDir ? { MVR2T_DATA_DIR: dataDir } : {}),
     MVR2T_BACKEND_PORT: '0', // 由作業系統挑選空閒埠
     MVR2T_AUTH_TOKEN: token,
     MVR2T_ALLOWED_ORIGINS: allowedOrigins.join(','),
@@ -124,6 +127,8 @@ type FetchFn = (url: string, init: { headers: Record<string, string>; signal: Ab
 export interface BackendManagerOptions {
   resolve: () => ResolveResult;
   allowedOrigins: string[];
+  /** Electron app.getPath('userData')；傳給後端作為 MVR2T_DATA_DIR。 */
+  dataDir?: string;
   onState: (state: BackendState) => void;
   /** 將後端輸出轉給 Electron 主控台（開發時方便查看）。 */
   onLog?: (line: string) => void;
@@ -152,7 +157,7 @@ export class BackendManager {
   /** 每次 start() 遞增；舊行程的事件一律忽略，避免 restart 時狀態錯亂。 */
   private generation = 0;
   private exitPromise: Promise<void> | null = null;
-  private readonly opts: Required<Omit<BackendManagerOptions, 'onLog'>> & Pick<BackendManagerOptions, 'onLog'>;
+  private readonly opts: Required<Omit<BackendManagerOptions, 'onLog' | 'dataDir'>> & Pick<BackendManagerOptions, 'onLog' | 'dataDir'>;
 
   constructor(opts: BackendManagerOptions) {
     this.opts = {
@@ -200,7 +205,7 @@ export class BackendManager {
       // 參數陣列 + shell:false：路徑含空格也安全，且不會被當成 shell 指令解析。
       child = this.opts.spawn(command, args, {
         cwd,
-        env: buildBackendEnv(this.opts.env, token, this.opts.allowedOrigins),
+        env: buildBackendEnv(this.opts.env, token, this.opts.allowedOrigins, this.opts.dataDir),
         stdio: ['pipe', 'pipe', 'pipe'],
         shell: false,
         windowsHide: true,

@@ -11,6 +11,8 @@ import os
 import socket
 import sys
 import threading
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI
@@ -19,12 +21,27 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import api_router
 from app.core.config import APP_NAME, APP_VERSION, READY_MARKER, Settings, settings
 from app.core.security import TokenAuthMiddleware
+from app.services.tasks import TaskManager
+from app.session.manager import SessionManager
 
 
 def create_app(cfg: Settings = settings) -> FastAPI:
     # 由 Electron 啟動時關閉互動式 API 文件，減少暴露面；手動開發時保留。
     docs_enabled = not cfg.auth_required
+    task_manager = TaskManager()
+    session_manager = SessionManager(cfg.sessions_root, task_manager)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        # 規格 §8.4：啟動時清除上次異常結束留下的暫存；正常結束時清除本次暫存。
+        removed = session_manager.cleanup_stale()
+        if removed:
+            print(f"Removed {removed} stale session folder(s)", flush=True)
+        yield
+        session_manager.end_all()
+
     app = FastAPI(
+        lifespan=lifespan,
         title=APP_NAME,
         version=APP_VERSION,
         docs_url="/api/docs" if docs_enabled else None,
@@ -43,6 +60,9 @@ def create_app(cfg: Settings = settings) -> FastAPI:
         allow_headers=["Authorization", "Content-Type"],
     )
 
+    app.state.settings = cfg
+    app.state.tasks = task_manager
+    app.state.sessions = session_manager
     app.include_router(api_router)
     return app
 

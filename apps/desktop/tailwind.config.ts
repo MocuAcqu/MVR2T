@@ -45,6 +45,11 @@ export default {
         float: '0 2px 8px 0 rgb(0 0 0 / 0.16)',
         press: 'inset 0 0 0 999px rgb(0 0 0 / 0.08)',
       },
+      // 不確定進度的進度條（例如後端正在檢查檔案）
+      keyframes: {
+        indeterminate: { '0%': { left: '-33%' }, '100%': { left: '100%' } },
+      },
+      animation: { indeterminate: 'indeterminate 1.2s ease-in-out infinite' },
     },
   },
   plugins: [],
