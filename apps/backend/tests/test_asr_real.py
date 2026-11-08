@@ -17,8 +17,8 @@ from __future__ import annotations
 import json
 import os
 import re
-import resource
 import subprocess
+import sys
 import wave
 from pathlib import Path
 
@@ -188,19 +188,52 @@ def test_cancel_real_model_mid_recognition(client):
     assert st["status"] == "cancelled" and elapsed < 5  # generation stopped by StoppingCriteria
 
 
+def _windows_rss_mb() -> float:
+    """Current working set of this process (same meaning as Linux VmRSS). `resource` does not exist on Windows."""
+    import ctypes
+    from ctypes import wintypes
+
+    class PROCESS_MEMORY_COUNTERS(ctypes.Structure):
+        _fields_ = [
+            ("cb", wintypes.DWORD),
+            ("PageFaultCount", wintypes.DWORD),
+            ("PeakWorkingSetSize", ctypes.c_size_t),
+            ("WorkingSetSize", ctypes.c_size_t),
+            ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+            ("QuotaPagedPoolUsage", ctypes.c_size_t),
+            ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+            ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+            ("PagefileUsage", ctypes.c_size_t),
+            ("PeakPagefileUsage", ctypes.c_size_t),
+        ]
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    psapi = ctypes.WinDLL("psapi", use_last_error=True)
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESS_MEMORY_COUNTERS), wintypes.DWORD]
+    psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+    counters = PROCESS_MEMORY_COUNTERS()
+    counters.cb = ctypes.sizeof(counters)
+    if not psapi.GetProcessMemoryInfo(kernel32.GetCurrentProcess(), ctypes.byref(counters), counters.cb):
+        raise ctypes.WinError(ctypes.get_last_error())
+    return counters.WorkingSetSize / 1024**2
+
+
 def _rss_mb() -> float:
+    if sys.platform == "win32":
+        return _windows_rss_mb()
     try:
         with open("/proc/self/status") as f:
             return next(int(line.split()[1]) / 1024 for line in f if line.startswith("VmRSS"))
-    except OSError:  # pragma: no cover - non-Linux
+    except OSError:  # pragma: no cover - non-Linux (macOS)
+        import resource  # Unix only; imported here so this module still loads on Windows
+
         return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
 
 
 def test_backend_memory_stays_low_across_repeated_transcriptions(client):
     """§5.4: models are released after each task. They run in a worker process that exits, so the backend
     process never holds model memory and does not grow from one transcription to the next."""
-    import sys
-
     readings = []
     for _ in range(2):
         run(client, SPEECH / "zh16.wav")
