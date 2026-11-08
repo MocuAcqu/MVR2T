@@ -3,7 +3,7 @@
  * 元件只呼叫這裡的函式；這裡負責呼叫 services/api 並更新 sessionStore。
  */
 import { getMediaKind, MAX_MEDIA_BYTES, MEDIA_EXTENSIONS } from '@shared/constants/media';
-import type { ExtractAudioResult } from '@shared/types/api';
+import type { AsrLanguage } from '@shared/types/api';
 import { formatBytes } from '@/lib/format';
 import {
   AbortedError,
@@ -12,17 +12,20 @@ import {
   createSession,
   getBackendConnection,
   getTask,
+  getTranscript,
   startExtraction as apiStartExtraction,
+  startTranscription as apiStartTranscription,
   uploadMedia,
   type BackendConnection,
 } from '@/services/api';
-import { idleExtraction, useSessionStore } from '@/stores/sessionStore';
+import { idleExtraction, idleTranscription, useSessionStore } from '@/stores/sessionStore';
 
 const POLL_MS = 400;
 const store = () => useSessionStore.getState();
 
 let uploadController: AbortController | null = null;
-let pollTimer: ReturnType<typeof setTimeout> | null = null;
+type TrackKind = 'extraction' | 'transcription';
+const pollTimers: Record<TrackKind, ReturnType<typeof setTimeout> | null> = { extraction: null, transcription: null };
 let sessionPromise: Promise<string> | null = null;
 
 const keyOf = (conn: BackendConnection) => `${conn.url}|${conn.token ?? ''}`;
@@ -33,10 +36,16 @@ async function connection(): Promise<BackendConnection> {
   return conn;
 }
 
-function stopPolling(): void {
-  if (pollTimer) clearTimeout(pollTimer);
-  pollTimer = null;
+function stopPolling(kind?: TrackKind): void {
+  for (const k of kind ? [kind] : (Object.keys(pollTimers) as TrackKind[])) {
+    const t = pollTimers[k];
+    if (t) clearTimeout(t);
+    pollTimers[k] = null;
+  }
 }
+
+const patchTrack = (kind: TrackKind, patch: Record<string, unknown>) =>
+  kind === 'extraction' ? store().patchExtraction(patch) : store().patchTranscription(patch);
 
 /**
  * 確保有一個屬於「目前這個後端行程」的 Session。
@@ -142,11 +151,21 @@ export async function removeMedia(): Promise<void> {
   }
 }
 
-async function poll(conn: BackendConnection, sessionId: string, taskId: string): Promise<void> {
+/** 輪詢一個背景工作直到結束；onCompleted 在成功完成時呼叫（例如取回完整逐字稿）。 */
+async function poll(
+  kind: TrackKind,
+  conn: BackendConnection,
+  sessionId: string,
+  taskId: string,
+  onCompleted?: () => Promise<void>,
+): Promise<void> {
+  const current = () => store()[kind].taskId === taskId;
   try {
-    const t = await getTask<ExtractAudioResult>(conn, sessionId, taskId);
-    if (store().extraction.taskId !== taskId) return;
-    store().patchExtraction({
+    const t = await getTask<unknown>(conn, sessionId, taskId);
+    if (!current()) return;
+    if (t.status === 'completed' && onCompleted) await onCompleted();
+    if (!current()) return;
+    patchTrack(kind, {
       status: t.status,
       progress: t.progress,
       stage: t.stage,
@@ -154,10 +173,12 @@ async function poll(conn: BackendConnection, sessionId: string, taskId: string):
       message: t.message,
       result: t.result,
     });
-    if (t.status === 'queued' || t.status === 'running') pollTimer = setTimeout(() => void poll(conn, sessionId, taskId), POLL_MS);
+    if (t.status === 'queued' || t.status === 'running') {
+      pollTimers[kind] = setTimeout(() => void poll(kind, conn, sessionId, taskId, onCompleted), POLL_MS);
+    }
   } catch (err) {
-    if (store().extraction.taskId !== taskId) return;
-    store().patchExtraction({ status: 'failed', message: messageOf(err) });
+    if (!current()) return;
+    patchTrack(kind, { status: 'failed', message: messageOf(err) });
   }
 }
 
@@ -165,13 +186,18 @@ export async function startExtraction(): Promise<void> {
   const state = store();
   if (state.import.status !== 'ready' || !state.sessionId) return;
   const mediaId = state.import.info.media_id;
-  stopPolling();
-  store().set({ extraction: { ...idleExtraction, status: 'starting', stage: '準備中' } });
+  stopPolling('extraction');
+  // 重新抽取後，舊逐字稿的時間就不再對應（後端也會清除）
+  store().set({
+    extraction: { ...idleExtraction, status: 'starting', stage: '準備中' },
+    transcription: idleTranscription,
+    transcript: null,
+  });
   try {
     const conn = await connection();
     const { task_id } = await apiStartExtraction(conn, state.sessionId, mediaId);
     store().patchExtraction({ taskId: task_id, status: 'running' });
-    void poll(conn, state.sessionId, task_id);
+    void poll('extraction', conn, state.sessionId, task_id);
   } catch (err) {
     store().patchExtraction({ status: 'failed', message: messageOf(err) });
   }
@@ -183,6 +209,42 @@ export async function cancelExtraction(): Promise<void> {
   store().patchExtraction({ stage: '正在取消' });
   try {
     await cancelTask(await connection(), sessionId, extraction.taskId);
+  } catch {
+    // 輪詢會回報最終狀態
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 05：語音辨識
+// ---------------------------------------------------------------------------
+
+/** 開始語音辨識（需先完成抽取音訊）。language = null 為自動偵測。 */
+export async function startTranscription(language: AsrLanguage | null): Promise<void> {
+  const state = store();
+  if (state.import.status !== 'ready' || !state.sessionId || state.extraction.status !== 'completed') return;
+  const mediaId = state.import.info.media_id;
+  const sessionId = state.sessionId;
+  stopPolling('transcription');
+  store().set({ transcription: { ...idleTranscription, status: 'starting', stage: '準備中' }, transcript: null });
+  try {
+    const conn = await connection();
+    const { task_id } = await apiStartTranscription(conn, sessionId, mediaId, language);
+    store().patchTranscription({ taskId: task_id, status: 'running' });
+    void poll('transcription', conn, sessionId, task_id, async () => {
+      const transcript = await getTranscript(conn, sessionId, mediaId);
+      if (store().transcription.taskId === task_id) store().set({ transcript });
+    });
+  } catch (err) {
+    store().patchTranscription({ status: 'failed', message: messageOf(err) });
+  }
+}
+
+export async function cancelTranscription(): Promise<void> {
+  const { sessionId, transcription } = store();
+  if (!sessionId || !transcription.taskId) return;
+  store().patchTranscription({ stage: '正在取消' });
+  try {
+    await cancelTask(await connection(), sessionId, transcription.taskId);
   } catch {
     // 輪詢會回報最終狀態
   }

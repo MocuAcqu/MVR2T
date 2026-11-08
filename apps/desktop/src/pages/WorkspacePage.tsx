@@ -4,10 +4,11 @@ import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/comp
 import { removeMedia } from '@/features/media/mediaController';
 import { ExtractionCard } from '@/features/workspace/ExtractionCard';
 import { MediaInfoCard } from '@/features/workspace/MediaInfoCard';
+import { TranscriptCard } from '@/features/workspace/TranscriptCard';
 import { useSessionStore } from '@/stores/sessionStore';
 import { useUiStore } from '@/stores/uiStore';
 
-/** Media workspace. Phase 04: media info + audio extraction and segmentation. Transcript etc. come later. */
+/** Media workspace: media info, audio extraction (Phase 04), transcript (Phase 05). Summary / mind map come later. */
 export function WorkspacePage() {
   const imp = useSessionStore((s) => s.import);
   const setPage = useUiStore((s) => s.setPage);
@@ -52,6 +53,9 @@ export function WorkspacePage() {
       <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <MediaInfoCard info={imp.info} />
         <ExtractionCard />
+      </div>
+      <div className="mt-6">
+        <TranscriptCard />
       </div>
     </PageContainer>
   );

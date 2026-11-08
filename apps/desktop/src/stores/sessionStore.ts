@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ExtractAudioResult, MediaInfo, TaskStatus } from '@shared/types/api';
+import type { ExtractAudioResult, MediaInfo, TaskStatus, TranscribeResult, Transcript } from '@shared/types/api';
 
 /**
  * 本次工作階段的狀態（只在記憶體中）。
@@ -15,17 +15,21 @@ export type ImportState =
   | { status: 'ready'; file: File; info: MediaInfo }
   | { status: 'error'; file: File | null; message: string };
 
-export interface ExtractionState {
+/** 一個背景工作（抽取音訊、語音辨識…）在畫面上的狀態。 */
+export interface TaskTrack<TResult> {
   taskId: string | null;
   status: 'idle' | 'starting' | TaskStatus;
   progress: number;
   stage: string;
   detail: string;
   message: string | null;
-  result: ExtractAudioResult | null;
+  result: TResult | null;
 }
 
-export const idleExtraction: ExtractionState = {
+export type ExtractionState = TaskTrack<ExtractAudioResult>;
+export type TranscriptionState = TaskTrack<TranscribeResult>;
+
+const idle = <T,>(): TaskTrack<T> => ({
   taskId: null,
   status: 'idle',
   progress: 0,
@@ -33,7 +37,10 @@ export const idleExtraction: ExtractionState = {
   detail: '',
   message: null,
   result: null,
-};
+});
+
+export const idleExtraction: ExtractionState = idle<ExtractAudioResult>();
+export const idleTranscription: TranscriptionState = idle<TranscribeResult>();
 
 interface SessionState {
   /** 後端的 Session ID；後端重新啟動（網址或憑證改變）時會重建。 */
@@ -42,8 +49,14 @@ interface SessionState {
   backendKey: string | null;
   import: ImportState;
   extraction: ExtractionState;
-  set: (patch: Partial<Pick<SessionState, 'sessionId' | 'backendKey' | 'import' | 'extraction'>>) => void;
+  transcription: TranscriptionState;
+  /** 本次 Session 的逐字稿（只在記憶體中，規格 §8.3） */
+  transcript: Transcript | null;
+  set: (
+    patch: Partial<Pick<SessionState, 'sessionId' | 'backendKey' | 'import' | 'extraction' | 'transcription' | 'transcript'>>,
+  ) => void;
   patchExtraction: (patch: Partial<ExtractionState>) => void;
+  patchTranscription: (patch: Partial<TranscriptionState>) => void;
   resetMedia: () => void;
 }
 
@@ -52,7 +65,11 @@ export const useSessionStore = create<SessionState>((set) => ({
   backendKey: null,
   import: { status: 'idle' },
   extraction: idleExtraction,
+  transcription: idleTranscription,
+  transcript: null,
   set: (patch) => set(patch),
   patchExtraction: (patch) => set((s) => ({ extraction: { ...s.extraction, ...patch } })),
-  resetMedia: () => set({ import: { status: 'idle' }, extraction: idleExtraction }),
+  patchTranscription: (patch) => set((s) => ({ transcription: { ...s.transcription, ...patch } })),
+  resetMedia: () =>
+    set({ import: { status: 'idle' }, extraction: idleExtraction, transcription: idleTranscription, transcript: null }),
 }));

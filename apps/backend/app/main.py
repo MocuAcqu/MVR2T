@@ -22,6 +22,7 @@ from app.api.router import api_router
 from app.core.config import APP_NAME, APP_VERSION, READY_MARKER, Settings, settings
 from app.core.security import TokenAuthMiddleware
 from app.services.tasks import TaskManager
+from app.services.transcribe import default_engines
 from app.session.manager import SessionManager
 
 
@@ -61,6 +62,7 @@ def create_app(cfg: Settings = settings) -> FastAPI:
     )
 
     app.state.settings = cfg
+    app.state.engines_factory = default_engines  # 測試可替換成假模型
     app.state.tasks = task_manager
     app.state.sessions = session_manager
     app.include_router(api_router)

@@ -13,17 +13,20 @@ release/
 build/pyinstaller/
 
 # Models & runtime (規格第 18 條：不得將模型權重提交至 Git)
+# 模型實際放在使用者資料夾（%APPDATA%\MVR2T\models），不在專案內；以下為防止誤放的保險。
+# 注意：資料夾規則一律以 / 開頭限定在專案根目錄。不加 / 會連 apps/backend/app/models/（原始碼）一起排除
+# （2026-11-09 曾因此漏交 registry.py / store.py）。
 *.gguf
 *.safetensors
 *.bin
 *.onnx
 *.pt
 *.pth
-models/
-runtime/
+/models/
+/runtime/
 
 # Session / temp（規格第 8 章：Session 資料不得持久化）
-temp/
+/temp/
 *.log
 
 # OS / editor

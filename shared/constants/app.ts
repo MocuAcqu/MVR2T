@@ -3,7 +3,7 @@
  * 注意：此檔案必須是「環境中立」的純 TS（不可使用 DOM 或 Node API），
  * 因為三個環境都會引用它。
  *
- * 規格第 18 條：模型 ID / 版本 / 下載來源集中放在 shared/constants/models.ts。
+ * 規格第 16 條：模型 ID / 版本 / 下載來源集中在後端 apps/backend/app/models/registry.py，前端透過 GET /api/models 取得。
  */
 
 export const APP_NAME = 'MVR2T - Local Media Studio';

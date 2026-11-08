@@ -1,6 +1,6 @@
 # 開發紀錄（給接手的 Claude / Claude Code）
 
-最後更新：2026-11-07。依賴升級已在 Windows 驗收；Phase 04 程式完成並在沙盒驗證，待 Windows 驗收。
+最後更新：2026-11-09。Phase 05 程式完成並在沙盒以真實模型驗證，待 Windows 驗收。
 
 ## 目前進度
 
@@ -11,7 +11,8 @@
 | 03 Electron 啟動 Python Backend | ✅ 使用者已在 Windows 驗收通過（2026-11-07；手動結束啟動器一項延後，見下方） |
 | 依賴升級 | ✅ 使用者已在 Windows 驗收通過（2026-11-07） |
 | 04 Media Processing | ✅ Windows 主要項目驗收通過（2026-11-09，見「Windows 套用回饋」） |
-| 05 ASR Integration | ⬜ Phase 04 驗收後開始 |
+| 05 ASR Integration | 🟡 沙盒以真實模型驗證通過，**待 Windows 驗收** |
+| 06 LLM Integration | ⬜ Phase 05 驗收後開始 |
 
 ## 沙盒驗證結果（2026-11-06）
 
@@ -107,6 +108,88 @@
 - `tsc` 只要有選項層級錯誤（例如缺型別套件）就會略過語意檢查，「沒有報錯」不代表通過。
 - 沙盒的 init 不會立即回收殭屍行程，`kill -0` 對殭屍也成功；判斷行程是否存活請看 `/proc/<pid>/stat` 狀態不是 `Z`。
 - 在沙盒跑 Electron：`xvfb-run -a`，並加 `--no-sandbox`（root）。
+
+## Phase 05 ASR Integration — 實作與驗證（2026-11-09）
+
+### 環境
+- 使用者開放 huggingface.co、*.hf.co、download.pytorch.org。download.pytorch.org 會轉址到 download-r2.pytorch.org（未開放），
+  所以沙盒改從 PyPI 安裝 torch（Linux 版含 CUDA 函式庫，約 5 GB，CPU 照常執行）。Windows / macOS 的 PyPI torch 本來就是 CPU 版。
+- 固定版本：torch 2.14.1、transformers 5.20.2、tokenizers 0.23.3、safetensors 0.8.0、numpy 2.4.6（2.5 起不支援 Python 3.11）、
+  huggingface_hub 2.2.0（只給下載腳本用）、OpenCC 1.4.2。`uv pip compile --python-platform windows` 確認 Windows 解析成功且不含 CUDA。
+- 模型：Qwen/Qwen3-ASR-0.6B-hf @ 7f1569a（1.58 GB）、Qwen/Qwen3-ForcedAligner-0.6B-hf @ c07281d（1.85 GB），Apache-2.0。
+
+### 架構
+- `app/models/registry.py`：模型 ID、revision、每個檔案的大小與雜湊（大檔 SHA-256、小檔 Git blob SHA-1）。**模型資訊唯一來源**；
+  前端改用 `GET /api/models`，刪除 `shared/constants/models.ts`。
+- `app/models/store.py` + `scripts/download_models.py`：逐檔下載到 `.<id>.partial`，全部驗證通過才改名並寫入 `.mvr2t-model.json`
+  （已安裝標記）。可續傳、`--verify` 重算雜湊、`--list`。
+- 預設資料夾改為與 Electron userData 相同（Windows `%APPDATA%\MVR2T`），手動啟動的後端與下載腳本共用模型；
+  test_lifecycle 一律用暫存資料夾，不碰真實 userData。
+- `engines/asr/qwen3.py`：Transformers 原生類別，只讀本機（local_files_only + HF_HUB_OFFLINE），torch 延後 import
+  （後端啟動 0.39 s、未載入 torch）；StoppingCriteria 讓生成途中可取消；dtype 可設定（預設 float32）。
+- `engines/asr/text.py`：依標點切句（處理 Mr. / e.g. 等縮寫）、以字詞時間決定句子起訖、加段落 offset、
+  **逐字詞**去除硬切重疊、整句 OpenCC s2twp 轉繁體。
+- `engines/asr/pipeline.py`：recognize（ASR 逐段）與 align（對齊逐段）兩步驟；`engines/asr/worker.py`：**每個步驟在新的 spawn 子程序執行**，
+  程序結束即釋放全部記憶體；子程序監看父程序，後端消失時自行結束。`services/transcribe.py`：工作、進度、取消、組逐字稿。
+- API：`GET /api/models`、`POST /api/asr/transcribe {session_id, media_id, language}`、`GET /api/transcript`。
+  一次只允許一個辨識工作；辨識中禁止重新抽取音訊；重新抽取會清除舊逐字稿。
+- 前端：AI 模型卡片顯示真實安裝狀態與下載指令；工作區「逐字稿」卡片（語言選擇、進度、取消、警告、逐句時間戳記、精確／估計標記）。
+
+### 實驗發現（決定設計的事實）
+1. **模型永遠輸出簡體**，提示詞無法改變（試過「請使用繁體中文」等）；熱詞提示修好一詞卻弄壞另一詞 → 不用提示，改 OpenCC。
+   OpenCC 片語轉換會改變字數（U盘→隨身碟），所以只在「句」層級轉換；對齊一律用模型原始簡體文字。
+2. **強制指定語言時，模型不輸出語言標記** → 以指定語言為準。
+3. **同一程序內卸載模型，記憶體不會還給作業系統**（ASR 卸載後仍約 3.2 GB，每辨識一次再增加）→ 改為子程序。
+4. **ASR 與對齊放在同一個子程序仍會累積**：沙盒（約 6 GB 上限）在載入對齊模型時被 OOM 終止（代碼 -9）→ 兩步驟各自一個子程序，
+   峰值 = 兩者較大值而非相加。
+5. float32 載入峰值約 5.2 GB（bf16 權重轉 fp32 暫存兩份）；bfloat16 約 2.5～3.2 GB，輸出相同。
+6. 日文、韓文對齊需要 nagisa / soynlp 斷詞套件，第一版未安裝 → 退回估計時間（有警告）。
+
+### 沙盒驗證（2 核 CPU、float32）
+- 中文（Piper TTS 合成 18 秒、4 句）：繁體、4 句、逐字時間、精確時間。
+- 英文（LibriSpeech 6 段串接 71.5 秒、跨 3 個 ASR 段）：**WER 3.0%**；6 段的第一個字都在該段於合併檔中的起點被找到
+  （+0.5 秒為 LibriSpeech 開頭靜音）→ 時間戳記正確對回原始音訊。
+- 長音訊（LibriSpeech 73 段、8 分鐘、16 段）：75 句、時間單調遞增、最後一句結束於 480.88 / 481.0 秒、**WER 4.2%**，耗時 429 秒（RTF ≈ 0.9，含其他測試搶 CPU）。
+- 取消：真實模型生成中取消 0.86 秒；Electron UI 1.4 秒；子程序全部結束。
+- 記憶體：後端程序在連續兩次辨識後維持 512 → 511 MB（模型不在後端程序中）。
+- benchmark（60 秒英文）：float32 RTF 0.68、峰值 5.2 GB；bfloat16 RTF 0.50、峰值 2.5 GB（沙盒 CPU 有原生 BF16/AMX，**Windows 需實測**）。
+- 測試：後端 96 passed（含真實模型 4 項；無測試語音時 92 passed + 4 skipped）、前端 118、typecheck、Electron E2E P03 22 / P04 22 / P05 17。
+
+### Windows 套用回饋：漏交原始碼（2026-11-09）
+- Claude Code 發現 `app/models/registry.py`、`store.py`（以及原本就有的 `app/models/__init__.py`）不在交付內容中，後端無法啟動。
+  原因：`.gitignore` 的 `models/` 沒有限定路徑，連 `apps/backend/app/models/`（原始碼）都被排除；交付清單由 `git diff` 產生，
+  所以被忽略的新檔案悄悄漏掉。沙盒測試在「工作目錄」執行，檔案都在，因此沒抓到。
+- 修正：`/models/`、`/runtime/`、`/temp/` 限定在專案根目錄（權重副檔名規則保留）；補進 3 個檔案；
+  `git ls-files --others --ignored --exclude-standard` 確認除了相依套件與建置輸出外，沒有任何被忽略的檔案。
+- **新規則：每次交付前，從 `git clone` 出的乾淨資料夾重跑全部測試**（npm ci、typecheck、vitest、build、pytest），
+  確保交付內容本身就是完整的。本次已用乾淨複本驗證：pytest 92 passed + 4 skipped、vitest 118、typecheck、build 皆通過。
+- Claude Code 的執行環境安裝 torch 時出現 `SSL CERTIFICATE_VERIFY_FAILED`（連 pypi.org），使用者改在自己的終端機安裝。
+
+### 已知限制 / 待辦
+- 預設 float32；待使用者的 benchmark 結果決定是否改為 bfloat16（Phase 10 硬體偵測自動選擇）。
+- 辨識途中不即時顯示部分文字（完成後一次顯示）。
+- 逐字稿編輯、依時間戳記播放原始影音、匯出 SRT 等：後續 Phase。
+- 打包（Phase 11）注意：worker 使用 multiprocessing spawn，PyInstaller 需 `multiprocessing.freeze_support()`。
+
+## Phase 05 ASR Integration — 調查與決策（2026-11-09）
+
+### 調查結果（官方 README：github.com/QwenLM/Qwen3-ASR）
+- Qwen3-ASR（0.6B / 1.7B，Apache-2.0）**只輸出文字與語言，不輸出時間戳記**。時間戳記需另一個模型
+  Qwen3-ForcedAligner-0.6B（Apache-2.0，單檔 model.safetensors 1.84 GB，NAR 單次前向，**每次最多 5 分鐘**，
+  支援 11 種語言：中、英、粵、法、德、義、日、韓、葡、俄、西）。規格 §5.2「先用 ASR 本身的時間資訊」不成立。
+- 2026-06-26 起 Transformers 原生支援（`-hf` 模型）：transformers 5.x 內建 `models/qwen3_asr`
+  （`Qwen3ASRForConditionalGeneration`、對齊用 `Qwen3ASRForTokenClassification`，processor 有
+  `apply_transcription_request`、`decode(return_format="parsed")`、`prepare_forced_aligner_inputs`、`decode_forced_alignment`）。
+  transformers 5.x 需 Python ≥ 3.11、torch ≥ 2.6。
+- 官方 `qwen-asr` 套件（0.0.6）固定 transformers==4.57.6，並拉進 gradio、flask、librosa、sox 等，不利 PyInstaller 打包 → **不採用**，
+  改用 Transformers 原生路線（也符合規格「優先測試官方 Transformers Backend」）。
+- 沙盒連不到 huggingface.co、modelscope.cn、download.pytorch.org（代理拒絕）；PyPI、GitHub raw 可連。
+
+### 使用者決策
+1. 使用者會在 claude.ai 開放網域（huggingface.co、hf.co、download.pytorch.org），讓沙盒以 CPU 實際辨識驗證。
+2. **加入 ForcedAligner**：ASR 完成 → 卸載 → 載入對齊模型（依序載入）。不支援的語言退回切段層級時間。
+3. 使用者電腦**沒有／不確定 NVIDIA GPU → 開發環境裝 CPU 版 PyTorch**（GPU 路線留到 Phase 10）。
+4. 開發期以**下載腳本**取得模型，放在 `%APPDATA%\MVR2T\models\`（與 Phase 09 相同位置），模型 ID 與 revision 集中在一處。
 
 ## Phase 04 Media Processing（2026-11-07）
 

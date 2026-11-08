@@ -12,7 +12,8 @@
 | 02 | UI Design System | ✅ 已在 Windows 驗收 |
 | 03 | Electron and Backend Integration | ✅ 已在 Windows 驗收 |
 | 04 | Media Processing（FFmpeg、匯入、抽取音訊、切段） | ✅ 已在 Windows 驗收 |
-| 05 – 12 | ASR、LLM、心智圖、Session、Model Manager、硬體偵測、打包 | ⏳ |
+| 05 | ASR Integration（Qwen3-ASR + 時間戳記對齊） | 🟡 沙盒已用真實模型驗證，待你在 Windows 驗收 |
+| 06 – 12 | LLM、心智圖、Session、Model Manager、硬體偵測、打包 | ⏳ |
 
 ## 環境需求
 
@@ -35,7 +36,7 @@ cd apps\backend
 py -3.11 -m venv .venv          # 若 py -0 找不到 3.11，請先安裝：winget install Python.Python.3.11
 .venv\Scripts\Activate.ps1
 python --version                # 應顯示 Python 3.11.x
-pip install -r requirements/dev.txt
+pip install -r requirements/dev.txt   # Phase 05 起含 PyTorch（CPU 版）與 Transformers，第一次約需數分鐘
 ```
 
 macOS（Terminal）：
@@ -47,7 +48,19 @@ source .venv/bin/activate
 pip install -r requirements/dev.txt
 ```
 
-**2. 前端套件**（在專案根目錄）
+**2. 下載 AI 模型**（Phase 05 起；只需一次，約 3.4 GB，之後完全離線）
+
+```powershell
+cd apps\backend
+.\.venv\Scripts\python.exe -m scripts.download_models          # 語音辨識 + 時間戳記對齊模型
+.\.venv\Scripts\python.exe -m scripts.download_models --list   # 查看安裝狀態與位置
+.\.venv\Scripts\python.exe -m scripts.download_models --verify # 重新檢查檔案完整性（SHA-256）
+```
+
+模型放在 `%APPDATA%\MVR2T\models\`（macOS：`~/Library/Application Support/MVR2T/models/`），
+版本與雜湊固定在 `apps/backend/app/models/registry.py`。下載中斷可重新執行，會從中斷處繼續。
+
+**3. 前端套件**（在專案根目錄）
 
 ```bash
 npm ci        # 依 package-lock.json 安裝確切版本
@@ -125,6 +138,24 @@ Phase 03 起**只需要一個終端機**。後端由 Electron 以 `apps/backend/
 - [ ] `%APPDATA%\MVR2T\temp\sessions\` 裡只有一個資料夾；重新整理（Ctrl+R）後換成新的資料夾；關閉程式後清空
 - [x] `npm test`、`npm run typecheck`、後端 pytest 全數通過（pytest 需已安裝 FFmpeg，否則 FFmpeg 相關測試會顯示 skipped）
 
+## Phase 05 驗收清單
+
+先完成「第一次設定」的第 2 步（下載模型）。
+
+- [ ] 首頁「AI 模型」卡片：Qwen3-ASR 0.6B 與 Qwen3-ForcedAligner 0.6B 顯示「已安裝」，Qwen3-4B 顯示「Phase 6 推出」
+- [ ] 匯入一段**中文**錄音或影片 → 工作區「抽取音訊」→「開始語音辨識」：顯示步驟與進度，完成後列出逐字稿
+- [ ] 逐字稿是**繁體中文**（台灣用語），每句前面有時間戳記，標記「精確時間」
+- [ ] 抽查幾句：時間戳記與原始影音中說那句話的時間相符（可用其他播放器跳到該時間比對）
+- [ ] 匯入一段**英文**錄音，語言自動偵測為「英文」
+- [ ] 辨識中按「取消」：幾秒內停止，顯示「已取消語音辨識」
+- [ ] 辨識一段 **10 分鐘以上**的錄音，程式不會當掉；完成後工作管理員中沒有殘留的 `python.exe`（辨識用的工作程序會自動結束）
+- [ ] 執行 `python -m scripts.benchmark_asr <一段錄音>`，把結果貼回 Cowork（決定 float32 / bfloat16 預設值）
+- [ ] `npm test`、`npm run typecheck`、後端 pytest 全數通過（真實模型測試需要測試語音，Windows 上會顯示 4 skipped，屬正常）
+
+進階設定（環境變數，啟動 `npm run dev` 前設定）：
+- `MVR2T_ASR_DTYPE=bfloat16`：記憶體約減半；在支援 BF16 的 CPU 上也較快（以 benchmark 結果為準）
+- `MVR2T_TORCH_THREADS=4`：限制語音辨識使用的 CPU 執行緒數
+
 ## 開發注意事項
 
 - `requirements/*.txt`、`pytest.ini` 等會被 pip / pytest 以「系統編碼」讀取的檔案，**必須只含 ASCII**（註解請用英文）。繁體中文 Windows 的系統編碼是 cp950，讀到 UTF-8 中文會安裝失敗。
@@ -143,5 +174,6 @@ shared/          前後端共用的常數與型別
 
 ## 已知待辦（刻意留到後續 Phase）
 
-- Phase 05：Qwen3-ASR 讀取 `audio/manifest.json` 的切段，時間戳記加上各段 `start` 對回原始時間
+- Phase 06：llama.cpp + Qwen3-4B Q4_K_M 摘要（讀取本次 Session 的逐字稿）
+- 逐字稿編輯、依時間戳記播放原始影音：後續 Phase（Transcript Editor）
 - Phase 11：PyInstaller 打包後端（Electron 已預留 `resources/backend/mvr2t-backend(.exe)` 路徑）

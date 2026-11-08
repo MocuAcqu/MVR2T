@@ -14,7 +14,7 @@
 from __future__ import annotations
 
 import os
-import tempfile
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -29,9 +29,21 @@ def _split_csv(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
-def _default_data_dir() -> Path:
-    """手動啟動（沒有 Electron）時使用系統暫存區下的開發用資料夾。"""
-    return Path(tempfile.gettempdir()) / "mvr2t-dev"
+APP_DIR_NAME = "MVR2T"  # 需與 apps/desktop/package.json 的 productName 一致（Electron userData 資料夾名稱）
+
+
+def default_user_data_dir() -> Path:
+    """與 Electron app.getPath('userData') 相同的位置，讓手動啟動的後端與下載腳本使用同一份模型。
+
+    Windows：%APPDATA%\\MVR2T　macOS：~/Library/Application Support/MVR2T　Linux：~/.config/MVR2T
+    """
+    if sys.platform == "win32":
+        base = Path(os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming")
+    elif sys.platform == "darwin":
+        base = Path.home() / "Library" / "Application Support"
+    else:
+        base = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+    return base / APP_DIR_NAME
 
 
 def _env_flag(name: str) -> bool:
@@ -63,7 +75,7 @@ class Settings:
     # 應用程式資料目錄（規格 §7.3）。Electron 傳入 app.getPath('userData')。
     # Session 暫存放在 <data_dir>/temp/sessions/<session_id>/，結束 Session 或下次啟動時清除。
     data_dir: Path = field(
-        default_factory=lambda: Path(os.environ["MVR2T_DATA_DIR"]) if os.environ.get("MVR2T_DATA_DIR") else _default_data_dir()
+        default_factory=lambda: Path(os.environ["MVR2T_DATA_DIR"]) if os.environ.get("MVR2T_DATA_DIR") else default_user_data_dir()
     )
 
     # 使用者在設定中指定的 FFmpeg 資料夾（含 ffmpeg 與 ffprobe）。空字串 = 自動尋找。
@@ -74,9 +86,19 @@ class Settings:
         default_factory=lambda: int(os.environ.get("MVR2T_MAX_UPLOAD_BYTES", str(10 * 1024**3)))
     )
 
+    # 語音辨識的數值精度（float32 / bfloat16）。bfloat16 記憶體約減半，但在沒有原生 BF16 指令的 CPU 上可能較慢。
+    asr_dtype: str = field(default_factory=lambda: os.environ.get("MVR2T_ASR_DTYPE", "float32"))
+    # PyTorch 執行緒數；0 = 由 PyTorch 自動決定
+    torch_threads: int = field(default_factory=lambda: int(os.environ.get("MVR2T_TORCH_THREADS", "0")))
+
     @property
     def sessions_root(self) -> Path:
         return self.data_dir / "temp" / "sessions"
+
+    @property
+    def models_root(self) -> Path:
+        """模型資料夾（規格 §7.3）：<userData>/models/<kind>/<id>/"""
+        return self.data_dir / "models"
 
     @property
     def runtime_ffmpeg_dir(self) -> Path:

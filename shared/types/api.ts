@@ -73,3 +73,68 @@ export interface FfmpegStatus {
   source: 'settings' | 'app-runtime' | 'path' | 'winget' | null;
   ffmpeg_path: string | null;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 05（需與 apps/backend/app/schemas/media.py 保持一致）
+// ---------------------------------------------------------------------------
+
+export interface ModelInfo {
+  id: string;
+  kind: 'asr' | 'aligner' | 'llm';
+  display_name: string;
+  role: string;
+  repo: string;
+  revision: string;
+  license: string;
+  size_bytes: number;
+  installed: boolean;
+  downloadable: boolean;
+  /** 尚未提供下載的模型會在哪個 Phase 推出 */
+  available_from_phase: number | null;
+}
+
+export interface ModelsResponse {
+  models_dir: string;
+  models: ModelInfo[];
+}
+
+/** 可指定的辨識語言（Qwen3-ASR 的英文名稱）；null = 自動偵測 */
+export type AsrLanguage = 'Chinese' | 'English' | 'Cantonese' | 'Japanese' | 'Korean';
+
+export interface TranscriptWord {
+  text: string;
+  start: number;
+  end: number;
+}
+
+/** 逐字稿的一句：start / end 是「原始檔案」時間軸上的秒數。 */
+export interface TranscriptSegment {
+  id: number;
+  start: number;
+  end: number;
+  text: string;
+  /** aligned = 對齊模型產生的精確時間；estimated = 依字數估計 */
+  timing: 'aligned' | 'estimated';
+  words: TranscriptWord[];
+}
+
+export interface Transcript {
+  media_id: string;
+  language: string | null;
+  timing: 'aligned' | 'estimated' | 'mixed';
+  duration: number;
+  models: Record<string, string | null>;
+  warnings: string[];
+  segments: TranscriptSegment[];
+}
+
+/** 語音辨識工作完成時的摘要（完整逐字稿另以 GET /api/transcript 取得）。 */
+export interface TranscribeResult {
+  media_id: string;
+  language: string | null;
+  timing: Transcript['timing'];
+  segment_count: number;
+  warnings: string[];
+  elapsed_seconds: number;
+  audio_seconds: number;
+}

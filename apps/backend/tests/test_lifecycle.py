@@ -77,8 +77,12 @@ def kill_tree(proc: subprocess.Popen[str]) -> None:
 
 def start_backend(**extra_env: str) -> tuple[subprocess.Popen[str], int, int]:
     """Start the backend like Electron does. Returns (process, port, server_pid)."""
+    import tempfile
+
     env = {
         **os.environ,
+        # never touch the developer's real %APPDATA%\\MVR2T (session cleanup runs at startup)
+        "MVR2T_DATA_DIR": tempfile.mkdtemp(prefix="mvr2t-lifecycle-"),
         "MVR2T_BACKEND_PORT": "0",
         "MVR2T_AUTH_TOKEN": TOKEN,
         "MVR2T_EXIT_ON_STDIN_EOF": "1",

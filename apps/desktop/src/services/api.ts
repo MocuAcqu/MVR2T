@@ -7,7 +7,16 @@
  * 在一般瀏覽器預覽時（沒有 window.mvr2t），改連手動啟動的開發用後端，不帶憑證。
  */
 import { DEFAULT_BACKEND_URL } from '@shared/constants/app';
-import type { FfmpegStatus, HealthResponse, MediaInfo, SessionResponse, TaskState } from '@shared/types/api';
+import type {
+  AsrLanguage,
+  FfmpegStatus,
+  HealthResponse,
+  MediaInfo,
+  ModelsResponse,
+  SessionResponse,
+  TaskState,
+  Transcript,
+} from '@shared/types/api';
 import type { AppInfo } from '@shared/types/ipc';
 
 export interface BackendConnection {
@@ -158,3 +167,19 @@ export function uploadMedia(
     xhr.send(file);
   });
 }
+
+// ---------------------------------------------------------------------------
+// Phase 05：模型與語音辨識
+// ---------------------------------------------------------------------------
+
+export const getModels = (conn: BackendConnection, signal?: AbortSignal) =>
+  apiJson<ModelsResponse>(conn, '/api/models', { signal });
+
+export const startTranscription = (conn: BackendConnection, sessionId: string, mediaId: string, language: AsrLanguage | null) =>
+  apiJson<{ task_id: string }>(conn, '/api/asr/transcribe', json({ session_id: sessionId, media_id: mediaId, language }));
+
+export const getTranscript = (conn: BackendConnection, sessionId: string, mediaId: string) =>
+  apiJson<Transcript>(
+    conn,
+    `/api/transcript?session_id=${encodeURIComponent(sessionId)}&media_id=${encodeURIComponent(mediaId)}`,
+  );

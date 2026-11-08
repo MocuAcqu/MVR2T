@@ -7,6 +7,8 @@ const api = vi.hoisted(() => ({
   startExtraction: vi.fn(),
   getTask: vi.fn(),
   cancelTask: vi.fn(),
+  startTranscription: vi.fn(),
+  getTranscript: vi.fn(),
 }));
 
 vi.mock('@/services/api', async (importOriginal) => {
@@ -16,8 +18,16 @@ vi.mock('@/services/api', async (importOriginal) => {
 
 import { AbortedError, ApiError } from '@/services/api';
 import { MAX_MEDIA_BYTES } from '@shared/constants/media';
-import { idleExtraction, useSessionStore } from '@/stores/sessionStore';
-import { __resetForTests, cancelImport, ensureSession, importFile, startExtraction, validateFile } from '../mediaController';
+import { idleExtraction, idleTranscription, useSessionStore } from '@/stores/sessionStore';
+import {
+  __resetForTests,
+  cancelImport,
+  ensureSession,
+  importFile,
+  startExtraction,
+  startTranscription,
+  validateFile,
+} from '../mediaController';
 
 const conn = { url: 'http://127.0.0.1:5000', token: 'a' };
 const file = (name: string, size = 10) => ({ name, size }) as File;
@@ -27,7 +37,14 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.useRealTimers();
   __resetForTests();
-  useSessionStore.setState({ sessionId: null, backendKey: null, import: { status: 'idle' }, extraction: idleExtraction });
+  useSessionStore.setState({
+    sessionId: null,
+    backendKey: null,
+    import: { status: 'idle' },
+    extraction: idleExtraction,
+    transcription: idleTranscription,
+    transcript: null,
+  });
   api.getBackendConnection.mockResolvedValue(conn);
   api.createSession.mockResolvedValue({ session_id: 's1' });
 });
@@ -152,5 +169,57 @@ describe('startExtraction', () => {
     await vi.advanceTimersByTimeAsync(500);
     expect(useSessionStore.getState().extraction).toMatchObject({ status: 'completed', progress: 1 });
     expect(api.getTask).toHaveBeenCalledWith(conn, 's1', 't1');
+  });
+});
+
+describe('startTranscription', () => {
+  const ready = (extractionStatus: 'completed' | 'idle') =>
+    useSessionStore.setState({
+      sessionId: 's1',
+      backendKey: `${conn.url}|a`,
+      import: { status: 'ready', file: file('a.mp4'), info },
+      extraction: { ...idleExtraction, status: extractionStatus },
+    });
+
+  it('does nothing until audio extraction has completed', async () => {
+    ready('idle');
+    await startTranscription(null);
+    expect(api.startTranscription).not.toHaveBeenCalled();
+  });
+
+  it('polls the task and fetches the full transcript when it completes', async () => {
+    vi.useFakeTimers();
+    ready('completed');
+    const transcript = { media_id: 'm1', language: 'Chinese', timing: 'aligned', segments: [{ id: 0, text: '你好。' }] };
+    api.startTranscription.mockResolvedValue({ task_id: 't9' });
+    api.getTask
+      .mockResolvedValueOnce({ status: 'running', progress: 0.3, stage: '正在辨識語音', detail: '第 1 / 2 段', message: null, result: null })
+      .mockResolvedValueOnce({ status: 'completed', progress: 1, stage: '完成', detail: '', message: null, result: { segment_count: 1 } });
+    api.getTranscript.mockResolvedValue(transcript);
+    await startTranscription('Chinese');
+    expect(api.startTranscription).toHaveBeenCalledWith(conn, 's1', 'm1', 'Chinese');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(useSessionStore.getState().transcription).toMatchObject({ status: 'running', detail: '第 1 / 2 段' });
+    expect(useSessionStore.getState().transcript).toBeNull();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(api.getTranscript).toHaveBeenCalledWith(conn, 's1', 'm1');
+    expect(useSessionStore.getState().transcription.status).toBe('completed');
+    expect(useSessionStore.getState().transcript).toEqual(transcript);
+  });
+
+  it('shows the backend message when it cannot start (e.g. model not downloaded)', async () => {
+    ready('completed');
+    api.startTranscription.mockRejectedValue(new ApiError(412, '尚未下載語音辨識模型。'));
+    await startTranscription(null);
+    expect(useSessionStore.getState().transcription).toMatchObject({ status: 'failed', message: '尚未下載語音辨識模型。' });
+  });
+
+  it('re-extracting audio clears the old transcript', async () => {
+    ready('completed');
+    useSessionStore.setState({ transcript: { media_id: 'm1' } as never });
+    api.startExtraction.mockResolvedValue({ task_id: 'x1' });
+    api.getTask.mockResolvedValue({ status: 'running', progress: 0, stage: '', detail: '', message: null, result: null });
+    await startExtraction();
+    expect(useSessionStore.getState().transcript).toBeNull();
   });
 });

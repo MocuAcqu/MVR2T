@@ -53,3 +53,59 @@ class FfmpegStatus(BaseModel):
     version: str | None
     source: Literal["settings", "app-runtime", "path", "winget"] | None
     ffmpeg_path: str | None
+
+
+# ---------------------------------------------------------------------------
+# Phase 05：模型與語音辨識
+# ---------------------------------------------------------------------------
+
+
+class ModelInfo(BaseModel):
+    id: str
+    kind: Literal["asr", "aligner", "llm"]
+    display_name: str
+    role: str
+    repo: str
+    revision: str
+    license: str
+    size_bytes: int
+    installed: bool
+    downloadable: bool
+    available_from_phase: int | None
+
+
+class ModelsResponse(BaseModel):
+    models_dir: str
+    models: list[ModelInfo]
+
+
+class TranscribeRequest(BaseModel):
+    session_id: str
+    media_id: str
+    #: None = 自動偵測；或 Chinese / English / Cantonese / Japanese / Korean
+    language: str | None = None
+
+
+class TranscriptWord(BaseModel):
+    text: str
+    start: float
+    end: float
+
+
+class TranscriptSegment(BaseModel):
+    id: int
+    start: float
+    end: float
+    text: str
+    timing: Literal["aligned", "estimated"]
+    words: list[TranscriptWord]
+
+
+class Transcript(BaseModel):
+    media_id: str
+    language: str | None
+    timing: Literal["aligned", "estimated", "mixed"]
+    duration: float
+    models: dict[str, str | None]
+    warnings: list[str]
+    segments: list[TranscriptSegment]
