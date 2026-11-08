@@ -146,6 +146,16 @@
 - 真實 Electron E2E 22/22（正式版）：啟動清除殘留、FFmpeg 狀態、中文檔名匯入、抽取與切段表、取消、換檔、重新整理清空、
   關閉清空、找不到 FFmpeg 的說明；無 CSP 違規。Phase 03 E2E 22/22、Phase 02 截圖 26/26 未退步。
 
+### Windows 套用回饋（2026-11-08）
+- 本機以 commit 886abe1 原封不動套用（42 個檔案；Cowork 先前說「43」是把清單標題行算進去了）。npm test 111、typecheck 通過。
+- **pytest 在 Windows 2 項失敗**：`test_locate_*` 只 mock 了 `shutil.which`，沒 mock `_winget_candidates()`，
+  而使用者電腦真的有 winget 安裝的 Gyan.FFmpeg。Claude Code 已在本機修正（6299ecb）；Cowork 已同步，
+  並新增 `test_locate_falls_back_to_winget_install`。**規則：預期「找不到 FFmpeg」的測試都要同時 mock `_winget_candidates`。**
+- 使用者電腦有兩份 FFmpeg：PATH 上的 7.1.1 essentials（Downloads 資料夾）與 winget 的 9.0.2 full_build；依尋找順序使用 PATH 的 7.1.1。
+- 使用者回報「抽取中取消後停在取消畫面、無法重新上傳」。沙盒以真實 Electron 重現三種路徑（工作區右上「換一個檔案」、
+  回首頁「更換檔案」、「再試一次」）皆正常，判斷為「下一步」不夠明顯：取消 / 失敗後卡片內只有「再試一次」。
+  已在卡片內加入「換一個檔案」按鈕與提示文字；**待使用者確認是否解決，若仍無法匯入需要具體操作步驟與畫面**。
+
 ### 已知限制 / 教訓
 - AAC 等有損格式的停頓邊界會偏移幾毫秒、結尾多約 19 ms padding，屬正常；測試以「切點落在停頓內」驗證。
 - **Playwright 在 Electron 中無法用 setInputFiles 傳入路徑含中文的檔案**（不觸發 change 事件）。這是測試工具限制，

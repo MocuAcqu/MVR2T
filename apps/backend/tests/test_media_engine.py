@@ -103,7 +103,7 @@ def _fake_pair(d: Path) -> None:
 
 def test_locate_prefers_settings_then_runtime(tmp_path, monkeypatch):
     monkeypatch.setattr(ff.shutil, "which", lambda name: None)
-    monkeypatch.setattr(ff, "_winget_candidates", lambda: [])  # ignore a real winget install on this machine
+    monkeypatch.setattr(ff, "_winget_candidates", lambda: [])  # ignore a real winget install on Windows
     custom, runtime = tmp_path / "custom", tmp_path / "runtime"
     assert ff.locate_ffmpeg("", runtime) is None
     _fake_pair(runtime / "bin")
@@ -115,11 +115,21 @@ def test_locate_prefers_settings_then_runtime(tmp_path, monkeypatch):
 
 def test_locate_requires_both_binaries_from_same_place(tmp_path, monkeypatch):
     monkeypatch.setattr(ff.shutil, "which", lambda name: "/usr/bin/ffmpeg" if name == "ffmpeg" else None)
-    monkeypatch.setattr(ff, "_winget_candidates", lambda: [])  # ignore a real winget install on this machine
+    monkeypatch.setattr(ff, "_winget_candidates", lambda: [])  # ignore a real winget install on Windows
     half = tmp_path / "half"
     half.mkdir()
     (half / f"ffmpeg{ff.EXE_SUFFIX}").write_text("")
     assert ff.locate_ffmpeg(str(half), tmp_path / "none") is None
+
+
+def test_locate_falls_back_to_winget_install(tmp_path, monkeypatch):
+    """After `winget install Gyan.FFmpeg` the PATH of an already-open terminal is stale; we still find it."""
+    monkeypatch.setattr(ff.shutil, "which", lambda name: None)
+    winget_bin = tmp_path / "Gyan.FFmpeg_x" / "ffmpeg-9.0.2-full_build" / "bin"
+    _fake_pair(winget_bin)
+    monkeypatch.setattr(ff, "_winget_candidates", lambda: [winget_bin])
+    loc = ff.locate_ffmpeg("", tmp_path / "none")
+    assert loc.source == "winget" and loc.ffmpeg.parent == winget_bin
 
 
 def test_locate_falls_back_to_path(tmp_path, monkeypatch):

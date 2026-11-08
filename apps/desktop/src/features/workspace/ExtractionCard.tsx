@@ -1,15 +1,22 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { cancelExtraction, startExtraction } from '@/features/media/mediaController';
+import { cancelExtraction, removeMedia, startExtraction } from '@/features/media/mediaController';
 import { SegmentTable } from '@/features/workspace/SegmentTable';
 import { formatDuration, formatPercent } from '@/lib/format';
 import { useSessionStore } from '@/stores/sessionStore';
+import { useUiStore } from '@/stores/uiStore';
 
 /** 抽取音訊（16 kHz 單聲道）並依停頓切段；顯示整體與目前步驟的進度，可取消（規格 §9.2）。 */
 export function ExtractionCard() {
   const x = useSessionStore((s) => s.extraction);
+  const setPage = useUiStore((s) => s.setPage);
   const busy = x.status === 'starting' || x.status === 'queued' || x.status === 'running';
+  const stopped = x.status === 'cancelled' || x.status === 'failed';
+  const changeFile = () => {
+    void removeMedia();
+    setPage('dashboard');
+  };
 
   return (
     <Card>
@@ -45,7 +52,9 @@ export function ExtractionCard() {
         {x.status === 'failed' ? (
           <p role="alert" className="rounded-lg bg-chip p-4 text-sm font-medium">{x.message ?? '音訊抽取失敗。'}</p>
         ) : null}
-        {x.status === 'cancelled' ? <p role="status" className="text-sm text-body-gray">已取消，暫存的音訊已刪除。</p> : null}
+        {x.status === 'cancelled' ? (
+          <p role="status" className="text-sm text-body-gray">已取消，暫存的音訊已刪除。可以再試一次，或換一個檔案。</p>
+        ) : null}
       </CardContent>
       <CardFooter>
         {busy ? (
@@ -53,9 +62,17 @@ export function ExtractionCard() {
             取消
           </Button>
         ) : (
-          <Button onClick={() => void startExtraction()}>
-            {x.status === 'completed' ? '重新抽取' : x.status === 'idle' ? '抽取音訊' : '再試一次'}
-          </Button>
+          <>
+            <Button onClick={() => void startExtraction()}>
+              {x.status === 'completed' ? '重新抽取' : x.status === 'idle' ? '抽取音訊' : '再試一次'}
+            </Button>
+            {/* 取消或失敗後，直接在這裡提供「換一個檔案」，不必找頁面右上角的按鈕 */}
+            {stopped ? (
+              <Button variant="secondary" onClick={changeFile}>
+                換一個檔案
+              </Button>
+            ) : null}
+          </>
         )}
       </CardFooter>
     </Card>
