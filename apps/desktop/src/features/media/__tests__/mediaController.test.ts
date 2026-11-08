@@ -95,38 +95,46 @@ describe('importFile', () => {
     await importFile(file('a.mp4'));
     expect(useSessionStore.getState().import.status).toBe('idle');
   });
+});
 
-  /** Upload mock that reports some progress, then waits until its signal is aborted (like the real XHR). */
-  const hangingUpload = () =>
+describe('cancelImport', () => {
+  /** uploadMedia that reports progress, then waits until its AbortSignal fires (like a real XHR). */
+  const pendingUpload = (progress: number) =>
     api.uploadMedia.mockImplementationOnce(
       (_c, _s, _f, onProgress: (n: number) => void, signal: AbortSignal) =>
         new Promise((_resolve, reject) => {
-          onProgress(0.15);
+          if (signal.aborted) return reject(new AbortedError()); // same as the real uploadMedia
+          onProgress(progress);
           signal.addEventListener('abort', () => reject(new AbortedError()), { once: true });
         }),
     );
-  const uploadStarted = () => vi.waitFor(() => expect(api.uploadMedia).toHaveBeenCalled());
 
-  it('returns to idle when the user presses Cancel during upload (regression: stuck at 15%)', async () => {
-    hangingUpload();
-    const pending = importFile(file('a.mp4'));
-    await uploadStarted();
-    expect(useSessionStore.getState().import).toMatchObject({ status: 'uploading', progress: 0.15 });
-
+  it('pressing Cancel mid-upload returns the UI to idle (regression: it stayed on the progress bar)', async () => {
+    pendingUpload(0.15);
+    const running = importFile(file('big.mp4'));
+    await vi.waitFor(() => expect(useSessionStore.getState().import).toMatchObject({ status: 'uploading', progress: 0.15 }));
     cancelImport();
-    await pending;
+    await running;
     expect(useSessionStore.getState().import.status).toBe('idle');
   });
 
-  it('keeps showing the new file when another file is picked during upload', async () => {
-    hangingUpload();
+  it('choosing another file mid-upload shows the new file, not idle', async () => {
+    pendingUpload(0.3);
     const first = importFile(file('first.mp4'));
-    await uploadStarted();
-
+    // wait until the first upload is really in flight (progress reported), not just marked as uploading
+    await vi.waitFor(() => expect(useSessionStore.getState().import).toMatchObject({ status: 'uploading', progress: 0.3 }));
     api.uploadMedia.mockResolvedValueOnce(info);
     await importFile(file('second.mp4'));
     await first;
-    expect(useSessionStore.getState().import).toMatchObject({ status: 'ready', file: { name: 'second.mp4' } });
+    const state = useSessionStore.getState().import;
+    expect(state.status).toBe('ready');
+    expect(state.status === 'ready' && state.file.name).toBe('second.mp4');
+  });
+
+  it('is a no-op when nothing is uploading', () => {
+    useSessionStore.setState({ import: { status: 'ready', file: file('a.mp4'), info } });
+    cancelImport();
+    expect(useSessionStore.getState().import.status).toBe('ready');
   });
 });
 

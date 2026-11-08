@@ -120,12 +120,12 @@ export async function importFile(file: File): Promise<void> {
 export function cancelImport(): void {
   const c = uploadController;
   uploadController = null;
-  if (c) {
-    c.abort();
-    // importFile 的 catch 會因 uploadController 已不是自己的 controller 而略過，所以畫面要在這裡重設；
-    // 否則按「取消」後會停在上傳進度畫面。
-    store().resetMedia();
-  }
+  if (!c) return;
+  c.abort();
+  // 先清掉 uploadController 是為了讓 importFile 的 catch 忽略這次的中止；
+  // 所以畫面要在這裡自己回到初始狀態，否則會停在「正在複製」的進度條（Windows 驗收發現）。
+  // importFile 開始新上傳時也會呼叫這裡，緊接著就會把狀態設成新檔案的 uploading。
+  store().resetMedia();
 }
 
 /** 移除目前的媒體：開一個新的 Session，後端會刪除舊 Session 的所有暫存檔。 */

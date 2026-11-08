@@ -10,7 +10,7 @@
 | 02 UI 設計系統 | ✅ 使用者已在 Windows 驗收通過（2026-11-06） |
 | 03 Electron 啟動 Python Backend | ✅ 使用者已在 Windows 驗收通過（2026-11-07；手動結束啟動器一項延後，見下方） |
 | 依賴升級 | ✅ 使用者已在 Windows 驗收通過（2026-11-07） |
-| 04 Media Processing | 🟡 沙盒驗證通過，**待 Windows 驗收** |
+| 04 Media Processing | ✅ Windows 主要項目驗收通過（2026-11-09，見「Windows 套用回饋」） |
 | 05 ASR Integration | ⬜ Phase 04 驗收後開始 |
 
 ## 沙盒驗證結果（2026-11-06）
@@ -152,9 +152,14 @@
   而使用者電腦真的有 winget 安裝的 Gyan.FFmpeg。Claude Code 已在本機修正（6299ecb）；Cowork 已同步，
   並新增 `test_locate_falls_back_to_winget_install`。**規則：預期「找不到 FFmpeg」的測試都要同時 mock `_winget_candidates`。**
 - 使用者電腦有兩份 FFmpeg：PATH 上的 7.1.1 essentials（Downloads 資料夾）與 winget 的 9.0.2 full_build；依尋找順序使用 PATH 的 7.1.1。
-- 使用者回報「抽取中取消後停在取消畫面、無法重新上傳」。沙盒以真實 Electron 重現三種路徑（工作區右上「換一個檔案」、
-  回首頁「更換檔案」、「再試一次」）皆正常，判斷為「下一步」不夠明顯：取消 / 失敗後卡片內只有「再試一次」。
-  已在卡片內加入「換一個檔案」按鈕與提示文字；**待使用者確認是否解決，若仍無法匯入需要具體操作步驟與畫面**。
+- 使用者回報「取消後停住、無法重新上傳」。**實際情境是首頁匯入（正在複製到工作階段）途中按取消**，不是抽取音訊。
+  Cowork 誤判為抽取取消，fix1 加的卡片內「換一個檔案」按鈕處理的是另一個情境（仍保留，屬 UX 改善）。
+  根本原因（Claude Code 在本機 43036b9 找到並修正）：`cancelImport()` 先把 `uploadController` 設為 null 再 abort，
+  `importFile` 的 catch 因此把「使用者取消」誤判成「被新的上傳取代」而直接 return，畫面停在 uploading。
+  修正：`cancelImport()` 在 abort 後呼叫 `resetMedia()`。Cowork 已同步，並以真實 Electron（限速上傳 4 MB/s、15% 時取消）
+  確認：舊程式碼卡住、新程式碼回到拖放區、部分上傳的檔案被刪除、可重新匯入。
+  **教訓：原本的單元測試讓 uploadMedia 直接丟 AbortedError，沒經過 cancelImport()；沙盒 E2E 只測了抽取取消，沒測上傳取消
+  （本機上傳太快來不及按）。之後的取消類測試要走「使用者實際按的那個函式」，E2E 需要限速才能測上傳中的操作。**
 
 ### 已知限制 / 教訓
 - AAC 等有損格式的停頓邊界會偏移幾毫秒、結尾多約 19 ms padding，屬正常；測試以「切點落在停頓內」驗證。

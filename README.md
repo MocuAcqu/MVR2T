@@ -11,7 +11,7 @@
 | 01 | Project Initialization | ✅ 已在 Windows 驗收 |
 | 02 | UI Design System | ✅ 已在 Windows 驗收 |
 | 03 | Electron and Backend Integration | ✅ 已在 Windows 驗收 |
-| 04 | Media Processing（FFmpeg、匯入、抽取音訊、切段） | 🟡 沙盒已驗證，待你在 Windows 驗收 |
+| 04 | Media Processing（FFmpeg、匯入、抽取音訊、切段） | ✅ 已在 Windows 驗收 |
 | 05 – 12 | ASR、LLM、心智圖、Session、Model Manager、硬體偵測、打包 | ⏳ |
 
 ## 環境需求
@@ -116,14 +116,14 @@ Phase 03 起**只需要一個終端機**。後端由 Electron 以 `apps/backend/
 
 先確認 FFmpeg 已安裝：`ffmpeg -version`、`ffprobe -version` 都有輸出。
 
-- [ ] 首頁「這台電腦」卡片的 FFmpeg 列顯示「已安裝 x.x」
-- [ ] 匯入一個 MP4（**檔名含中文與空格**）：出現「正在複製到工作階段」進度條，完成後顯示格式、大小與**長度**
-- [ ] 匯入時按「取消」可以中止（大檔案比較容易測）
+- [x] 首頁「這台電腦」卡片的 FFmpeg 列顯示「已安裝 x.x」
+- [x] 匯入一個 MP4（**檔名含中文與空格**）：出現「正在複製到工作階段」進度條，完成後顯示格式、大小與**長度**
+- [x] 匯入時按「取消」可以中止（大檔案比較容易測）
 - [ ] 匯入一個改了副檔名的假檔（例如把 .txt 改名成 .mp4）：顯示「檔案可能已損壞」
-- [ ] 工作區按「抽取音訊」：進度條與「x / y 秒」更新，完成後列出各段的開始 / 結束時間與切點
-- [ ] 一段約 1 小時的錄音：抽取中按「取消」會停止，顯示「已取消，暫存的音訊已刪除」
+- [x] 工作區按「抽取音訊」：進度條與「x / y 秒」更新，完成後列出各段的開始 / 結束時間與切點
+- [x] 抽取中按「取消」會停止，顯示「已取消」，卡片內可「再試一次」或「換一個檔案」
 - [ ] `%APPDATA%\MVR2T\temp\sessions\` 裡只有一個資料夾；重新整理（Ctrl+R）後換成新的資料夾；關閉程式後清空
-- [ ] `npm test`、`npm run typecheck`、後端 pytest 全數通過（pytest 需已安裝 FFmpeg，否則 FFmpeg 相關測試會顯示 skipped）
+- [x] `npm test`、`npm run typecheck`、後端 pytest 全數通過（pytest 需已安裝 FFmpeg，否則 FFmpeg 相關測試會顯示 skipped）
 
 ## 開發注意事項
 
