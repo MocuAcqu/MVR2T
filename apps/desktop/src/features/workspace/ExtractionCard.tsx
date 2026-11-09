@@ -2,6 +2,7 @@ import { Mono } from '@/components/mono/Mono';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { KeepAwakeNote } from '@/features/media/KeepAwakeNote';
 import { cancelExtraction, removeMedia, startExtraction } from '@/features/media/mediaController';
 import { GuideCoach } from '@/features/guide/GuideCoach';
 import { GuideTarget } from '@/features/guide/GuideTarget';
@@ -41,6 +42,7 @@ export function ExtractionCard() {
               <span className="tabular-nums text-body-gray">{formatPercent(x.progress)}</span>
             </div>
             <Progress label="音訊抽取進度" value={x.progress} />
+            <KeepAwakeNote />
           </div>
           </div>
         ) : null}

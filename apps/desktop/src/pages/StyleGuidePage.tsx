@@ -135,7 +135,7 @@ export function StyleGuidePage() {
             interactive（hover / click）
           </div>
         </div>
-        <GuideBubble step="extract" className="mt-6 max-w-xl" onDismiss={() => {}} onDisable={() => {}} />
+        <GuideBubble step="extract" className="mt-6 max-w-xl" />
       </Section>
     </PageContainer>
   );

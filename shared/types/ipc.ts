@@ -36,6 +36,12 @@ export interface BackendState {
   mode: 'managed' | 'external';
 }
 
+/** 系統通知內容（逐字稿完成、處理失敗等）。 */
+export interface AppNotification {
+  title: string;
+  body: string;
+}
+
 /**
  * Preload 透過 contextBridge 暴露給 Renderer 的「有限 API」（規格 §11-8）。
  * Renderer 只能呼叫這裡列出的方法，無法直接取得 Node.js / Electron 權限。
@@ -46,4 +52,8 @@ export interface Mvr2tBridge {
   restartBackend(): Promise<BackendState>;
   /** 訂閱後端狀態變化；回傳取消訂閱函式。 */
   onBackendState(listener: (state: BackendState) => void): () => void;
+  /** 程式不是目前使用中的視窗時，顯示系統通知並閃爍工作列圖示。回傳是否真的顯示了通知。 */
+  notify(notification: AppNotification): Promise<boolean>;
+  /** true：處理中，防止電腦因閒置自動睡眠（螢幕仍可關閉）；false：解除。 */
+  setKeepAwake(on: boolean): Promise<void>;
 }

@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { KeepAwakeNote } from '@/features/media/KeepAwakeNote';
 import { cancelTranscription, startTranscription } from '@/features/media/mediaController';
 import { GuideCoach } from '@/features/guide/GuideCoach';
 import { GuideTarget } from '@/features/guide/GuideTarget';
@@ -93,8 +94,9 @@ export function TranscriptCard() {
             <p className="text-xs text-body-gray">
               {loadingModel
                 ? '正在把模型載入記憶體。第一次約需 1～2 分鐘，之後會比較快。'
-                : '處理時間依電腦效能而定，長錄音可能需要與錄音長度相近的時間。'}
+                : '處理時間依電腦效能而定，長錄音可能需要與錄音長度相近的時間。完成時如果你正在用其他程式，會跳出系統通知。'}
             </p>
+            <KeepAwakeNote />
           </div>
           </div>
         ) : null}

@@ -21,6 +21,12 @@ import {
 import { idleExtraction, idleTranscription, useSessionStore } from '@/stores/sessionStore';
 
 const POLL_MS = 400;
+/**
+ * 輪詢時連不到後端（例如電腦睡眠、喚醒的那一刻）不要立刻判定失敗：工作仍在後端進行。
+ * 每 2 秒重試，連續失敗約 5 分鐘（以次數計，睡眠期間不算）才放棄。
+ */
+const RECONNECT_MS = 2000;
+const MAX_RECONNECT_ATTEMPTS = 150;
 const store = () => useSessionStore.getState();
 
 let uploadController: AbortController | null = null;
@@ -158,6 +164,7 @@ async function poll(
   sessionId: string,
   taskId: string,
   onCompleted?: () => Promise<void>,
+  failures = 0,
 ): Promise<void> {
   const current = () => store()[kind].taskId === taskId;
   try {
@@ -178,6 +185,15 @@ async function poll(
     }
   } catch (err) {
     if (!current()) return;
+    const network = err instanceof ApiError && err.status === 0;
+    if (network && failures < MAX_RECONNECT_ATTEMPTS) {
+      patchTrack(kind, { detail: '連線中斷，重新連線中…' });
+      pollTimers[kind] = setTimeout(
+        () => void poll(kind, conn, sessionId, taskId, onCompleted, failures + 1),
+        RECONNECT_MS,
+      );
+      return;
+    }
     patchTrack(kind, { status: 'failed', message: messageOf(err) });
   }
 }

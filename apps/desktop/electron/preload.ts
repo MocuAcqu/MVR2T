@@ -4,7 +4,7 @@
  */
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import { IPC_CHANNELS } from '@shared/constants/app';
-import type { AppInfo, BackendState, Mvr2tBridge } from '@shared/types/ipc';
+import type { AppInfo, AppNotification, BackendState, Mvr2tBridge } from '@shared/types/ipc';
 
 const bridge: Mvr2tBridge = {
   getAppInfo: (): Promise<AppInfo> => ipcRenderer.invoke(IPC_CHANNELS.getAppInfo),
@@ -18,6 +18,8 @@ const bridge: Mvr2tBridge = {
       ipcRenderer.removeListener(IPC_CHANNELS.backendStateChanged, wrapped);
     };
   },
+  notify: (notification: AppNotification): Promise<boolean> => ipcRenderer.invoke(IPC_CHANNELS.notify, notification),
+  setKeepAwake: (on: boolean): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.setKeepAwake, on),
 };
 
 contextBridge.exposeInMainWorld('mvr2t', bridge);

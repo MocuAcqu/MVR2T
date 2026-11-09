@@ -26,6 +26,10 @@ export const IPC_CHANNELS = {
   getAppInfo: 'app:get-info',
   getBackendState: 'backend:get-state',
   restartBackend: 'backend:restart',
+  /** Renderer → Main：顯示系統通知（例如逐字稿完成）。 */
+  notify: 'app:notify',
+  /** Renderer → Main：處理中時防止電腦自動睡眠。 */
+  setKeepAwake: 'power:keep-awake',
   /** Main → Renderer 推送後端狀態變化。 */
   backendStateChanged: 'backend:state-changed',
 } as const;

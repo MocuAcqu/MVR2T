@@ -1,8 +1,7 @@
 import { PageContainer } from '@/components/layout/PageContainer';
 import { HeroTitle } from '@/features/dashboard/HeroTitle';
-import { HardwareStatusCard } from '@/features/dashboard/HardwareStatusCard';
 import { HowItWorks } from '@/features/dashboard/HowItWorks';
-import { ModelStatusCard } from '@/features/dashboard/ModelStatusCard';
+import { SystemNotice } from '@/features/dashboard/SystemNotice';
 import { ImportCard } from '@/features/import/ImportCard';
 
 export function DashboardPage() {
@@ -15,10 +14,8 @@ export function DashboardPage() {
         <ImportCard />
       </section>
 
-      <section aria-label="系統狀態" className="mt-12 grid gap-6 md:grid-cols-2">
-        <ModelStatusCard />
-        <HardwareStatusCard />
-      </section>
+      {/* 模型與這台電腦的詳細狀態已移到「模型管理」；首頁只在有問題時提醒 */}
+      <SystemNotice className="mt-10" />
 
       <HowItWorks className="mt-14" />
     </PageContainer>

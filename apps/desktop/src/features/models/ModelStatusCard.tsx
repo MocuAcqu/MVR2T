@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useSystemStatus } from '@/hooks/useSystemStatus';
 import { formatBytes } from '@/lib/format';
-import { useUiStore } from '@/stores/uiStore';
 
 function StatusBadge({ m }: { m: ModelInfo }) {
   if (!m.downloadable) return <Badge variant="outline">Phase {m.available_from_phase} 推出</Badge>;
@@ -13,7 +12,6 @@ function StatusBadge({ m }: { m: ModelInfo }) {
 
 /** 模型清單與安裝狀態來自後端（GET /api/models）；模型 ID 與版本只定義在後端的登錄表。 */
 export function ModelStatusCard() {
-  const setPage = useUiStore((s) => s.setPage);
   const { models, refreshModels } = useSystemStatus();
   const list = models.status === 'done' ? models.data.models : [];
   const missing = list.filter((m) => m.downloadable && !m.installed);
@@ -54,12 +52,11 @@ export function ModelStatusCard() {
           </div>
         ) : null}
       </CardContent>
-      <CardFooter>
-        <Button variant="secondary" size="sm" onClick={() => setPage('models')}>前往模型管理</Button>
-        {models.status === 'done' ? (
-          <Button variant="ghost" size="sm" onClick={refreshModels}>重新檢查</Button>
-        ) : null}
-      </CardFooter>
+      {models.status === 'done' ? (
+        <CardFooter>
+          <Button variant="secondary" size="sm" onClick={refreshModels}>重新檢查</Button>
+        </CardFooter>
+      ) : null}
     </Card>
   );
 }

@@ -170,6 +170,31 @@ describe('startExtraction', () => {
     expect(useSessionStore.getState().extraction).toMatchObject({ status: 'completed', progress: 1 });
     expect(api.getTask).toHaveBeenCalledWith(conn, 's1', 't1');
   });
+  it('keeps waiting when the backend is briefly unreachable (e.g. the computer slept) instead of failing', async () => {
+    vi.useFakeTimers();
+    useSessionStore.setState({ sessionId: 's1', backendKey: `${conn.url}|a`, import: { status: 'ready', file: file('a.mp4'), info } });
+    api.startExtraction.mockResolvedValue({ task_id: 't1' });
+    api.getTask
+      .mockResolvedValueOnce({ status: 'running', progress: 0.4, stage: '正在抽取音訊', detail: '', message: null, result: null })
+      .mockRejectedValueOnce(new ApiError(0, '無法連線到本機後端。'))
+      .mockRejectedValueOnce(new ApiError(0, '無法連線到本機後端。'))
+      .mockResolvedValueOnce({ status: 'completed', progress: 1, stage: '完成', detail: '', message: null, result: { segments: [] } });
+    await startExtraction();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(useSessionStore.getState().extraction).toMatchObject({ status: 'running', progress: 0.4, detail: '連線中斷，重新連線中…' });
+    await vi.advanceTimersByTimeAsync(4100);
+    expect(useSessionStore.getState().extraction).toMatchObject({ status: 'completed', detail: '' });
+  });
+
+  it('still fails right away on a real error from the backend', async () => {
+    vi.useFakeTimers();
+    useSessionStore.setState({ sessionId: 's1', backendKey: `${conn.url}|a`, import: { status: 'ready', file: file('a.mp4'), info } });
+    api.startExtraction.mockResolvedValue({ task_id: 't1' });
+    api.getTask.mockRejectedValueOnce(new ApiError(404, '找不到這個工作。'));
+    await startExtraction();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(useSessionStore.getState().extraction).toMatchObject({ status: 'failed', message: '找不到這個工作。' });
+  });
 });
 
 describe('startTranscription', () => {

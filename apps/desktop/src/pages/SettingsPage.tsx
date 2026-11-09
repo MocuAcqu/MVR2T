@@ -21,7 +21,7 @@ export function SettingsPage() {
             <Mono animation="hint" scale={2} />
             <div className="flex min-w-0 flex-1 flex-col gap-1">
               <CardTitle id={`${id}-title`}>操作引導</CardTitle>
-              <CardDescription>每完成一步，下一個按鈕會發光，Mono 會說明接下來要做什麼。</CardDescription>
+              <CardDescription>開啟時，每完成一步，下一個按鈕會發光，Mono 會說明接下來要做什麼。不需要時可以在這裡關閉。</CardDescription>
             </div>
             <button
               type="button"

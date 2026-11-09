@@ -4,11 +4,21 @@
  */
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { app, BrowserWindow, ipcMain, session, shell, type IpcMainInvokeEvent } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  Notification,
+  powerMonitor,
+  powerSaveBlocker,
+  session,
+  shell,
+  type IpcMainInvokeEvent,
+} from 'electron';
 import { APP_NAME, IPC_CHANNELS } from '@shared/constants/app';
 import type { AppInfo, BackendState } from '@shared/types/ipc';
 import { BackendManager, resolveBackendCommand } from './backend';
-import { isAppUrl, isSafeExternalUrl, rendererOrigins } from './security';
+import { isAppUrl, isSafeExternalUrl, parseNotification, rendererOrigins } from './security';
 
 // 開發模式：由 `npm run dev` 注入 Vite dev server 位址；正式版則載入打包後的 index.html。
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
@@ -111,6 +121,7 @@ function createMainWindow(): BrowserWindow {
   });
 
   win.once('ready-to-show', () => win.show());
+  win.on('focus', () => win.flashFrame(false)); // 停止通知造成的工作列閃爍
 
   // 阻擋視窗內任意導航 / 開新視窗
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -140,11 +151,55 @@ function assertTrustedSender(event: IpcMainInvokeEvent): void {
   }
 }
 
-function handle<T>(channel: string, fn: () => T | Promise<T>): void {
-  ipcMain.handle(channel, (event) => {
+function handle<T>(channel: string, fn: (arg: unknown) => T | Promise<T>): void {
+  ipcMain.handle(channel, (event, arg: unknown) => {
     assertTrustedSender(event);
-    return fn();
+    return fn(arg);
   });
+}
+
+// ---------------------------------------------------------------------------
+// 通知與防止睡眠
+// ---------------------------------------------------------------------------
+
+function mainWindow(): BrowserWindow | undefined {
+  return BrowserWindow.getAllWindows().find((w) => !w.isDestroyed());
+}
+
+/** 程式不在前景時才通知（在前景時畫面上已經看得到結果）。點通知會把視窗帶回前景。 */
+function showNotification(input: unknown): boolean {
+  const n = parseNotification(input);
+  const win = mainWindow();
+  if (!n || !Notification.isSupported()) return false;
+  if (win && win.isVisible() && win.isFocused() && !win.isMinimized()) return false;
+  const notification = new Notification({ title: n.title, body: n.body });
+  notification.on('click', () => {
+    const w = mainWindow();
+    if (!w) return;
+    if (w.isMinimized()) w.restore();
+    w.show();
+    w.focus();
+  });
+  notification.show();
+  win?.flashFrame(true); // Windows：工作列圖示閃爍，直到使用者切回程式
+  return true;
+}
+
+/**
+ * 處理中防止電腦「因閒置」自動睡眠（螢幕仍可依設定關閉）。
+ * Windows 的 Modern Standby 在螢幕關閉後會讓系統進入待命並暫停桌面程式，辨識就會停住。
+ * 闔上筆電或手動睡眠無法阻止；喚醒後程序會繼續，前端輪詢也會自動重新連線。
+ */
+let keepAwakeId: number | null = null;
+function setKeepAwake(on: unknown): void {
+  if (on === true && keepAwakeId === null) {
+    keepAwakeId = powerSaveBlocker.start('prevent-app-suspension');
+    console.log('[power] keep awake: on');
+  } else if (on !== true && keepAwakeId !== null) {
+    powerSaveBlocker.stop(keepAwakeId);
+    keepAwakeId = null;
+    console.log('[power] keep awake: off');
+  }
 }
 
 function registerIpc(): void {
@@ -160,6 +215,8 @@ function registerIpc(): void {
     if (externalBackendUrl) return currentBackendState();
     return backend.restart();
   });
+  handle(IPC_CHANNELS.notify, showNotification);
+  handle(IPC_CHANNELS.setKeepAwake, setKeepAwake);
 }
 
 // ---------------------------------------------------------------------------
@@ -180,7 +237,14 @@ if (!app.requestSingleInstanceLock()) {
 
   registerIpc();
 
+  // Windows 通知需要 AppUserModelID。開發時沒有開始功能表捷徑，用 Electron 執行檔路徑才會顯示通知。
+  if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? 'com.mvr2t.desktop' : process.execPath);
+
   void app.whenReady().then(() => {
+    // 除錯用：睡眠／喚醒與畫面行程異常都記在終端機，方便追查「螢幕關閉後內容消失」這類問題。
+    powerMonitor.on('suspend', () => console.log('[power] system suspend'));
+    powerMonitor.on('resume', () => console.log('[power] system resume'));
+    app.on('render-process-gone', (_e, _wc, details) => console.log(`[renderer] gone: ${details.reason} (exit ${details.exitCode})`));
     installDevCsp();
     // 視窗與後端同時啟動；畫面會顯示「後端啟動中」直到健康檢查通過。
     if (!externalBackendUrl) void backend.start();

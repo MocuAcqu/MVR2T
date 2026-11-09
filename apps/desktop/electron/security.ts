@@ -36,3 +36,14 @@ export function isSafeExternalUrl(url: string): boolean {
 export function rendererOrigins(devServerUrl?: string): string[] {
   return devServerUrl ? [new URL(devServerUrl).origin] : ['null'];
 }
+
+/** IPC 傳入的通知內容不可信：只接受兩個字串欄位，去掉控制字元並限制長度。 */
+export function parseNotification(input: unknown): { title: string; body: string } | null {
+  if (!input || typeof input !== 'object') return null;
+  const { title, body } = input as Record<string, unknown>;
+  if (typeof title !== 'string' || typeof body !== 'string') return null;
+  // eslint-disable-next-line no-control-regex
+  const clean = (s: string, max: number) => s.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max);
+  const t = clean(title, 80);
+  return t ? { title: t, body: clean(body, 240) } : null;
+}
