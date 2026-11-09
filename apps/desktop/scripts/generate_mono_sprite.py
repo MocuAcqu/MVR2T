@@ -141,6 +141,7 @@ def main() -> None:
         "import type { MonoSprite } from './types';\n\n"
         f"export const MONO_SPRITE: MonoSprite = {body};\n",
         encoding="utf-8",
+        newline="\n",  # LF on every platform, so the output is byte-identical on Windows too
     )
     print(f"wrote {OUT}")
 

@@ -13,7 +13,7 @@
 | 03 | Electron and Backend Integration | ✅ 已在 Windows 驗收 |
 | 04 | Media Processing（FFmpeg、匯入、抽取音訊、切段） | ✅ 已在 Windows 驗收 |
 | 05 | ASR Integration（Qwen3-ASR + 時間戳記對齊） | ✅ 已在 Windows 實測 |
-| — | 介面更新（吉祥物 Mono、首頁標題、操作引導） | 🟡 待你在 Windows 驗收 |
+| — | 介面更新（吉祥物 Mono、首頁標題、操作引導） | ✅ 已在 Windows 驗收 |
 | 06 – 12 | LLM、心智圖、Session、Model Manager、硬體偵測、打包 | ⏳ |
 
 ## 環境需求

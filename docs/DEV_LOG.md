@@ -1,6 +1,6 @@
 # 開發紀錄（給接手的 Claude / Claude Code）
 
-最後更新：2026-11-09。Phase 05 已在 Windows 實測通過；新增吉祥物 Mono、首頁標題動畫與操作引導（待 Windows 驗收）。
+最後更新：2026-11-09。Phase 05 已在 Windows 實測通過；吉祥物 Mono、首頁標題動畫與操作引導已在 Windows 驗收；ASR 預設精度定為 float32。
 
 ## 目前進度
 
@@ -12,7 +12,7 @@
 | 依賴升級 | ✅ 使用者已在 Windows 驗收通過（2026-11-07） |
 | 04 Media Processing | ✅ Windows 主要項目驗收通過（2026-11-09，見「Windows 套用回饋」） |
 | 05 ASR Integration | ✅ Windows 實測通過（24 分鐘中文錄音 → 320 句，float32 約 32 分鐘）；benchmark 待使用者執行 |
-| 介面更新（Mono／標題／引導） | 🟡 沙盒驗證通過，**待 Windows 驗收** |
+| 介面更新（Mono／標題／引導） | ✅ Windows 驗收通過（2026-11-09） |
 | 06 LLM Integration | ⬜ 介面更新驗收後開始 |
 
 ## 沙盒驗證結果（2026-11-06）
@@ -147,7 +147,25 @@
   失敗就 raise，**絕不回報假的 0 MB**），`scripts/benchmark_asr.py` 改用它（原本在 Windows 峰值記憶體永遠是 0）；
   `tests/test_lifecycle.py` 的 `pid_alive` 在 Windows 也改為具型別呼叫（OpenProcess 失敗時：87=不存在、5=存在、其他 raise）。
   **規則：ctypes 一律用私有 WinDLL 並宣告 argtypes/restype、檢查回傳值；不要用 `ctypes.windll` 全域實例。**
-- 待 Claude Code 在 Windows 處理：`app/main.py` 的 `_stdin_is_windows_pipe` 仍用未宣告型別的 `ctypes.windll.kernel32.GetFileType`。
+- `_stdin_is_windows_pipe` 的 GetFileType 已由 Claude Code 在本機改為具型別呼叫（使用者本機 3909935）。
+  **沙盒副本尚未同步這個 commit**（patch 未附上）；在同步前，交付時不要包含 `apps/backend/app/main.py`，以免蓋掉它。
+- 產生器改為 `write_text(..., newline="\n")`：Windows 上預設寫出 CRLF，內容相同但位元組不同（Claude Code 回報）。
+
+### Windows 驗收結果（2026-11-09）
+Claude Code 套用為 e3c87ca：typecheck、vitest 125、pytest 95 passed / 4 skipped、test_procmem 實際執行通過；
+README「介面更新驗收清單」全部通過（含 125%／150% 縮放下 Mono 清晰、引導依序出現、「不再提示」重開後保留）。
+
+### ASR 精度基準（使用者電腦，2026-11-09，benchmark_asr，60 秒中文歌曲，10 執行緒）
+| 精度 | 載入 | 辨識 | RTF | 峰值記憶體 |
+|---|---|---|---|---|
+| float32 | 13.7 s | 101.0 s | 1.68 | 4227 MB |
+| bfloat16 | 27.7 s | 147.4 s | 2.46 | 2672 MB |
+
+決定：**預設維持 float32**。這顆 CPU 沒有原生 BF16，bfloat16 反而慢 1.5 倍，只省 1.5 GB 記憶體。
+Phase 10 硬體偵測：只有在可用記憶體不足（float32 約需 4.3 GB）時才退回 bfloat16。
+RTF > 1（歌曲有伴奏，比一般說話難；24 分鐘說話錄音實測 RTF 約 1.33）。之後可評估的加速：限制每段最大生成長度、
+批次辨識多段、或 Phase 10 有 GPU 時用 CUDA。benchmark 的預覽文字是模型原始輸出（簡體），App 內會經 OpenCC 轉繁體。
+
 - 偶發失敗的 webm 測試：測試影片用無限長的 lavfi 來源＋`-shortest`，長度不固定；改為依 wav 長度明確指定 `d=`。
 - 逐字稿載入模型時顯示不確定進度與提示；「部分估計」時說明有幾句是估計時間。
 
