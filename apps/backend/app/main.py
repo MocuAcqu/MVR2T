@@ -119,16 +119,30 @@ def _wait_stdin_eof_windows_pipe(fd: int) -> None:
 
 
 def _stdin_is_windows_pipe(fd: int) -> bool:
+    """stdin 是否為 Windows 管線（Electron 啟動時是）。判斷不出來時回傳 False，退回原本的阻塞讀取。
+
+    依 app/core/procmem.py 的原則：使用私有 WinDLL 並宣告型別。未宣告時 HANDLE 會被當成 32 位元 int 傳入，
+    在 64 位元 Windows 上可能無聲失敗。
+    """
     if sys.platform != "win32":
         return False
     import ctypes
     import msvcrt
+    from ctypes import wintypes
 
-    file_type_pipe = 3
+    file_type_unknown, file_type_pipe = 0, 3
     try:
-        return ctypes.windll.kernel32.GetFileType(msvcrt.get_osfhandle(fd)) == file_type_pipe
+        handle = msvcrt.get_osfhandle(fd)
     except OSError:
         return False
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+    kernel32.GetFileType.argtypes = [wintypes.HANDLE]
+    kernel32.GetFileType.restype = wintypes.DWORD
+    ctypes.set_last_error(0)  # FILE_TYPE_UNKNOWN 只有在 GetLastError 非 0 時才代表失敗
+    file_type = kernel32.GetFileType(handle)
+    if file_type == file_type_unknown and ctypes.get_last_error() != 0:
+        return False
+    return file_type == file_type_pipe
 
 
 def _wait_stdin_eof() -> None:
