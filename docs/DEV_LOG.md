@@ -1,6 +1,6 @@
 # 開發紀錄（給接手的 Claude / Claude Code）
 
-最後更新：2026-11-09（優化：完成通知、睡眠處理、首頁精簡、引導簡化，待 Windows 驗收）。Phase 05 已在 Windows 實測通過；吉祥物 Mono、首頁標題動畫與操作引導已在 Windows 驗收；ASR 預設精度定為 float32。
+最後更新：2026-11-09。Phase 05 與之後的介面／通知／防睡眠優化都已在 Windows 驗收，下一步 Phase 06。Phase 05 已在 Windows 實測通過；吉祥物 Mono、首頁標題動畫與操作引導已在 Windows 驗收；ASR 預設精度定為 float32。
 
 ## 目前進度
 
@@ -13,7 +13,8 @@
 | 04 Media Processing | ✅ Windows 主要項目驗收通過（2026-11-09，見「Windows 套用回饋」） |
 | 05 ASR Integration | ✅ Windows 實測通過（24 分鐘中文錄音 → 320 句，float32 約 32 分鐘）；benchmark 待使用者執行 |
 | 介面更新（Mono／標題／引導） | ✅ Windows 驗收通過（2026-11-09） |
-| 06 LLM Integration | ⬜ 介面更新驗收後開始 |
+| 優化（通知／防睡眠／首頁／引導） | ✅ Windows 驗收通過（2026-11-09） |
+| 06 LLM Integration | ⬜ 下一步 |
 
 ## 沙盒驗證結果（2026-11-06）
 
@@ -121,7 +122,9 @@ Windows 驗收（Claude Code 回報，筆電為 Modern Standby，不支援 S3）
    **PowerRequestSystemRequired**（PowerCreateRequest＋原因文字，`powercfg /requests` 的 SYSTEM 區段會看到 python.exe
    「MVR2T：正在處理影音…」），最後一個工作結束時清除；失敗只記錄 `[power] could not …`，不影響工作。
    Electron 端的 ExecutionRequired 保留（讓程式不被暫停）。macOS／Linux 目前為 no-op。
-   **待 Windows 確認**：Modern Standby 機型在螢幕因閒置關閉後，有 SYSTEM 請求時是否就不會出現 `[power] system suspend`。
+   **Windows 已確認（使用者 a5638ec，Modern Standby 筆電）**：辨識中 `powercfg /requests` 的 SYSTEM 區段有 python.exe 與原因文字、
+   結束後消失；螢幕閒置關閉並超過睡眠時間，沒有出現 `[power] system suspend`，辨識持續進行。
+   `MVR2T_DEV_NO_HMR=1` 時闔上筆電再打開，畫面與辨識進度保留、工作接著進行。pytest 100 passed / 4 skipped（Windows）。
 2. **開發模式闔上筆電後頁面被清空**：不是後端或畫面行程的問題（醒來後同一個工作仍回 200，沒有 `[renderer] gone`），
    而是 Vite 開發伺服器的客戶端在 websocket 斷線、重新連上後執行 `location.reload()`。正式版（`npm start`）沒有這個行為，實測畫面與辨識都保留。
    在開發模式要測睡眠時，設定 `MVR2T_DEV_NO_HMR=1` 會關閉 HMR 與 websocket（`server.hmr=false`、`server.ws=false`；
