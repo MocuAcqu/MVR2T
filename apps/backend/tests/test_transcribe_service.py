@@ -18,8 +18,10 @@ from app.core.config import Settings
 from app.engines.asr.qwen3 import AsrResult
 from app.engines.asr.text import Unit
 from app.main import create_app
+from app.api import models as models_api
 from app.models import store
 from app.models.registry import QWEN3_ASR_0_6B
+from app.services import transcribe as transcribe_service
 from app.engines.asr.pipeline import Engines
 from tests.test_media_api import LOC, extract, new_session, upload, wait_task, write_signal_wav
 
@@ -98,19 +100,21 @@ def read_audio(path: Path) -> np.ndarray:
 
 
 @pytest.fixture()
-def data_dir(tmp_path) -> Path:
-    d = tmp_path / "userData"
-    # pretend the ASR model is installed (marker + right-sized empty files are enough for is_installed)
-    md = QWEN3_ASR_0_6B.local_dir(d / "models")
-    md.mkdir(parents=True)
-    for f in QWEN3_ASR_0_6B.files:
-        with (md / f.name).open("wb") as fh:
-            fh.truncate(f.size)  # sparse file: correct size, no disk usage
-    (md / store.MARKER).write_text(
-        f'{{"id": "{QWEN3_ASR_0_6B.id}", "repo": "{QWEN3_ASR_0_6B.repo}", "revision": "{QWEN3_ASR_0_6B.revision}"}}',
-        encoding="utf-8",
-    )
-    return d
+def data_dir(tmp_path, monkeypatch) -> Path:
+    """userData folder where the ASR model counts as installed.
+
+    Patches the installed-check instead of creating placeholder model files: a 1.5 GB file made with
+    truncate() is sparse on Linux, but on Windows/NTFS the space is really allocated (and pytest keeps
+    the temp folders of the last 3 runs), which could fill the developer's disk.
+    """
+    real = store.is_installed
+
+    def fake_is_installed(spec, root):
+        return spec.id == QWEN3_ASR_0_6B.id or real(spec, root)
+
+    monkeypatch.setattr(transcribe_service, "is_installed", fake_is_installed)
+    monkeypatch.setattr(models_api, "is_installed", fake_is_installed)
+    return tmp_path / "userData"
 
 
 def make_client(data_dir: Path, engines: Engines) -> TestClient:

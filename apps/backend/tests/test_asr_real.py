@@ -14,6 +14,7 @@ cancellable; long audio does not crash.
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import re
@@ -34,13 +35,9 @@ from tests.test_media_api import LOC, extract, new_session, upload, wait_task
 SPEECH = Path(os.environ.get("MVR2T_TEST_SPEECH_DIR", "/nonexistent"))
 MODELS_DATA = Path(os.environ.get("MVR2T_DATA_DIR") or default_user_data_dir())
 
-try:
-    import torch  # noqa: F401
-    import transformers  # noqa: F401
-
-    HAVE_TORCH = True
-except ImportError:  # pragma: no cover
-    HAVE_TORCH = False
+# find_spec checks availability WITHOUT importing torch, so the memory test below can assert that the
+# backend process itself never loads it.
+HAVE_TORCH = importlib.util.find_spec("torch") is not None and importlib.util.find_spec("transformers") is not None
 
 pytestmark = [
     pytest.mark.skipif(LOC is None, reason="FFmpeg not installed"),
@@ -55,11 +52,10 @@ pytestmark = [
 
 @pytest.fixture()
 def client(tmp_path):
-    # models from the real userData folder, session temp in a throwaway folder
-    cfg = Settings(auth_token="", data_dir=tmp_path / "userData")
-    object.__setattr__(cfg, "data_dir", tmp_path / "userData")
-    app = create_app(cfg)
+    # Models from the real folder, session temp in a throwaway folder. models_dir points straight at the
+    # real models (no symlink: creating symlinks on Windows needs Developer Mode or admin rights).
     real_models = MODELS_DATA / "models"
+    app = create_app(Settings(auth_token="", data_dir=tmp_path / "userData", models_dir=real_models))
 
     from app.engines.asr.worker import EngineSpec
 
@@ -73,9 +69,6 @@ def client(tmp_path):
         )
 
     app.state.engines_factory = engines
-    # the "model installed" check in start_transcription looks at cfg.models_root
-    (tmp_path / "userData").mkdir(parents=True)
-    (tmp_path / "userData" / "models").symlink_to(real_models, target_is_directory=True)
     with TestClient(app) as c:
         yield c
 
@@ -188,56 +181,47 @@ def test_cancel_real_model_mid_recognition(client):
     assert st["status"] == "cancelled" and elapsed < 5  # generation stopped by StoppingCriteria
 
 
-def _windows_rss_mb() -> float:
-    """Current working set of this process (same meaning as Linux VmRSS). `resource` does not exist on Windows."""
-    import ctypes
-    from ctypes import wintypes
+def _rss_mb() -> float | None:
+    """Current resident memory of this process in MB (Windows / Linux), or None where not measurable.
 
-    class PROCESS_MEMORY_COUNTERS(ctypes.Structure):
-        _fields_ = [
-            ("cb", wintypes.DWORD),
-            ("PageFaultCount", wintypes.DWORD),
-            ("PeakWorkingSetSize", ctypes.c_size_t),
-            ("WorkingSetSize", ctypes.c_size_t),
-            ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
-            ("QuotaPagedPoolUsage", ctypes.c_size_t),
-            ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
-            ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
-            ("PagefileUsage", ctypes.c_size_t),
-            ("PeakPagefileUsage", ctypes.c_size_t),
-        ]
-
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    psapi = ctypes.WinDLL("psapi", use_last_error=True)
-    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
-    psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESS_MEMORY_COUNTERS), wintypes.DWORD]
-    psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
-    counters = PROCESS_MEMORY_COUNTERS()
-    counters.cb = ctypes.sizeof(counters)
-    if not psapi.GetProcessMemoryInfo(kernel32.GetCurrentProcess(), ctypes.byref(counters), counters.cb):
-        raise ctypes.WinError(ctypes.get_last_error())
-    return counters.WorkingSetSize / 1024**2
-
-
-def _rss_mb() -> float:
+    Windows: WorkingSetSize via psapi (same meaning as Linux VmRSS; no extra packages).
+    Linux:   VmRSS from /proc/self/status.
+    macOS:   only the *peak* is available without extra packages (ru_maxrss, in bytes) — not comparable,
+             so the growth check is skipped there.
+    """
     if sys.platform == "win32":
-        return _windows_rss_mb()
-    try:
-        with open("/proc/self/status") as f:
-            return next(int(line.split()[1]) / 1024 for line in f if line.startswith("VmRSS"))
-    except OSError:  # pragma: no cover - non-Linux (macOS)
-        import resource  # Unix only; imported here so this module still loads on Windows
+        import ctypes
+        from ctypes import wintypes
 
-        return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+        class PMC(ctypes.Structure):
+            _fields_ = [
+                ("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD),
+                ("PeakWorkingSetSize", ctypes.c_size_t), ("WorkingSetSize", ctypes.c_size_t),
+                ("QuotaPeakPagedPoolUsage", ctypes.c_size_t), ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t), ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                ("PagefileUsage", ctypes.c_size_t), ("PeakPagefileUsage", ctypes.c_size_t),
+            ]
+
+        pmc = PMC()
+        pmc.cb = ctypes.sizeof(PMC)
+        ctypes.windll.psapi.GetProcessMemoryInfo(ctypes.windll.kernel32.GetCurrentProcess(), ctypes.byref(pmc), pmc.cb)
+        return pmc.WorkingSetSize / 1024**2
+    try:
+        with open("/proc/self/status", encoding="ascii") as f:
+            return next(int(line.split()[1]) / 1024 for line in f if line.startswith("VmRSS"))
+    except OSError:
+        return None
 
 
 def test_backend_memory_stays_low_across_repeated_transcriptions(client):
     """§5.4: models are released after each task. They run in a worker process that exits, so the backend
     process never holds model memory and does not grow from one transcription to the next."""
-    readings = []
+    if _rss_mb() is None:
+        pytest.skip("current RSS not measurable on this platform without extra packages")
+    readings: list[float] = []
     for _ in range(2):
         run(client, SPEECH / "zh16.wav")
-        readings.append(_rss_mb())
+        readings.append(_rss_mb() or 0.0)
     print(f"\nbackend RSS after each transcription: {[f'{r:.0f} MB' for r in readings]}")
-    assert "torch" not in sys.modules or readings[-1] < 1500
+    assert "torch" not in sys.modules, "models must never be loaded in the backend process"
     assert readings[-1] < 1500 and readings[-1] - readings[0] < 200

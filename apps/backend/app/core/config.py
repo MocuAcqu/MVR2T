@@ -95,10 +95,15 @@ class Settings:
     def sessions_root(self) -> Path:
         return self.data_dir / "temp" / "sessions"
 
+    # 模型資料夾（可選）。未設定時為 <userData>/models；例如想把 3.4 GB 的模型放在 D 槽時設定 MVR2T_MODELS_DIR。
+    models_dir: Path | None = field(
+        default_factory=lambda: Path(os.environ["MVR2T_MODELS_DIR"]) if os.environ.get("MVR2T_MODELS_DIR") else None
+    )
+
     @property
     def models_root(self) -> Path:
-        """模型資料夾（規格 §7.3）：<userData>/models/<kind>/<id>/"""
-        return self.data_dir / "models"
+        """模型資料夾（規格 §7.3）：<models_dir 或 userData/models>/<kind>/<id>/"""
+        return self.models_dir if self.models_dir is not None else self.data_dir / "models"
 
     @property
     def runtime_ffmpeg_dir(self) -> Path:

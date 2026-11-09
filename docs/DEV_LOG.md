@@ -165,6 +165,21 @@
   確保交付內容本身就是完整的。本次已用乾淨複本驗證：pytest 92 passed + 4 skipped、vitest 118、typecheck、build 皆通過。
 - Claude Code 的執行環境安裝 torch 時出現 `SSL CERTIFICATE_VERIFY_FAILED`（連 pypi.org），使用者改在自己的終端機安裝。
 
+### Windows 套用回饋：只在 Linux 跑過的程式（2026-11-09）
+- Claude Code 在 Windows 發現 `tests/test_asr_real.py` 頂層 `import resource`（Unix 專用）→ pytest 收集階段中斷，整個後端測試沒執行。
+  本機修正 38cb148；Cowork 已同步（改寫為相同效果）。
+- Cowork 依建議全面掃描平台限定寫法，另外找到：
+  1. `test_asr_real.py` 用 `symlink_to()` 指向真實模型 → Windows 需開發人員模式或系統管理員權限。改為新增設定
+     `MVR2T_MODELS_DIR`（也讓使用者能把模型放在其他磁碟），測試直接指向真實模型資料夾。
+  2. `test_transcribe_service.py` 用 `truncate()` 建立 1.5 GB 假模型檔 → Linux 為稀疏檔不佔空間，
+     **Windows/NTFS 會真的配置磁碟空間**，且 pytest 保留最近 3 次的暫存資料夾，可能佔用數十 GB。改為 monkeypatch「已安裝」判斷。
+  3. 記憶體測試原本用 `import torch` 檢查是否安裝，使「後端程序不得載入 torch」無法斷言 → 改用 `importlib.util.find_spec`。
+     現在斷言後端程序完全沒有載入 torch，後端 RSS 111 → 110 MB。
+- 其他命中（`benchmark_asr.py` 的 resource、`test_lifecycle.py` 的 /proc）已在平台判斷之內，無需修改。
+- **交付前跨平台檢查清單**（Python）：`resource`、`fcntl`、`termios`、`pwd`、`grp`、`os.getuid`、`os.fork`、`/proc`、
+  `symlink`、`os.kill(pid, 0)`（Windows 會終止行程）、`SIGKILL`、`shell=True`、`truncate()` 建大檔、寫死的 `/tmp`。
+  可用：`grep -rnE "import (resource|fcntl|termios|pwd|grp)|os\.getuid|os\.fork|/proc/|symlink|truncate\(|/tmp" --include=*.py apps/backend`
+
 ### 已知限制 / 待辦
 - 預設 float32；待使用者的 benchmark 結果決定是否改為 bfloat16（Phase 10 硬體偵測自動選擇）。
 - 辨識途中不即時顯示部分文字（完成後一次顯示）。

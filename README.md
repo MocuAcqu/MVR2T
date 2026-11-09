@@ -155,6 +155,7 @@ Phase 03 起**只需要一個終端機**。後端由 Electron 以 `apps/backend/
 進階設定（環境變數，啟動 `npm run dev` 前設定）：
 - `MVR2T_ASR_DTYPE=bfloat16`：記憶體約減半；在支援 BF16 的 CPU 上也較快（以 benchmark 結果為準）
 - `MVR2T_TORCH_THREADS=4`：限制語音辨識使用的 CPU 執行緒數
+- `MVR2T_MODELS_DIR=D:\MVR2T\models`：把模型放在其他位置（例如 D 槽）；下載腳本與程式都會使用這個位置
 
 ## 開發注意事項
 
