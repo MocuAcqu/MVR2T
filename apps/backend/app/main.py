@@ -87,13 +87,69 @@ def _announce_ready(port: int) -> None:
     print(f"{READY_MARKER} {json.dumps({'port': port, 'pid': os.getpid()})}", flush=True)
 
 
-def _watch_stdin(server: uvicorn.Server) -> None:
-    """Electron 結束（正常關閉或當機）時 stdin 管線會關閉 → 讀到 EOF → 後端優雅結束。"""
+_STDIN_POLL_SECONDS = 0.5
+
+
+def _wait_stdin_eof_windows_pipe(fd: int) -> None:
+    """Windows：以 PeekNamedPipe 輪詢 stdin 管線，直到 Electron 那端關閉。
+
+    不能在執行緒中阻塞讀取：Windows 上一個執行緒對管線發出同步讀取時，其他對同一管線的操作都會被擋住。
+    multiprocessing（spawn）啟動的語音辨識工作程序沿用這個 stdin，啟動時檢查它就會永遠卡住
+    （2026-11-09 Windows 驗收：辨識停在「準備中 0%」）。PeekNamedPipe 不會留下等待中的讀取。
+    """
+    import ctypes
+    import msvcrt
+    import time
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.PeekNamedPipe.argtypes = [
+        wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD, ctypes.c_void_p, ctypes.POINTER(wintypes.DWORD), ctypes.c_void_p,
+    ]
+    kernel32.PeekNamedPipe.restype = wintypes.BOOL
+    handle = msvcrt.get_osfhandle(fd)
+    available = wintypes.DWORD()
+    while True:
+        if not kernel32.PeekNamedPipe(handle, None, 0, None, ctypes.byref(available), None):
+            # 通常是 ERROR_BROKEN_PIPE（Electron 結束）；其他錯誤也代表管線已不可用，一樣結束後端
+            return
+        if available.value:
+            os.read(fd, available.value)  # Electron 不會寫入資料；收到也直接丟棄（有資料時不會阻塞）
+        time.sleep(_STDIN_POLL_SECONDS)
+
+
+def _stdin_is_windows_pipe(fd: int) -> bool:
+    if sys.platform != "win32":
+        return False
+    import ctypes
+    import msvcrt
+
+    file_type_pipe = 3
     try:
+        return ctypes.windll.kernel32.GetFileType(msvcrt.get_osfhandle(fd)) == file_type_pipe
+    except OSError:
+        return False
+
+
+def _wait_stdin_eof() -> None:
+    """阻擋直到 stdin 讀到 EOF（Electron 結束時管線關閉）。"""
+    try:
+        fd = sys.stdin.fileno()
+    except (AttributeError, OSError, ValueError):
+        return  # 沒有可用的 stdin：視同已關閉
+    try:
+        if _stdin_is_windows_pipe(fd):
+            _wait_stdin_eof_windows_pipe(fd)
+            return
         while sys.stdin.buffer.read(1024):
             pass  # Electron 不會寫入資料；收到也直接忽略
     except (OSError, ValueError):
         pass
+
+
+def _watch_stdin(server: uvicorn.Server) -> None:
+    """Electron 結束（正常關閉或當機）時 stdin 管線會關閉 → 偵測到 EOF → 後端優雅結束。"""
+    _wait_stdin_eof()
     # 順序很重要：Electron 當機時 stdout 管線也已斷開，print 會丟出 BrokenPipeError。
     # 所以先排定保險計時器並要求 uvicorn 結束，最後才嘗試輸出訊息。
     # 保險：若 5 秒內沒結束（例如卡在請求中），直接結束行程。

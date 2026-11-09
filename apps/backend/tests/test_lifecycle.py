@@ -204,3 +204,52 @@ def test_exits_when_parent_dies_and_stdout_is_broken():
         assert wait_dead(server_pid), "real server process is still running (orphan)"
     finally:
         kill_tree(proc)
+
+
+_SPAWN_WHILE_WATCHING_STDIN = """
+import multiprocessing as mp, threading, time
+from app.main import _wait_stdin_eof
+eof = threading.Event()
+threading.Thread(target=lambda: (_wait_stdin_eof(), eof.set()), daemon=True).start()
+time.sleep(1.0)  # let the watchdog start waiting on the pipe first
+p = mp.get_context("spawn").Process(target=time.sleep, args=(0,), daemon=True)
+p.start()
+p.join(30)
+print("SPAWN_EXITCODE", p.exitcode, flush=True)
+if p.exitcode is None:
+    p.terminate()
+print("WAITING_FOR_EOF", flush=True)
+print("EOF_DETECTED" if eof.wait(30) else "EOF_MISSED", flush=True)
+"""
+
+
+def test_spawn_worker_starts_while_stdin_watchdog_runs():
+    """Regression (Windows, Phase 05): the speech-recognition worker is started with multiprocessing spawn
+    while the stdin-EOF watchdog is waiting on the stdin pipe. A blocking read in that thread made the
+    worker hang forever during interpreter start-up ("準備中 0%"). The watchdog must not block the pipe,
+    and must still notice when Electron closes it."""
+    env = {**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONUTF8": "1"}
+    proc = subprocess.Popen(
+        [sys.executable, "-c", _SPAWN_WHILE_WATCHING_STDIN],
+        cwd=BACKEND_DIR,
+        env=env,
+        stdin=subprocess.PIPE,  # like Electron: stdin is a pipe that stays open
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+    )
+    try:
+        assert proc.stdout is not None and proc.stdin is not None
+        lines: list[str] = []
+        for line in proc.stdout:
+            lines.append(line.rstrip())
+            if line.startswith("WAITING_FOR_EOF"):
+                break
+        assert "SPAWN_EXITCODE 0" in lines, f"spawned worker did not start/finish: {lines}"
+        proc.stdin.close()  # Electron quits
+        rest = proc.stdout.read()
+        assert "EOF_DETECTED" in rest, f"watchdog missed stdin EOF: {lines} {rest!r}"
+        assert proc.wait(timeout=10) == 0
+    finally:
+        kill_tree(proc)
