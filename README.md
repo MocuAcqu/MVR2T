@@ -177,7 +177,10 @@ Phase 03 起**只需要一個終端機**。後端由 Electron 以 `apps/backend/
 - [ ] 開始語音辨識後切到其他程式：完成時右下角跳出「逐字稿完成」通知、工作列圖示閃爍；點通知回到 MVR2T
 - [ ] 辨識時留在 MVR2T 畫面：完成時不跳系統通知（Mono 會在畫面上歡呼）
 - [ ] 辨識中不要動電腦，讓螢幕自動關閉（不要闔上筆電）幾分鐘後再喚醒：辨識仍在進行或已完成，內容沒有消失；
-      終端機有 `[power] keep awake: on`，結束後有 `keep awake: off`
+      終端機有 `[power] keep awake: on` 與 `[backend] [power] system-required request on`，結束後兩者都變成 off
+- [ ] 辨識進行中，在系統管理員 PowerShell 執行 `powercfg /requests`：SYSTEM 區段有 python.exe「MVR2T：正在處理影音…」
+- [ ] 闔上筆電的測試請用 `npm start`（正式版）；開發模式要測時先執行 `$env:MVR2T_DEV_NO_HMR=1` 再 `npm run dev`
+      （否則 Vite 會在喚醒後重新載入整頁，畫面被清空；正式版不會）
 - [ ] 引導對話框不再有「知道了／不再提示」；到「設定 → 操作引導」可以關閉或開啟（如果先前按過「不再提示」，請在這裡重新開啟）
 
 要改 Mono 的造型：改 `apps/desktop/scripts/generate_mono_sprite.py` 後執行 `python apps/desktop/scripts/generate_mono_sprite.py`。

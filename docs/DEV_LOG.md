@@ -110,6 +110,23 @@
 - 沙盒的 init 不會立即回收殭屍行程，`kill -0` 對殭屍也成功；判斷行程是否存活請看 `/proc/<pid>/stat` 狀態不是 `Z`。
 - 在沙盒跑 Electron：`xvfb-run -a`，並加 `--no-sandbox`（root）。
 
+## 防睡眠修正與開發模式重新載入（2026-11-09）
+
+Windows 驗收（Claude Code 回報，筆電為 Modern Standby，不支援 S3）：通知 ✅、首頁／引導 ✅、螢幕自動關閉與 2 分鐘睡眠後辨識都能繼續 ✅。
+兩個發現：
+1. **`powerSaveBlocker('prevent-app-suspension')` 在 Windows 8 以後是 PowerRequestExecutionRequired**：
+   `powercfg /requests` 中 electron.exe 只出現在「執行」，SYSTEM 是空的 → 它不會阻止閒置睡眠
+   （先前「睡眠後仍繼續」其實是睡著、喚醒後接著跑）。Electron 沒有「只保持系統清醒、螢幕照常關」的選項。
+   修正：後端新增 `app/core/keepawake.py`，TaskManager 在每個工作執行期間以參考計數送出
+   **PowerRequestSystemRequired**（PowerCreateRequest＋原因文字，`powercfg /requests` 的 SYSTEM 區段會看到 python.exe
+   「MVR2T：正在處理影音…」），最後一個工作結束時清除；失敗只記錄 `[power] could not …`，不影響工作。
+   Electron 端的 ExecutionRequired 保留（讓程式不被暫停）。macOS／Linux 目前為 no-op。
+   **待 Windows 確認**：Modern Standby 機型在螢幕因閒置關閉後，有 SYSTEM 請求時是否就不會出現 `[power] system suspend`。
+2. **開發模式闔上筆電後頁面被清空**：不是後端或畫面行程的問題（醒來後同一個工作仍回 200，沒有 `[renderer] gone`），
+   而是 Vite 開發伺服器的客戶端在 websocket 斷線、重新連上後執行 `location.reload()`。正式版（`npm start`）沒有這個行為，實測畫面與辨識都保留。
+   在開發模式要測睡眠時，設定 `MVR2T_DEV_NO_HMR=1` 會關閉 HMR 與 websocket（`server.hmr=false`、`server.ws=false`；
+   只設 `hmr:false` 仍會重新載入，沙盒實測）。代價：改程式後要手動 Ctrl+R，主控台會出現 websocket 連線失敗訊息，可忽略。
+
 ## 優化：完成通知、睡眠與螢幕關閉、首頁精簡、引導簡化（2026-11-09）
 
 使用者回饋四點：

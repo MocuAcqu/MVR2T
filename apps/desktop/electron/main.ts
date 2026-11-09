@@ -186,8 +186,9 @@ function showNotification(input: unknown): boolean {
 }
 
 /**
- * 處理中防止電腦「因閒置」自動睡眠（螢幕仍可依設定關閉）。
- * Windows 的 Modern Standby 在螢幕關閉後會讓系統進入待命並暫停桌面程式，辨識就會停住。
+ * 處理中請系統不要暫停或終止本程式（Windows 8 以後：PowerRequestExecutionRequired，`powercfg /requests` 的「執行」區段）。
+ * 注意：這**不會**阻止電腦因閒置而睡眠（2026-11-09 使用者實測）；防止閒置睡眠由後端在工作期間送出
+ * PowerRequestSystemRequired（apps/backend/app/core/keepawake.py）。兩者都不影響螢幕依設定關閉。
  * 闔上筆電或手動睡眠無法阻止；喚醒後程序會繼續，前端輪詢也會自動重新連線。
  */
 let keepAwakeId: number | null = null;

@@ -14,6 +14,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from app.core.keepawake import KEEP_AWAKE, KeepAwake
+
 TaskStatus = Literal["queued", "running", "completed", "failed", "cancelled"]
 TERMINAL: frozenset[str] = frozenset({"completed", "failed", "cancelled"})
 
@@ -94,9 +96,11 @@ class UserFacingError(Exception):
 
 
 class TaskManager:
-    def __init__(self) -> None:
+    def __init__(self, keep_awake: KeepAwake | None = None) -> None:
         self._tasks: dict[str, Task] = {}
         self._lock = threading.Lock()
+        # 工作執行期間請系統不要因閒置而睡眠（見 app/core/keepawake.py）
+        self._keep_awake = keep_awake if keep_awake is not None else KEEP_AWAKE
 
     def start(self, session_id: str, kind: str, fn: Callable[[Task], Any]) -> Task:
         task = Task(id=uuid.uuid4().hex, session_id=session_id, kind=kind)
@@ -105,6 +109,7 @@ class TaskManager:
 
         def runner() -> None:
             task.status = "running"
+            self._keep_awake.acquire()
             try:
                 result = fn(task)
                 if task.cancelled:
@@ -121,6 +126,8 @@ class TaskManager:
             except Exception as e:  # noqa: BLE001
                 task.status = "cancelled" if task.cancelled else "failed"
                 task.message = None if task.cancelled else f"處理時發生未預期的錯誤：{e}"
+            finally:
+                self._keep_awake.release()
 
         task.thread = threading.Thread(target=runner, name=f"task-{kind}-{task.id[:8]}", daemon=True)
         task.thread.start()

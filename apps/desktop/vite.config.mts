@@ -46,6 +46,9 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     fs: { allow: ['../..'] }, // 允許讀取 repo 根目錄的 shared/
+    // 開發模式的 HMR 在電腦睡眠、連線中斷後會「整頁重新載入」，記憶體中的工作階段會被清空（正式版沒有這個行為）。
+    // 要在開發模式測試闔上筆電／睡眠時，先設定 MVR2T_DEV_NO_HMR=1 關閉 HMR（改程式後需手動按 Ctrl+R 重新整理）。
+    ...(process.env.MVR2T_DEV_NO_HMR === '1' ? { hmr: false, ws: false as const } : {}),
   },
   build: { outDir: 'dist', emptyOutDir: true },
 });
