@@ -23,7 +23,7 @@ export function MediaInfoCard({ info }: { info: MediaInfo }) {
     rows.push(['影像', [info.video_codec?.toUpperCase(), info.width && info.height ? `${info.width} x ${info.height}` : null].filter(Boolean).join('，')]);
   }
   return (
-    <Card>
+    <Card className="flex h-full flex-col">
       <CardHeader>
         <CardTitle>影音資訊</CardTitle>
         <CardDescription>已複製到本次工作階段，結束後自動刪除。</CardDescription>

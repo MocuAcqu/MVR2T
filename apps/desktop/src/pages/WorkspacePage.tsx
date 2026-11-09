@@ -1,4 +1,5 @@
 import { PageContainer } from '@/components/layout/PageContainer';
+import { Mono } from '@/components/mono/Mono';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { removeMedia } from '@/features/media/mediaController';
@@ -19,11 +20,14 @@ export function WorkspacePage() {
       <PageContainer>
         <h1 className="text-h1">工作區</h1>
         <Card className="mt-6 max-w-xl">
-          <CardHeader>
+          <CardHeader className="flex-row items-end gap-4">
+            <Mono animation={inProgress ? 'loading' : 'idle'} scale={2} interactive />
+            <div className="flex flex-col gap-1.5">
             <CardTitle>{inProgress ? '檔案匯入中' : '還沒有匯入影音'}</CardTitle>
             <CardDescription>
               {inProgress ? '請回到首頁查看匯入進度。' : '回到首頁匯入影片或錄音，就能在這裡處理。'}
             </CardDescription>
+            </div>
           </CardHeader>
           <CardFooter>
             <Button onClick={() => setPage('dashboard')}>回到首頁</Button>
@@ -50,7 +54,8 @@ export function WorkspacePage() {
           換一個檔案
         </Button>
       </div>
-      <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+      {/* items-stretch（預設）：兩張卡片在同一列時等高 */}
+      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <MediaInfoCard info={imp.info} />
         <ExtractionCard />
       </div>

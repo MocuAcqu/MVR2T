@@ -23,3 +23,48 @@
     }
   }
 }
+
+/* Mono（像素吉祥物）的整體動作：以底部為支點擠壓與伸展，像麻糬一樣 Q 彈。
+   prefers-reduced-motion 時由上方的全域規則停用。 */
+@layer components {
+  .mono-breathe { transform-origin: 50% 100%; animation: mono-breathe 2.6s ease-in-out infinite; }
+  .mono-bounce  { transform-origin: 50% 100%; animation: mono-bounce 0.9s infinite; }
+  .mono-sway    { transform-origin: 50% 100%; animation: mono-sway 1.4s ease-in-out infinite; }
+  .mono-jelly   { transform-origin: 50% 100%; animation: mono-jelly 0.6s ease-out; }
+
+  /* 操作引導：下一步的按鈕外圈發光、旁邊的箭頭左右輕推 */
+  .guide-glow   { animation: guide-glow 1.4s ease-out infinite; }
+  .guide-nudge  { animation: guide-nudge 0.8s steps(2) infinite; }
+}
+
+@keyframes mono-breathe {
+  0%, 100% { transform: scale(1, 1); }
+  50%      { transform: scale(1.035, 0.965); }
+}
+@keyframes mono-bounce {
+  0%   { transform: translateY(0) scale(1.12, 0.86); }
+  18%  { transform: translateY(0) scale(0.92, 1.1); }
+  45%  { transform: translateY(-12%) scale(0.96, 1.05); }
+  70%  { transform: translateY(0) scale(1.14, 0.84); }
+  85%  { transform: translateY(0) scale(0.97, 1.03); }
+  100% { transform: translateY(0) scale(1.12, 0.86); }
+}
+@keyframes mono-sway {
+  0%, 100% { transform: rotate(-5deg) scale(1.02, 0.98); }
+  50%      { transform: rotate(5deg) scale(1.02, 0.98); }
+}
+@keyframes mono-jelly {
+  0%   { transform: scale(1, 1); }
+  25%  { transform: scale(1.18, 0.82); }
+  50%  { transform: scale(0.9, 1.12); }
+  75%  { transform: scale(1.05, 0.96); }
+  100% { transform: scale(1, 1); }
+}
+@keyframes guide-glow {
+  0%   { box-shadow: 0 0 0 0 rgb(0 0 0 / 0.45); }
+  70%  { box-shadow: 0 0 0 12px rgb(0 0 0 / 0); }
+  100% { box-shadow: 0 0 0 0 rgb(0 0 0 / 0); }
+}
+@keyframes guide-nudge {
+  50% { transform: translateX(-6px); }
+}

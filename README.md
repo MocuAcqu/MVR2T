@@ -12,7 +12,8 @@
 | 02 | UI Design System | ✅ 已在 Windows 驗收 |
 | 03 | Electron and Backend Integration | ✅ 已在 Windows 驗收 |
 | 04 | Media Processing（FFmpeg、匯入、抽取音訊、切段） | ✅ 已在 Windows 驗收 |
-| 05 | ASR Integration（Qwen3-ASR + 時間戳記對齊） | 🟡 沙盒已用真實模型驗證，待你在 Windows 驗收 |
+| 05 | ASR Integration（Qwen3-ASR + 時間戳記對齊） | ✅ 已在 Windows 實測 |
+| — | 介面更新（吉祥物 Mono、首頁標題、操作引導） | 🟡 待你在 Windows 驗收 |
 | 06 – 12 | LLM、心智圖、Session、Model Manager、硬體偵測、打包 | ⏳ |
 
 ## 環境需求
@@ -156,6 +157,20 @@ Phase 03 起**只需要一個終端機**。後端由 Electron 以 `apps/backend/
 - `MVR2T_ASR_DTYPE=bfloat16`：記憶體約減半；在支援 BF16 的 CPU 上也較快（以 benchmark 結果為準）
 - `MVR2T_TORCH_THREADS=4`：限制語音辨識使用的 CPU 執行緒數
 - `MVR2T_MODELS_DIR=D:\MVR2T\models`：把模型放在其他位置（例如 D 槽）；下載腳本與程式都會使用這個位置
+
+## 介面更新驗收清單（Mono、首頁標題、操作引導）
+
+- [ ] 首頁標題「Your ▢」的黑底字每 2 秒在 Media → Video → Record 間切換，下方像素音波會動；補充說明是「把影片與錄音轉成逐字稿、摘要和心智圖」
+- [ ] 左上角 MVR2T 旁有 Mono：滑鼠移過去會折耳、張大眼、鼻子聞聞；點一下會 Q 彈一下
+- [ ] 匯入檔案時 Mono 在進度條旁跳；匯入完成後「開啟工作區」發光、旁邊有箭頭，下方出現 Mono 對話框
+- [ ] 工作區：「影音資訊」和「音訊抽取與切段」兩張卡片等高；「抽取音訊」發光並有對話框
+- [ ] 抽取中 Mono 戴耳機、耳朵跟著擺；完成後換「開始語音辨識」發光
+- [ ] 辨識載入模型時 Mono 原地跳；辨識中 Mono 捧著小螢幕（播放三角形清楚可見）；完成後 Mono 舉手歡呼並顯示完成說明
+- [ ] 對話框按「知道了」只關這一則；按「不再提示」後不再出現，到「設定 → 操作引導」可重新開啟（重開 App 後設定仍保留）
+- [ ] Windows「動畫效果」關閉時（設定 → 協助工具 → 視覺效果），Mono 與標題不再動，標題顯示成三行
+- [ ] 開發模式「設計規範」頁最下方可看到所有 Mono 動畫
+
+要改 Mono 的造型：改 `apps/desktop/scripts/generate_mono_sprite.py` 後執行 `python apps/desktop/scripts/generate_mono_sprite.py`。
 
 ## 開發注意事項
 

@@ -7,6 +7,9 @@ import { cancelImport, importFile, removeMedia } from '@/features/media/mediaCon
 import { formatBytes, formatDuration, formatPercent } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useSessionStore } from '@/stores/sessionStore';
+import { Mono } from '@/components/mono/Mono';
+import { GuideCoach } from '@/features/guide/GuideCoach';
+import { GuideTarget } from '@/features/guide/GuideTarget';
 
 const ACCEPT = MEDIA_EXTENSIONS.map((e) => `.${e}`).join(',');
 const list = (items: readonly string[]) => items.map((e) => e.toUpperCase()).join('、');
@@ -69,7 +72,9 @@ export function MediaDropzone({ onOpenWorkspace }: { onOpenWorkspace: () => void
       <div className="flex flex-col gap-4">
         {hiddenInput}
         <FileSummary file={state.file} />
-        <div className="flex flex-col gap-2" aria-live="polite">
+        <div className="flex items-end gap-4">
+        <Mono animation={uploading ? 'loading' : 'video'} scale={2} />
+        <div className="flex min-w-0 flex-1 flex-col gap-2" aria-live="polite">
           <div className="flex justify-between text-sm">
             <span className="font-medium">{uploading ? '正在複製到工作階段' : '正在檢查檔案'}</span>
             {uploading ? <span className="tabular-nums text-body-gray">{formatPercent(state.progress)}</span> : null}
@@ -79,6 +84,7 @@ export function MediaDropzone({ onOpenWorkspace }: { onOpenWorkspace: () => void
             value={uploading ? state.progress : undefined}
             indeterminate={!uploading}
           />
+        </div>
         </div>
         <div>
           <Button variant="secondary" onClick={cancelImport}>取消</Button>
@@ -93,10 +99,13 @@ export function MediaDropzone({ onOpenWorkspace }: { onOpenWorkspace: () => void
         {hiddenInput}
         <FileSummary file={state.file} duration={state.info.duration} />
         <div className="flex flex-wrap gap-2">
-          <Button onClick={onOpenWorkspace}>開啟工作區</Button>
+          <GuideTarget step="open-workspace">
+            <Button onClick={onOpenWorkspace}>開啟工作區</Button>
+          </GuideTarget>
           <Button variant="secondary" onClick={pick}>更換檔案</Button>
           <Button variant="ghost" onClick={() => void removeMedia()}>移除</Button>
         </div>
+        <GuideCoach step="open-workspace" />
       </div>
     );
   }

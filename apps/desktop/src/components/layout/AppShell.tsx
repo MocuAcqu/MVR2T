@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react';
+import { Mono } from '@/components/mono/Mono';
 import { describeBackend, StatusDot } from '@/components/StatusDot';
 import { useSystemStatus } from '@/hooks/useSystemStatus';
 import { cn } from '@/lib/utils';
@@ -32,6 +33,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-10 border-b border-chip bg-background">
         <div className="mx-auto flex h-16 w-full max-w-[1136px] items-center gap-4 px-4 sm:px-6 lg:px-8">
+          {/* 吉祥物 Mono：滑鼠移過去會好奇地聞聞，點一下會 Q 彈一下 */}
+          <Mono scale={1} interactive label="Mono（吉祥物）" className="-my-1" />
           <button
             onClick={() => setPage('dashboard')}
             aria-label="MVR2T，回到首頁"

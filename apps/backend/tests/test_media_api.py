@@ -72,7 +72,12 @@ VIDEO = {"mp4", "mov", "mkv", "webm"}
 def encode(src_wav: Path, ext: str, out: Path) -> Path:
     args = [str(LOC.ffmpeg), "-hide_banner", "-loglevel", "error", "-nostdin", "-y"]
     if ext in VIDEO:
-        args += ["-f", "lavfi", "-i", "color=c=black:s=160x120:r=10"]
+        # Give the video source the SAME length as the audio. Relying on -shortest with an infinite source
+        # overshoots by a timing-dependent amount (seen as an intermittent webm duration failure on
+        # Windows with FFmpeg 7.1.1).
+        with wave.open(str(src_wav)) as w:
+            seconds = w.getnframes() / w.getframerate()
+        args += ["-f", "lavfi", "-i", f"color=c=black:s=160x120:r=10:d={seconds:.3f}"]
     args += ["-i", str(src_wav)]
     if ext in VIDEO:
         args += ["-map", "0:v", "-map", "1:a"]

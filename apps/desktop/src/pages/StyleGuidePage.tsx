@@ -1,10 +1,13 @@
 import type { ReactNode } from 'react';
 import { PageContainer } from '@/components/layout/PageContainer';
+import { MONO_ANIMATIONS, type MonoAnimationName } from '@/components/mono/animations';
+import { Mono } from '@/components/mono/Mono';
 import { StatusDot } from '@/components/StatusDot';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { GuideBubble } from '@/features/guide/GuideCoach';
 
 const COLORS = [
   ['Black', '#000000', 'bg-foreground text-background'],
@@ -117,6 +120,22 @@ export function StyleGuidePage() {
             </CardContent>
           </Card>
         </div>
+      </Section>
+
+      <Section title="吉祥物 Mono">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          {(Object.keys(MONO_ANIMATIONS) as MonoAnimationName[]).map((name) => (
+            <div key={name} className="flex flex-col items-center gap-2 rounded-lg bg-chip p-4 text-sm">
+              <Mono animation={name} scale={3} />
+              {name}
+            </div>
+          ))}
+          <div className="flex flex-col items-center gap-2 rounded-lg bg-chip p-4 text-sm">
+            <Mono scale={3} interactive />
+            interactive（hover / click）
+          </div>
+        </div>
+        <GuideBubble step="extract" className="mt-6 max-w-xl" onDismiss={() => {}} onDisable={() => {}} />
       </Section>
     </PageContainer>
   );

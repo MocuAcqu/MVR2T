@@ -48,8 +48,13 @@ export default {
       // 不確定進度的進度條（例如後端正在檢查檔案）
       keyframes: {
         indeterminate: { '0%': { left: '-33%' }, '100%': { left: '100%' } },
+        // 首頁標題下方的像素音波
+        wave: { '50%': { transform: 'scaleY(0.35)' } },
       },
-      animation: { indeterminate: 'indeterminate 1.2s ease-in-out infinite' },
+      animation: {
+        indeterminate: 'indeterminate 1.2s ease-in-out infinite',
+        wave: 'wave 1.1s steps(4) infinite',
+      },
     },
   },
   plugins: [],

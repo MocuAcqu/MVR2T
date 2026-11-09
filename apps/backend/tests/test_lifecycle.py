@@ -30,16 +30,32 @@ def pid_alive(pid: int) -> bool:
     """
     if sys.platform == "win32":
         import ctypes
+        from ctypes import wintypes
 
-        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        # Typed private WinDLL (see app/core/procmem.py): untyped calls can fail silently on 64-bit Windows,
+        # and a silent failure here would read as "dead" and let an orphan-process test pass falsely.
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+        kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+        kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel32.CloseHandle.restype = wintypes.BOOL
         PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
         STILL_ACTIVE = 259
+        ERROR_ACCESS_DENIED, ERROR_INVALID_PARAMETER = 5, 87
         handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
         if not handle:
-            return False
+            err = ctypes.get_last_error()
+            if err == ERROR_INVALID_PARAMETER:  # no process with this id
+                return False
+            if err == ERROR_ACCESS_DENIED:  # exists, but we may not query it
+                return True
+            raise ctypes.WinError(err)  # type: ignore[attr-defined]
         try:
-            code = ctypes.c_ulong()
-            kernel32.GetExitCodeProcess(handle, ctypes.byref(code))
+            code = wintypes.DWORD()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                raise ctypes.WinError(ctypes.get_last_error())  # type: ignore[attr-defined]
             return code.value == STILL_ACTIVE
         finally:
             kernel32.CloseHandle(handle)

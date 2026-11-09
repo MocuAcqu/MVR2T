@@ -27,6 +27,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings, default_user_data_dir
+from app.core.procmem import current_rss_mb
 from app.main import create_app
 from app.models.registry import QWEN3_ASR_0_6B, QWEN3_FORCED_ALIGNER_0_6B
 from app.models.store import is_installed
@@ -182,43 +183,8 @@ def test_cancel_real_model_mid_recognition(client):
 
 
 def _rss_mb() -> float | None:
-    """Current resident memory of this process in MB (Windows / Linux), or None where not measurable.
-
-    Windows: WorkingSetSize via psapi (same meaning as Linux VmRSS; no extra packages).
-    Linux:   VmRSS from /proc/self/status.
-    macOS:   only the *peak* is available without extra packages (ru_maxrss, in bytes) — not comparable,
-             so the growth check is skipped there.
-    """
-    if sys.platform == "win32":
-        import ctypes
-        from ctypes import wintypes
-
-        class PMC(ctypes.Structure):
-            _fields_ = [
-                ("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD),
-                ("PeakWorkingSetSize", ctypes.c_size_t), ("WorkingSetSize", ctypes.c_size_t),
-                ("QuotaPeakPagedPoolUsage", ctypes.c_size_t), ("QuotaPagedPoolUsage", ctypes.c_size_t),
-                ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t), ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
-                ("PagefileUsage", ctypes.c_size_t), ("PeakPagefileUsage", ctypes.c_size_t),
-            ]
-
-        # Explicit types are required on 64-bit Windows: without restype, GetCurrentProcess()'s pseudo-handle
-        # (-1) is truncated to a 32-bit int, GetProcessMemoryInfo fails, and the struct silently stays 0 MB.
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        psapi = ctypes.WinDLL("psapi", use_last_error=True)
-        kernel32.GetCurrentProcess.restype = wintypes.HANDLE
-        psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(PMC), wintypes.DWORD]
-        psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
-        pmc = PMC()
-        pmc.cb = ctypes.sizeof(PMC)
-        if not psapi.GetProcessMemoryInfo(kernel32.GetCurrentProcess(), ctypes.byref(pmc), pmc.cb):
-            raise ctypes.WinError(ctypes.get_last_error())  # never report a fake 0 MB
-        return pmc.WorkingSetSize / 1024**2
-    try:
-        with open("/proc/self/status", encoding="ascii") as f:
-            return next(int(line.split()[1]) / 1024 for line in f if line.startswith("VmRSS"))
-    except OSError:
-        return None
+    """Current RSS of this (backend) process; Windows reading verified on real hardware (see app/core/procmem.py)."""
+    return current_rss_mb()
 
 
 def test_backend_memory_stays_low_across_repeated_transcriptions(client):

@@ -1,10 +1,13 @@
 import { useId, useState } from 'react';
 import type { AsrLanguage, Transcript } from '@shared/types/api';
+import { Mono } from '@/components/mono/Mono';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { cancelTranscription, startTranscription } from '@/features/media/mediaController';
+import { GuideCoach } from '@/features/guide/GuideCoach';
+import { GuideTarget } from '@/features/guide/GuideTarget';
 import { formatDuration, formatPercent, formatTimestamp } from '@/lib/format';
 import { useSessionStore } from '@/stores/sessionStore';
 
@@ -58,7 +61,10 @@ export function TranscriptCard() {
 
   const ready = extraction.status === 'completed';
   const busy = t.status === 'starting' || t.status === 'queued' || t.status === 'running';
+  // 載入模型時無法估計進度（首次從磁碟讀取 1.5～1.8 GB，Windows 實測約 80 秒）→ 顯示不確定進度
+  const loadingModel = busy && (t.status === 'starting' || t.stage.includes('載入'));
   const result = t.result;
+  const estimatedCount = transcript ? transcript.segments.filter((s) => s.timing === 'estimated').length : 0;
 
   return (
     <Card>
@@ -72,16 +78,24 @@ export function TranscriptCard() {
         {!ready && !transcript ? <p className="text-sm text-body-gray">請先完成「抽取音訊」，再開始語音辨識。</p> : null}
 
         {busy ? (
-          <div className="flex flex-col gap-2" aria-live="polite">
+          <div className="flex items-end gap-4">
+          {/* 載入模型時原地跳著等；辨識時捧著小螢幕看 */}
+          <Mono animation={loadingModel ? 'loading' : 'video'} scale={2} />
+          <div className="flex min-w-0 flex-1 flex-col gap-2" aria-live="polite">
             <div className="flex justify-between gap-4 text-sm">
               <span className="font-medium">
                 {t.stage || '準備中'}
                 {t.detail ? <span className="ml-2 font-normal text-body-gray">{t.detail}</span> : null}
               </span>
-              <span className="tabular-nums text-body-gray">{formatPercent(t.progress)}</span>
+              {loadingModel ? null : <span className="tabular-nums text-body-gray">{formatPercent(t.progress)}</span>}
             </div>
-            <Progress label="語音辨識進度" value={t.progress} />
-            <p className="text-xs text-body-gray">處理時間依電腦效能而定；首次載入模型需要數秒。</p>
+            <Progress label="語音辨識進度" value={t.progress} indeterminate={loadingModel} />
+            <p className="text-xs text-body-gray">
+              {loadingModel
+                ? '正在把模型載入記憶體。第一次約需 1～2 分鐘，之後會比較快。'
+                : '處理時間依電腦效能而定，長錄音可能需要與錄音長度相近的時間。'}
+            </p>
+          </div>
           </div>
         ) : null}
 
@@ -106,14 +120,25 @@ export function TranscriptCard() {
             ) : (
               <p className="text-sm text-body-gray">沒有辨識到語音內容。</p>
             )}
-            {transcript.timing !== 'aligned' ? <p className="text-xs text-body-gray">* 為依字數估計的時間。</p> : null}
+            {estimatedCount > 0 ? (
+              <p className="text-xs text-body-gray">
+                {transcript.timing === 'mixed'
+                  ? `其中 ${estimatedCount} 句（標 *）的時間是依字數估計，通常是極短的語助詞或對齊模型無法對應的句子；其餘為精確時間。`
+                  : '* 為依字數估計的時間。'}
+              </p>
+            ) : null}
           </>
         ) : null}
 
         {t.status === 'failed' ? (
-          <p role="alert" className="rounded-lg bg-chip p-4 text-sm font-medium">{t.message ?? '語音辨識失敗。'}</p>
+          <div className="flex items-center gap-3 rounded-lg bg-chip p-4">
+            <Mono animation="error" scale={1} />
+            <p role="alert" className="text-sm font-medium">{t.message ?? '語音辨識失敗。'}</p>
+          </div>
         ) : null}
         {t.status === 'cancelled' ? <p role="status" className="text-sm text-body-gray">已取消語音辨識。</p> : null}
+        <GuideCoach step="transcribe" />
+        <GuideCoach step="done" />
       </CardContent>
       <CardFooter className="flex-wrap">
         {busy ? (
@@ -134,9 +159,11 @@ export function TranscriptCard() {
                 <option key={l.value} value={l.value}>{l.label}</option>
               ))}
             </select>
-            <Button onClick={() => void startTranscription(language === 'auto' ? null : language)} disabled={!ready}>
-              {t.status === 'completed' ? '重新辨識' : t.status === 'idle' ? '開始語音辨識' : '再試一次'}
-            </Button>
+            <GuideTarget step="transcribe">
+              <Button onClick={() => void startTranscription(language === 'auto' ? null : language)} disabled={!ready}>
+                {t.status === 'completed' ? '重新辨識' : t.status === 'idle' ? '開始語音辨識' : '再試一次'}
+              </Button>
+            </GuideTarget>
           </>
         )}
       </CardFooter>

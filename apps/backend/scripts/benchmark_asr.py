@@ -19,33 +19,10 @@ import time
 from pathlib import Path
 
 
-def _peak_memory_mb() -> float:
-    if sys.platform == "win32":
-        import ctypes
-        from ctypes import wintypes
-
-        class PMC(ctypes.Structure):
-            _fields_ = [
-                ("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD),
-                ("PeakWorkingSetSize", ctypes.c_size_t), ("WorkingSetSize", ctypes.c_size_t),
-                ("QuotaPeakPagedPoolUsage", ctypes.c_size_t), ("QuotaPagedPoolUsage", ctypes.c_size_t),
-                ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t), ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
-                ("PagefileUsage", ctypes.c_size_t), ("PeakPagefileUsage", ctypes.c_size_t),
-            ]
-
-        pmc = PMC()
-        pmc.cb = ctypes.sizeof(PMC)
-        ctypes.windll.psapi.GetProcessMemoryInfo(ctypes.windll.kernel32.GetCurrentProcess(), ctypes.byref(pmc), pmc.cb)
-        return pmc.PeakWorkingSetSize / 1024**2
-    import resource
-
-    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    return peak / 1024**2 if sys.platform == "darwin" else peak / 1024  # macOS: bytes, Linux: KB
-
-
 def _child(dtype: str, wav: str) -> None:
     """子程序：載入模型並辨識一次，輸出一行 JSON。"""
     from app.core.config import settings
+    from app.core.procmem import peak_rss_mb
     from app.engines.asr.qwen3 import Qwen3Asr, read_wav_16k_mono
     from app.models.registry import QWEN3_ASR_0_6B
 
@@ -62,7 +39,7 @@ def _child(dtype: str, wav: str) -> None:
 
     print(json.dumps({
         "dtype": dtype, "audio_s": round(seconds, 1), "load_s": round(load_s, 1), "asr_s": round(asr_s, 1),
-        "rtf": round(asr_s / seconds, 2), "peak_mb": round(_peak_memory_mb()), "threads": torch.get_num_threads(),
+        "rtf": round(asr_s / seconds, 2), "peak_mb": round(peak_rss_mb()), "threads": torch.get_num_threads(),
         "language": res.language, "preview": res.text[:40],
     }, ensure_ascii=False))
 

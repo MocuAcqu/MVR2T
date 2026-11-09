@@ -1,6 +1,6 @@
 # 開發紀錄（給接手的 Claude / Claude Code）
 
-最後更新：2026-11-09。Phase 05 程式完成並在沙盒以真實模型驗證，待 Windows 驗收。
+最後更新：2026-11-09。Phase 05 已在 Windows 實測通過；新增吉祥物 Mono、首頁標題動畫與操作引導（待 Windows 驗收）。
 
 ## 目前進度
 
@@ -11,8 +11,9 @@
 | 03 Electron 啟動 Python Backend | ✅ 使用者已在 Windows 驗收通過（2026-11-07；手動結束啟動器一項延後，見下方） |
 | 依賴升級 | ✅ 使用者已在 Windows 驗收通過（2026-11-07） |
 | 04 Media Processing | ✅ Windows 主要項目驗收通過（2026-11-09，見「Windows 套用回饋」） |
-| 05 ASR Integration | 🟡 沙盒以真實模型驗證通過，**待 Windows 驗收** |
-| 06 LLM Integration | ⬜ Phase 05 驗收後開始 |
+| 05 ASR Integration | ✅ Windows 實測通過（24 分鐘中文錄音 → 320 句，float32 約 32 分鐘）；benchmark 待使用者執行 |
+| 介面更新（Mono／標題／引導） | 🟡 沙盒驗證通過，**待 Windows 驗收** |
+| 06 LLM Integration | ⬜ 介面更新驗收後開始 |
 
 ## 沙盒驗證結果（2026-11-06）
 
@@ -108,6 +109,47 @@
 - `tsc` 只要有選項層級錯誤（例如缺型別套件）就會略過語意檢查，「沒有報錯」不代表通過。
 - 沙盒的 init 不會立即回收殭屍行程，`kill -0` 對殭屍也成功；判斷行程是否存活請看 `/proc/<pid>/stat` 狀態不是 `Z`。
 - 在沙盒跑 Electron：`xvfb-run -a`，並加 `--no-sandbox`（root）。
+
+## 介面更新：吉祥物 Mono、首頁標題、操作引導（2026-11-09）
+
+使用者要求（Phase 05 之後、Phase 06 之前）：兩張卡片等高、操作引導、像素吉祥物、首頁標題更有視覺感。
+設計以 HTML 預覽來回確認 5 版後定稿（outputs/Mono_design_preview_v1～v5.html）。
+
+### 使用者決定
+- **Mono**：白色、圓潤的「麻糬」兔子，頭和身體是一整坨；長耳朵、內耳淺灰；**沒有嘴巴，用鼻子表情**（抽動、聞聞）；
+  平常看不到手腳，有動作時才出現（揮手、歡呼、捧螢幕、遮眼、跳）；動作要有 Q 彈的擠壓伸展。
+  垂耳要看得出是長耳朵（不要像貓耳）。聽音樂、完成時鼻子**不要**變愛心。提示動作＝身體左右晃＋鼻子抽動。
+  使用者提供的參考圖之一很像現有角色；只借用通用元素（麻糬感、豆豆眼），Mono 的長耳、灰內耳、鼻子表情維持原創。
+- **首頁標題**：A 字彙輪播（Your Media → Video → Record）＋ B 像素音波，**不放吉祥物**；補充說明只留
+  「把影片與錄音轉成逐字稿、摘要和心智圖」（原本的「讓影音更方便的被解析」拿掉）。
+- **引導**：選「操作後引導」（不是頂部流程列）：下一個按鈕發光＋箭頭，Mono 對話框說明；「知道了」關這一則，
+  「不再提示」關全部，可在設定頁重新開啟。
+
+### 實作
+- `apps/desktop/scripts/generate_mono_sprite.py`（只用標準函式庫）→ 產生 `src/components/mono/sprite.ts`。
+  以橢圓、貝茲曲線「管子」（垂耳）畫形狀，每個部件自動加 1 像素黑框。32×36 像素、5 個灰階色。
+  **要改造型請改腳本再重新產生，不要手改 sprite.ts。** 形狀中心一律放在 x=16.0（像素 15 與 16 之間），臉部才會左右對稱
+  （第一次放在 15.5，對稱測試抓到半像素偏移）。
+- `compose.ts`：部件分層（陰影、尾巴、後耳、身體、腳、前耳、臉、手持道具、手、穿戴道具）→ SVG 橫向色塊。
+- `animations.ts`：idle、loading、music（抽取音訊中）、video（匯入檢查／辨識中）、hint（引導）、done、error；
+  整體動作（breathe / bounce / sway / jelly）是 index.css 的 CSS keyframes，以底部為支點縮放。
+  `prefers-reduced-motion` 時停在第一格、不加動作。
+- `features/guide/`：`nextGuideStep()` 純函式決定提示哪一步（open-workspace → extract → transcribe → done；
+  處理中、失敗、取消時不提示）；`guideStore` 只把「開關」存在 localStorage（介面偏好，不含媒體資料，符合 §8.3），
+  「知道了」只在記憶體、換檔案時清空。`GuideTarget` 包住下一步的按鈕，`GuideCoach` 是 Mono 對話框。
+- 首頁 `HeroTitle`：h1 的 aria-label 固定為完整標題，輪播文字 aria-hidden；reduced motion 時改顯示三行標題。
+- 設計規範頁（開發模式）新增「吉祥物 Mono」區塊，可看所有動畫與對話框。
+
+### 同步 Claude Code 的本機修正（2026-11-09）
+- `9b3a5a8` Windows 記憶體讀數加回 ctypes 型別與錯誤檢查；`5b5b215` stdin 監看改用 PeekNamedPipe（不阻塞管線，
+  修正辨識卡在「準備中 0%」）＋回歸測試 `test_spawn_worker_starts_while_stdin_watchdog_runs`。沙盒以 git am 套用。
+- 依其原則整理：新增 `app/core/procmem.py`（測試與 benchmark 共用；Windows 用自己的 WinDLL＋argtypes/restype，
+  失敗就 raise，**絕不回報假的 0 MB**），`scripts/benchmark_asr.py` 改用它（原本在 Windows 峰值記憶體永遠是 0）；
+  `tests/test_lifecycle.py` 的 `pid_alive` 在 Windows 也改為具型別呼叫（OpenProcess 失敗時：87=不存在、5=存在、其他 raise）。
+  **規則：ctypes 一律用私有 WinDLL 並宣告 argtypes/restype、檢查回傳值；不要用 `ctypes.windll` 全域實例。**
+- 待 Claude Code 在 Windows 處理：`app/main.py` 的 `_stdin_is_windows_pipe` 仍用未宣告型別的 `ctypes.windll.kernel32.GetFileType`。
+- 偶發失敗的 webm 測試：測試影片用無限長的 lavfi 來源＋`-shortest`，長度不固定；改為依 wav 長度明確指定 `d=`。
+- 逐字稿載入模型時顯示不確定進度與提示；「部分估計」時說明有幾句是估計時間。
 
 ## Phase 05 ASR Integration — 實作與驗證（2026-11-09）
 
