@@ -9,7 +9,12 @@ Large sizes are drawn from vector shapes with 4x4 supersampling. 16 and 32 px ar
 (simplified ears, M strokes 2-3 px wide) so they stay crisp in the taskbar.
 
 Standard library only (no Pillow needed):
-    python apps/desktop/scripts/generate_icons.py
+    python apps/desktop/scripts/generate_icons.py           # write the files
+    python apps/desktop/scripts/generate_icons.py --check   # verify the committed files (exit 1 if different)
+
+The PNG data is zlib-compressed, and different zlib builds (e.g. Python 3.11 vs 3.13 on Windows) can produce
+different bytes for the same pixels. So "reproducible" means *the decoded pixels are identical*; --check
+compares pixels, not bytes (2026-11-10, found on Windows).
 """
 from __future__ import annotations
 
@@ -171,7 +176,63 @@ def ico_bytes(images: dict[int, bytes]) -> bytes:
     return header + entries + data
 
 
+def decode_png(data: bytes) -> list[list[tuple[int, int, int, int]]]:
+    """Decoder for the PNGs this script writes (8-bit RGBA, filter type 0 on every row)."""
+    assert data[:8] == b"\x89PNG\r\n\x1a\n", "not a PNG"
+    pos, idat, w, h = 8, b"", 0, 0
+    while pos < len(data):
+        (n,) = struct.unpack(">I", data[pos : pos + 4])
+        kind, body = data[pos + 4 : pos + 8], data[pos + 8 : pos + 8 + n]
+        if kind == b"IHDR":
+            w, h, depth, color = struct.unpack(">IIBB", body[:10])
+            assert (depth, color) == (8, 6), "unexpected PNG format"
+        elif kind == b"IDAT":
+            idat += body
+        pos += 12 + n
+    raw = zlib.decompress(idat)
+    stride = 1 + 4 * w
+    rows = []
+    for y in range(h):
+        line = raw[y * stride : (y + 1) * stride]
+        assert line[0] == 0, "unexpected PNG filter"
+        rows.append([tuple(line[1 + 4 * x : 5 + 4 * x]) for x in range(w)])
+    return rows
+
+
+def decode_ico(data: bytes) -> dict[int, list[list[tuple[int, int, int, int]]]]:
+    _, _, count = struct.unpack("<HHH", data[:6])
+    out = {}
+    for i in range(count):
+        w, _, _, _, _, _, size, offset = struct.unpack("<BBBBHHII", data[6 + 16 * i : 22 + 16 * i])
+        out[w or 256] = decode_png(data[offset : offset + size])
+    return out
+
+
+def build() -> dict[str, dict[int, list[list[tuple[int, int, int, int]]]]]:
+    frames = {16: pixel16(), 32: pixel32(), 48: render_vector(48), 256: render_vector(256)}
+    return {
+        "build/icon.ico": frames,
+        "build/icon.png": {512: render_vector(512, ss=3)},
+        "public/favicon.ico": {s: frames[s] for s in (16, 32, 48)},
+    }
+
+
+def check() -> int:
+    ok = True
+    for rel, want in build().items():
+        data = (ROOT / rel).read_bytes()
+        have = decode_ico(data) if rel.endswith(".ico") else {512: decode_png(data)}
+        same = have == want
+        print(f"{rel}: {'pixels identical' if same else 'DIFFERENT'}")
+        ok = ok and same
+    return 0 if ok else 1
+
+
 def main() -> None:
+    import sys
+
+    if "--check" in sys.argv[1:]:
+        raise SystemExit(check())
     frames = {16: png_bytes(pixel16()), 32: png_bytes(pixel32()), 48: png_bytes(render_vector(48)), 256: png_bytes(render_vector(256))}
     (ROOT / "build").mkdir(exist_ok=True)
     (ROOT / "public").mkdir(exist_ok=True)

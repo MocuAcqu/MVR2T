@@ -31,6 +31,7 @@ class EngineSpec:
     aligner_dir: str | None
     dtype: str
     threads: int
+    asr_batch: int = 4  # 一次辨識幾段（MVR2T_ASR_BATCH）
 
 
 def _watch_parent() -> None:
@@ -64,6 +65,7 @@ def worker_main(phase: str, spec: EngineSpec, payload: dict[str, Any], events: A
             asr=lambda: Qwen3Asr(Path(spec.asr_dir), spec.dtype, spec.threads),
             aligner=(lambda: Qwen3Aligner(Path(spec.aligner_dir), spec.dtype, spec.threads)) if spec.aligner_dir else None,
             read_audio=read_wav_16k_mono,
+            asr_batch=spec.asr_batch,
         )
 
         def report(**kw: Any) -> None:

@@ -161,9 +161,7 @@ def test_full_flow_sequential_loading_offsets_and_traditional(data_dir, two_segm
         state = transcribe(c, sid, mid)
         assert state["status"] == "completed", state.get("message")
         assert state["result"]["timing"] == "aligned" and state["result"]["language"] == "Chinese"
-        # Per-step durations for the workspace card. Regression: the dict was overwritten by the set of sentence
-        # timings and reached the UI as ["aligned", ...]. (Only the worker-process path fills it in; the in-process
-        # fake engines used here leave it empty, so check the type and the allowed keys.)
+        # step timings stay a dict of seconds (regression: it was overwritten by the set of sentence timing kinds)
         timings = state["result"]["timings"]
         assert isinstance(timings, dict) and set(timings) <= {"asr_seconds", "align_seconds"}
 

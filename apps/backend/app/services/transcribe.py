@@ -50,7 +50,7 @@ def default_engines(cfg: Settings) -> EngineSpec:
     aligner_dir = (
         str(QWEN3_FORCED_ALIGNER_0_6B.local_dir(root)) if is_installed(QWEN3_FORCED_ALIGNER_0_6B, root) else None
     )
-    return EngineSpec(str(QWEN3_ASR_0_6B.local_dir(root)), aligner_dir, cfg.asr_dtype, cfg.torch_threads)
+    return EngineSpec(str(QWEN3_ASR_0_6B.local_dir(root)), aligner_dir, cfg.asr_dtype, cfg.torch_threads, cfg.asr_batch)
 
 
 def _load_manifest(rec: MediaRecord) -> dict[str, Any]:
@@ -125,8 +125,7 @@ def run_transcription(task: Task, rec: MediaRecord, engines: EngineChoice, langu
     for s in raw:
         if s["text"] and s["language"]:
             lang_weight[s["language"]] += s["duration"]
-    # 不能叫 timings：那是上面記錄各步驟耗時的 dict（Windows 驗收時被這裡覆蓋，卡片沒有顯示辨識／對齊時間）
-    sentence_timing = {s.timing for s in sentences}
+    sentence_timing = {s.timing for s in sentences}  # 不要叫 timings：會蓋掉上面的步驟耗時（2026-11-10 Windows 驗收發現）
     transcript = {
         "media_id": rec.id,
         "language": lang_weight.most_common(1)[0][0] if lang_weight else None,

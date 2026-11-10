@@ -67,6 +67,7 @@ def client(tmp_path):
             str(QWEN3_FORCED_ALIGNER_0_6B.local_dir(real_models)),
             _cfg.asr_dtype,
             _cfg.torch_threads,
+            _cfg.asr_batch,
         )
 
     app.state.engines_factory = engines

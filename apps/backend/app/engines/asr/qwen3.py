@@ -104,6 +104,13 @@ class Qwen3Asr:
             raise EngineError("記憶體不足，無法載入語音辨識模型。請關閉其他程式後再試。") from e
 
     def transcribe(self, audio: np.ndarray, language: str | None, is_cancelled: Callable[[], bool]) -> AsrResult:
+        return self.transcribe_batch([audio], language, is_cancelled)[0]
+
+    def transcribe_batch(
+        self, audios: list[np.ndarray], language: str | None, is_cancelled: Callable[[], bool]
+    ) -> list[AsrResult]:
+        """一次辨識多段（同一次 generate）。CPU 上比逐段快：沙盒 5.5 分鐘中文，4 段一批快 1.7 倍、文字完全相同，
+        記憶體只多約 0.1 GB（docs/DEV_LOG.md「語音辨識加速」）。"""
         import torch
         from transformers import StoppingCriteria, StoppingCriteriaList
 
@@ -112,17 +119,26 @@ class Qwen3Asr:
                 return torch.full((input_ids.shape[0],), is_cancelled(), dtype=torch.bool)
 
         assert self._model is not None and self._processor is not None, "call load() first"
-        inputs = self._processor.apply_transcription_request(audio=audio, language=language).to(dtype=self._dtype)
-        limit = max_new_tokens_for(len(audio) / SAMPLE_RATE)
+        n = len(audios)
+        inputs = self._processor.apply_transcription_request(
+            audio=audios if n > 1 else audios[0],
+            language=([language] * n if n > 1 else language) if language else None,
+        ).to(dtype=self._dtype)
+        limits = [max_new_tokens_for(len(a) / SAMPLE_RATE) for a in audios]
         with torch.inference_mode():
             out = self._model.generate(
-                **inputs, max_new_tokens=limit, do_sample=False, stopping_criteria=StoppingCriteriaList([_Cancel()])
+                **inputs, max_new_tokens=max(limits), do_sample=False, stopping_criteria=StoppingCriteriaList([_Cancel()])
             )
-        generated = out[0, inputs["input_ids"].shape[1] :]
-        parsed = self._processor.decode(generated, return_format="parsed")
-        # 強制指定語言時，模型不會再輸出語言標記，所以以指定的語言為準
-        detected = parsed.get("language") or language
-        return AsrResult(language=detected, text=(parsed.get("transcription") or "").strip(), truncated=len(generated) >= limit)
+        pad_id = getattr(self._model.generation_config, "pad_token_id", None)
+        results = []
+        for i, limit in enumerate(limits):
+            generated = out[i, inputs["input_ids"].shape[1] :]
+            length = int((generated != pad_id).sum()) if pad_id is not None else len(generated)
+            parsed = self._processor.decode(generated, return_format="parsed")
+            # 強制指定語言時，模型不會再輸出語言標記，所以以指定的語言為準
+            detected = parsed.get("language") or language
+            results.append(AsrResult(language=detected, text=(parsed.get("transcription") or "").strip(), truncated=length >= limit))
+        return results
 
     def unload(self) -> None:
         self._model = None

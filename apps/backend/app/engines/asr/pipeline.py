@@ -45,6 +45,8 @@ class Engines:
     asr: Callable[[], AsrBackend]
     aligner: Callable[[], AlignBackend] | None  # None = 對齊模型未安裝
     read_audio: Callable[[Path], np.ndarray]
+    #: 一次辨識幾段（ASR 實作有 transcribe_batch 時才會批次）
+    asr_batch: int = 1
 
 
 @dataclass
@@ -95,16 +97,34 @@ def recognize(
         asr.load()
         check()
         done = 0.0
-        for meta, rel in zip(seg_meta, files):
+        batch = max(1, engines.asr_batch) if hasattr(asr, "transcribe_batch") else 1
+        items = list(zip(seg_meta, files))
+        i = 0
+        while i < len(items):
             check()
-            report(stage="正在辨識語音", detail=f"第 {meta['index'] + 1} / {len(seg_meta)} 段")
-            res = asr.transcribe(engines.read_audio(audio_dir / rel), language, is_cancelled)
+            group = items[i : i + batch]
+            first, last = group[0][0]["index"] + 1, group[-1][0]["index"] + 1
+            report(stage="正在辨識語音", detail=f"第 {first} / {len(seg_meta)} 段" if first == last else f"第 {first}–{last} / {len(seg_meta)} 段")
+            audios = [engines.read_audio(audio_dir / rel) for _, rel in group]
+            if batch > 1:
+                try:
+                    results = asr.transcribe_batch(audios, language, is_cancelled)  # type: ignore[attr-defined]
+                except (MemoryError, RuntimeError) as e:
+                    if not isinstance(e, MemoryError) and "memory" not in str(e).lower():
+                        raise
+                    # 記憶體不夠一次處理多段：改回逐段，之後也不再批次
+                    batch = 1
+                    continue
+            else:
+                results = [asr.transcribe(audios[0], language, is_cancelled)]
             check()
-            if res.truncated:
-                warnings.append(f"第 {meta['index'] + 1} 段文字可能不完整（超過生成長度上限）。")
-            raw.append({**meta, "language": res.language, "text": res.text, "file": rel})
-            done += meta["duration"]
+            for (meta, rel), res in zip(group, results):
+                if res.truncated:
+                    warnings.append(f"第 {meta['index'] + 1} 段文字可能不完整（超過生成長度上限）。")
+                raw.append({**meta, "language": res.language, "text": res.text, "file": rel})
+                done += meta["duration"]
             report(progress=P_LOAD_ASR + (P_ASR - P_LOAD_ASR) * done / total_seconds)
+            i += len(group)
     finally:
         asr.unload()  # 規格 §5.4：用完立即卸載，再載入下一個模型
     return raw, warnings
