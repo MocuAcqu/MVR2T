@@ -1,6 +1,6 @@
 # 開發紀錄（給接手的 Claude / Claude Code）
 
-最後更新：2026-11-11。Phase 07 心智圖已在沙盒完成，待 Windows 驗收。
+最後更新：2026-11-11。Phase 07 已在 Windows 驗收（fix1 待套用）；下一步 Phase 08 Session and Export（含使用者新增的 CSV／DOCX／PDF 需求，待確認設計）。
 
 ## 目前進度
 
@@ -15,7 +15,7 @@
 | 介面更新（Mono／標題／引導） | ✅ Windows 驗收通過（2026-11-09） |
 | 優化（通知／防睡眠／首頁／引導） | ✅ Windows 驗收通過（2026-11-09） |
 | 06 LLM Integration | ✅ Windows 驗收通過（2026-11-10，llama.cpp b11312＋Qwen3.5-4B） |
-| 07 Mind Map | 🧪 沙盒完成（2026-11-11），待 Windows 驗收 |
+| 07 Mind Map | ✅ Windows 驗收通過（2026-11-11）；fix1 待確認 |
 
 ## 沙盒驗證結果（2026-11-06）
 
@@ -144,6 +144,16 @@
   瀏覽器預覽改用下載。
 - React Flow 的 attribution 以 `proOptions.hideAttribution` 隱藏（MIT 授權允許；避免在 Electron 內點到外部連結）。
 - 心智圖與其編輯只在記憶體中（§8.3）；換檔、重新辨識、重新產生摘要時清空。
+
+### Windows 驗收（2026-11-11，本機 46ca158）
+- npm ci 無 lockfile 差異；前端 156 passed；後端含真實模型 132 passed、5 skipped（59 分鐘）。
+  `test_mindmap_is_a_valid_tree_about_the_meeting` 930 s；長逐字稿測試這次 2273 s（Phase 06 時 1370 s，同一台電腦速度差異大）。
+- 23:57 中文錄音：只勾心智圖約 21 分鐘（時間主要在分段筆記，勾幾種都要做）；勾全部 8 種約 32 分鐘。
+- 匯出 PNG（相片）、SVG（瀏覽器）中文正常、內容完整；40 字節點不重疊。
+- **問題**：勾全部 8 種的那次，心智圖只涵蓋前約 2 分鐘（其他摘要完整；重新產生後正常，無法重現）。
+  → fix1：`mindmap_coverage()`（引用到的最後一句的位置）< 0.5 且 ≥20 句時，加上「必須涵蓋開頭到結尾」的提示、
+  溫度 0.1 重做一次，保留涵蓋較完整的結果（最多 2 次）。
+- 小問題 → fix1：改字輸入框跟著內容長高（原本最多 4 行出現捲軸）；工具列「編輯」改名「改文字」，未選取時顯示「先點選一個節點」。
 
 ### 驗證（沙盒）
 - vitest：model 11 tests；pytest：19 passed（含 merge 與 mindmap 預算測試）；electron security tests 含 saveFile 驗證。

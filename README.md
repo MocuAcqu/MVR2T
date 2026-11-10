@@ -16,7 +16,7 @@
 | — | 介面更新（吉祥物 Mono、首頁標題、操作引導） | ✅ 已在 Windows 驗收 |
 | — | 優化（完成通知、防睡眠、首頁精簡、引導） | ✅ 已在 Windows 驗收 |
 | 06 | LLM Integration（llama.cpp + Qwen3.5-4B 摘要） | ✅ 已在 Windows 驗收 |
-| 07 | Mind Map（React Flow 心智圖：編輯、拖曳、匯出 PNG／SVG） | 🧪 待 Windows 驗收 |
+| 07 | Mind Map（React Flow 心智圖：編輯、拖曳、匯出 PNG／SVG） | ✅ 已在 Windows 驗收（fix1 待確認） |
 | 08 – 12 | Session、Model Manager、硬體偵測、打包 | ⏳ |
 
 ## 環境需求

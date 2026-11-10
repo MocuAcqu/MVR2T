@@ -445,15 +445,47 @@ def plan(lines: Sequence[Line], types: Sequence[SummaryType], budget: Budget) ->
     return Plan(chunks=chunks, types=ordered)
 
 
-def _call_json(llm: Chat, messages: list[dict[str, str]], schema: dict[str, Any], max_tokens: int) -> tuple[dict[str, Any], Any]:
+def _call_json(
+    llm: Chat, messages: list[dict[str, str]], schema: dict[str, Any], max_tokens: int, temperature: float = 0.3
+) -> tuple[dict[str, Any], Any]:
     """呼叫一次；JSON 解析失敗（字串與陣列都有上限後應不會發生）時以較低溫度重試一次。
     不加大 max_tokens：心智圖的輸入＋輸出已接近 8192 context，加倍會超過。"""
-    res = llm.chat(messages, max_tokens=max_tokens, json_schema=schema)
+    res = llm.chat(messages, max_tokens=max_tokens, json_schema=schema, temperature=temperature)
     try:
         return _parse_json(res.content), res
     except ValueError:
         res = llm.chat(messages, max_tokens=max_tokens, json_schema=schema, temperature=0.1)
         return _parse_json(res.content), res
+
+
+# 心智圖的涵蓋範圍檢查（2026-11-11，Windows 實測：一次心智圖只整理了 24 分鐘錄音的前 2 分鐘）
+MINDMAP_MIN_COVERAGE = 0.5  # 心智圖引用到的最後一句，至少要在逐字稿的一半之後
+MINDMAP_COVERAGE_MIN_LINES = 20  # 很短的內容不檢查
+
+
+def mindmap_coverage(tree: dict[str, Any] | None, lines: Sequence[Line]) -> float:
+    """心智圖引用到的最後一句在逐字稿中的位置（0～1）；沒有任何引用回傳 0。"""
+    if not tree or not lines:
+        return 0.0
+    position = {ln.id: i for i, ln in enumerate(lines)}
+    last = -1
+
+    def walk(n: dict[str, Any]) -> None:
+        nonlocal last
+        for r in n.get("refs", []):
+            last = max(last, position.get(r, -1))
+        for c in n.get("children", []):
+            walk(c)
+
+    walk(tree)
+    return (last + 1) / len(lines)
+
+
+def _coverage_hint(lines: Sequence[Line]) -> str:
+    return (
+        f"注意：內容共 {len(lines)} 句（編號 {lines[0].id}～{lines[-1].id}）。心智圖必須涵蓋從開頭到結尾的所有主題，"
+        "後段的主題也要有自己的分支，不可只整理前面的部分。"
+    )
 
 
 def summarize(
@@ -533,6 +565,17 @@ def summarize(
         raw, res = _call_json(llm, _messages(context, FINAL_INSTRUCTIONS[t]), FINAL_SCHEMAS[t], max_out)
         record(res)
         results[t] = normalize(t, raw, by_id)
+        if t == "mindmap" and len(lines) >= MINDMAP_COVERAGE_MIN_LINES:
+            coverage = mindmap_coverage(results[t], lines)
+            if coverage < MINDMAP_MIN_COVERAGE:
+                # 只涵蓋前段：提醒涵蓋全部、降低溫度，重做一次；保留涵蓋較完整的結果
+                step("正在產生心智圖", "內容只涵蓋前段，重新整理一次")
+                instruction = f"{FINAL_INSTRUCTIONS[t]}\n{_coverage_hint(lines)}"
+                raw, res = _call_json(llm, _messages(context, instruction), FINAL_SCHEMAS[t], max_out, temperature=0.1)
+                record(res)
+                retry = normalize(t, raw, by_id)
+                if mindmap_coverage(retry, lines) > coverage:
+                    results[t] = retry
         done += 1
     progress(1.0, "完成", "")
     return {"types": list(p.types), "results": results, "chunks": len(p.chunks), "levels": levels}

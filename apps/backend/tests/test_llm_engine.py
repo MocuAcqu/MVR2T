@@ -20,6 +20,7 @@ from app.engines.llm.summarize import (
     Budget,
     Line,
     estimate_tokens,
+    mindmap_coverage,
     normalize,
     split_chunks,
     summarize,
@@ -36,7 +37,7 @@ MINDMAP_REPLY = {
             ]},
         ]},
         {"title": "", "refs": [1], "children": []},
-        {"title": "会员点数", "refs": [25, 999], "children": []},
+        {"title": "会员点数", "refs": [60, 999], "children": []},
     ],
 }
 MEETING = json.loads((FIXTURES / "meeting_zh.json").read_text(encoding="utf-8"))
@@ -237,8 +238,44 @@ def test_mindmap_is_a_validated_tree_with_ids_kinds_and_times():
     sub = main["children"][0]
     assert sub["kind"] == "sub" and sub["id"] == "n-1-1"
     assert [d["kind"] for d in sub["children"]] == ["conclusion"]  # empty detail dropped
-    assert tree["children"][1]["refs"] == [25]  # unknown sentence id removed
+    assert tree["children"][1]["refs"] == [60]  # unknown sentence id removed
     assert normalize("mindmap", {"title": "x", "children": []}, by_id) is None  # nothing to show
+
+
+class EarlyMindmapLlm(FakeLlm):
+    """The first mind map only covers the first few sentences (seen once on Windows); the retry covers everything."""
+
+    def __init__(self, retry_refs: int) -> None:
+        super().__init__()
+        self.retry_refs = retry_refs
+        self.mindmap_temps: list[float] = []
+
+    def chat(self, messages, *, max_tokens, json_schema=None, temperature=0.3):  # noqa: ANN001
+        if json_schema is not FINAL_SCHEMAS["mindmap"]:
+            return super().chat(messages, max_tokens=max_tokens, json_schema=json_schema, temperature=temperature)
+        self.calls.append((messages[-1]["content"], json_schema))
+        self.mindmap_temps.append(temperature)
+        refs = [2] if len(self.mindmap_temps) == 1 else [self.retry_refs]
+        reply = {"title": "会议", "children": [{"title": "开幕", "refs": [1], "children": [{"title": "日期", "refs": refs, "children": []}]}]}
+        return Res(json.dumps(reply, ensure_ascii=False))
+
+
+def test_mindmap_that_only_covers_the_beginning_is_regenerated_once():
+    last = LINES[-1].id
+    llm = EarlyMindmapLlm(retry_refs=last)
+    out = summarize(llm, LINES, ["mindmap"], Budget())
+    assert llm.mindmap_temps == [0.3, 0.1]
+    assert "必須涵蓋從開頭到結尾" in llm.calls[-1][0]
+    assert mindmap_coverage(out["results"]["mindmap"], LINES) == 1.0
+    # the retry is no better: keep the first one, and never try a third time
+    llm2 = EarlyMindmapLlm(retry_refs=1)
+    out2 = summarize(llm2, LINES, ["mindmap"], Budget())
+    assert len(llm2.mindmap_temps) == 2
+    assert out2["results"]["mindmap"]["children"][0]["children"][0]["refs"] == [2]
+    # a mind map that already covers the content is not regenerated
+    llm3 = FakeLlm()
+    summarize(llm3, LINES, ["mindmap"], Budget())
+    assert sum(1 for _, s in llm3.calls if s is FINAL_SCHEMAS["mindmap"]) == 1
 
 
 def test_mindmap_uses_its_own_output_budget():

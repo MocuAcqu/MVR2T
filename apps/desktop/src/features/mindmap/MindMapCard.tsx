@@ -324,11 +324,12 @@ function MindMapEditor({ root, mediaName }: { root: MindNode; mediaName: string 
       <div role="toolbar" aria-label="心智圖工具" className="flex flex-wrap items-center gap-2">
         <ToolButton onClick={() => add('child')} disabled={!canAddChild} title="新增子節點（Tab）">＋ 子節點</ToolButton>
         <ToolButton onClick={() => add('sibling')} disabled={!canAddSibling} title="新增同層節點（Enter）">＋ 同層</ToolButton>
-        <ToolButton onClick={() => selected && actions.startEdit(selected.id)} disabled={!selected} title="編輯文字（F2 或雙擊節點）">編輯</ToolButton>
+        <ToolButton onClick={() => selected && actions.startEdit(selected.id)} disabled={!selected} title="修改節點文字（也可以雙擊節點或按 F2）">改文字</ToolButton>
         <ToolButton onClick={remove} disabled={!canAddSibling} title="刪除節點與它的子節點（Delete）">刪除</ToolButton>
         <ToolButton onClick={() => selected && commit(toggleConclusion(root, selected.id))} disabled={!canConclude} title="把細節標為結論，或取消">
           {selected?.kind === 'conclusion' ? '取消結論' : '標為結論'}
         </ToolButton>
+        {selected ? null : <span className="text-xs text-body-gray">先點選一個節點</span>}
         <Sep />
         <ToolButton onClick={undo} disabled={past.current.length === 0} title={`復原（${modKey}+Z）`}>復原</ToolButton>
         <ToolButton onClick={redo} disabled={future.current.length === 0} title={`重做（${modKey}+Shift+Z）`}>重做</ToolButton>

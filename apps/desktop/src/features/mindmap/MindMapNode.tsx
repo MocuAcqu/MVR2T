@@ -1,4 +1,4 @@
-import { createContext, memo, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, memo, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { formatDuration } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -55,12 +55,19 @@ function InlineEditor({ id, text }: { id: string; text: string }) {
     focus();
     return () => cancelAnimationFrame(raf);
   }, []);
+  // 輸入框跟著內容長高（不出現捲軸，看得到全部文字）
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
   return (
     <textarea
       ref={ref}
       aria-label="節點文字"
       value={value}
-      rows={Math.min(4, Math.max(1, Math.ceil(value.length / 12)))}
+      rows={1}
       maxLength={80}
       onChange={(e) => setValue(e.target.value.replace(/\n/g, ''))}
       onKeyDown={(e) => {
@@ -74,7 +81,7 @@ function InlineEditor({ id, text }: { id: string; text: string }) {
         }
       }}
       onBlur={() => actions.commitEdit(id, value)}
-      className="nodrag nopan nowheel w-full resize-none bg-transparent leading-snug outline-none"
+      className="nodrag nopan nowheel block w-full resize-none overflow-hidden bg-transparent leading-snug outline-none"
     />
   );
 }
