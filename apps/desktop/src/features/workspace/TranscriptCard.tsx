@@ -124,6 +124,11 @@ export function TranscriptCard() {
               <Badge variant={transcript.timing === 'aligned' ? 'default' : 'outline'}>{TIMING_LABEL[transcript.timing]}</Badge>
               <span className="text-body-gray">
                 {transcript.segments.length} 句，音訊 {formatDuration(result.audio_seconds)}，處理 {formatDuration(result.elapsed_seconds)}
+                {result.timings?.asr_seconds !== undefined
+                  ? `（辨識 ${formatDuration(result.timings.asr_seconds)}${
+                      result.timings.align_seconds !== undefined ? `、對齊 ${formatDuration(result.timings.align_seconds)}` : ''
+                    }）`
+                  : ''}
               </span>
             </div>
             {transcript.warnings.length > 0 ? (

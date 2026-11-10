@@ -66,6 +66,8 @@ def run_transcription(task: Task, rec: MediaRecord, engines: EngineChoice, langu
     audio_dir = rec.dir / "audio"
     total_seconds = sum(s["duration"] for s in manifest["segments"]) or 1.0
     started = time.monotonic()
+    # 各步驟耗時（含載入模型），用來評估加速方案（2026-11-10 使用者提議：辨識與對齊同時進行）
+    timings: dict[str, float] = {}
 
     def report(progress: float | None = None, stage: str | None = None, detail: str | None = None) -> None:
         task.update(progress=progress, stage=stage, detail=detail)
@@ -80,7 +82,9 @@ def run_transcription(task: Task, rec: MediaRecord, engines: EngineChoice, langu
             except (WorkerCrashed, WorkerFailed) as e:
                 raise UserFacingError(str(e)) from e
 
+        t0 = time.monotonic()
         asr_msg = step("asr", {"manifest": manifest, "audio_dir": str(audio_dir), "language": language})
+        timings["asr_seconds"] = round(time.monotonic() - t0, 1)
         raw = asr_msg["raw"]
         warnings = list(asr_msg["warnings"])
         units: dict[int, list[Unit] | None] = {s["index"]: None for s in raw}
@@ -88,7 +92,9 @@ def run_transcription(task: Task, rec: MediaRecord, engines: EngineChoice, langu
         if aligner_used and segments_to_align(raw):
             if task.cancelled:
                 raise TaskCancelled()
+            t0 = time.monotonic()
             al_msg = step("align", {"raw": raw, "audio_dir": str(audio_dir)})
+            timings["align_seconds"] = round(time.monotonic() - t0, 1)
             units.update({int(k): ([Unit(**u) for u in v] if v is not None else None) for k, v in al_msg["units"].items()})
             warnings += al_msg["warnings"]
         warnings += alignment_warnings(raw, aligner_used)
@@ -154,6 +160,7 @@ def run_transcription(task: Task, rec: MediaRecord, engines: EngineChoice, langu
         "warnings": warnings,
         "elapsed_seconds": round(elapsed, 1),
         "audio_seconds": round(total_seconds, 1),
+        "timings": timings,
     }
 
 

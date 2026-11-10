@@ -20,7 +20,8 @@ vi.mock('@/services/api', async (importOriginal) => {
 
 import { AbortedError, ApiError } from '@/services/api';
 import { MAX_MEDIA_BYTES } from '@shared/constants/media';
-import { idleExtraction, idleTranscription, useSessionStore } from '@/stores/sessionStore';
+import { idleExtraction, idleSummary, idleTranscription, useSessionStore } from '@/stores/sessionStore';
+import { isBusy } from '../backgroundEffects';
 import {
   __resetForTests,
   cancelImport,
@@ -295,5 +296,31 @@ describe('startSummary', () => {
     api.getTask.mockResolvedValue({ status: 'running', progress: 0, stage: '', detail: '', message: null, result: null });
     await startTranscription(null);
     expect(useSessionStore.getState().summary).toBeNull();
+  });
+});
+
+describe('importing another file while work is running', () => {
+  it('clears the old transcription and summary so nothing stays "running" (and keep-awake is released)', async () => {
+    useSessionStore.setState({
+      sessionId: 's1',
+      backendKey: `${conn.url}|a`,
+      import: { status: 'ready', file: file('a.mp4'), info },
+      extraction: { ...idleExtraction, status: 'completed' },
+      transcription: { ...idleTranscription, status: 'completed' },
+      transcript: { media_id: 'm1', segments: [] } as never,
+      summarizing: { ...idleSummary, taskId: 'sum1', status: 'running', stage: '正在產生摘要' },
+      summary: null,
+    });
+    api.uploadMedia.mockReturnValue(new Promise(() => undefined)); // still uploading
+    void importFile(file('b.mp3'));
+    await Promise.resolve();
+    const s = useSessionStore.getState();
+    expect(s.import.status).toBe('uploading');
+    expect(s.summarizing.status).toBe('idle');
+    expect(s.transcription.status).toBe('idle');
+    expect(s.transcript).toBeNull();
+    expect(isBusy(s)).toBe(true); // only because the new upload is in progress
+    useSessionStore.setState({ import: { status: 'ready', file: file('b.mp3'), info } });
+    expect(isBusy(useSessionStore.getState())).toBe(false);
   });
 });

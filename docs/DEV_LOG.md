@@ -1,6 +1,6 @@
 # 開發紀錄（給接手的 Claude / Claude Code）
 
-最後更新：2026-11-10。Phase 06（摘要）完成並在沙盒以真實模型驗證，待 Windows 驗收。
+最後更新：2026-11-10。Phase 06（摘要）已在 Windows 驗收；討論中：程式圖示、語音辨識加速。
 
 ## 目前進度
 
@@ -14,7 +14,7 @@
 | 05 ASR Integration | ✅ Windows 實測通過（24 分鐘中文錄音 → 320 句，float32 約 32 分鐘）；benchmark 待使用者執行 |
 | 介面更新（Mono／標題／引導） | ✅ Windows 驗收通過（2026-11-09） |
 | 優化（通知／防睡眠／首頁／引導） | ✅ Windows 驗收通過（2026-11-09） |
-| 06 LLM Integration | 🟡 沙盒以真實模型驗證通過（Qwen3.5-4B），**待 Windows 驗收** |
+| 06 LLM Integration | ✅ Windows 驗收通過（2026-11-10，llama.cpp b11312＋Qwen3.5-4B） |
 
 ## 沙盒驗證結果（2026-11-06）
 
@@ -168,9 +168,26 @@
   分段＋整合模式下全文摘要保留 LINE 與 9/20、問題含 POS、5 個負責人全部保留；任務結束後 llama-server 程序確實結束。
 - 前端 vitest、typecheck、build 通過；SummaryCard 以真實輸出截圖檢查（分頁、時間標籤捲動、處理中狀態）。
 
-### 待使用者電腦確認
-- Claude Code 執行 resolve_llama_release 填入 tag／SHA-256，`download_models --llm` 下載並驗證 Windows CPU 版 llama-server。
-- Windows 上 Job Object 測試（test_child_dies_when_the_backend_process_dies）、真實模型測試、實際摘要時間與記憶體。
+### Windows 驗收（2026-11-10，使用者本機 931d9c5＋519e8d7）
+- llama.cpp 固定為 **b11312**（正好是 commit 0c1e570 的 release），win-cpu-x64 zip 19,265,352 bytes、SHA-256 d2d966c2…；
+  download_models --llm／--verify 正常（模型下載約 0.5 MB/s，花了 81 分鐘，HF 未登入）。
+- pytest 118 passed / 4 skipped；Job Object 測試在 Windows 通過；test_llm_real：直接模式 223 秒、分段整合模式 1,370 秒（約 23 分鐘）。
+- 實測：中文錄音勾選 7 種摘要共 32 分 43 秒；完成與取消後沒有殘留 llama-server.exe；摘要沒有錄音中不存在的人名、數字、日期；
+  時間標籤捲動、摘要完成通知、摘要中擋下重新抽取／重新辨識都正常。
+- 工作管理員預設的「記憶體」欄位（私人工作集）只看到約 52 MB：llama.cpp 以 mmap 載入模型，不算在這個欄位，要看「尖峰工作集」。
+- 修正（Claude Code 發現）：摘要或辨識中從首頁更換檔案時，前端沒有重設逐字稿／摘要狀態，卡片停在「進行中」、防睡眠不解除。
+  importFile 開始上傳時一併清除，並補測試。
+- macOS 的 llama.cpp 是 .tar.gz：runtime 改為能安全解壓 .zip 與 .tar.gz（拒絕路徑穿越與跳出資料夾的連結），resolver 也找 .tar.gz；
+  macOS 項目在 Phase 11 填入。
+- 語音辨識結果新增 timings（辨識、對齊各花多少秒，含載入模型），工作區顯示，用來評估使用者提議的「辨識與對齊同時進行」。
+
+### 程式圖示（2026-11-10，使用者選 A：圓角方形黑底、白色兔頭雙耳直立、粗體 M）
+- `apps/desktop/scripts/generate_icons.py`（**只用標準函式庫**：自行光柵化＋寫 PNG／ICO，不需要 Pillow）產生
+  `build/icon.ico`（16/32/48/256）、`build/icon.png`（512）、`public/favicon.ico`（16/32/48）。
+  48 以上由向量形狀 4×4 超取樣；**16、32 是手工像素圖**（耳朵簡化成 2／4 像素寬、M 筆畫 2～3 像素），避免縮小後糊掉。
+- BrowserWindow 設定 icon（Windows 用 .ico，其他用 .png）；index.html 加 favicon。安裝程式圖示在 Phase 11 使用同一個 .ico。
+- 開發模式（npm run dev）的工作列可能仍顯示 Electron 的圖示（AppUserModelID 是 electron.exe），正式打包後才會完全一致。
+- 語音辨識加速：使用者同意「先量測再決定」，等 Windows 上的辨識／對齊時間回報後再在沙盒比較方案。
 
 ## 防睡眠修正與開發模式重新載入（2026-11-09）
 

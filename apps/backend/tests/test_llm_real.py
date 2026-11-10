@@ -5,7 +5,9 @@ Skipped unless:
 - the summary model (LLM_MODEL) is downloaded.
 
 Uses tests/fixtures/meeting_zh.json: a synthetic 8.5-minute Traditional-Chinese meeting with known facts
-(5 owners with tasks, decisions with dates, two open questions). Each test takes several minutes on CPU.
+(5 owners with tasks, decisions with dates, two open questions).
+Runtime on CPU: about 4 minutes for the first test and 20-25 minutes for the hierarchical one
+(measured on the user's Windows PC, 2026-11-10); set MVR2T_SKIP_LLM_REAL=1 to skip them.
 """
 from __future__ import annotations
 
@@ -30,6 +32,7 @@ MEETING = json.loads((Path(__file__).parent / "fixtures" / "meeting_zh.json").re
 LINES = [Line(s["id"], s["start"], s["end"], s["text"]) for s in MEETING["segments"]]
 
 pytestmark = [
+    pytest.mark.skipif(os.environ.get("MVR2T_SKIP_LLM_REAL") == "1", reason="MVR2T_SKIP_LLM_REAL=1"),
     pytest.mark.skipif(EXE is None, reason="llama-server not installed"),
     pytest.mark.skipif(not is_installed(LLM_MODEL, CFG.models_root), reason="summary model not downloaded"),
 ]

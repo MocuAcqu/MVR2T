@@ -15,7 +15,7 @@
 | 05 | ASR Integration（Qwen3-ASR + 時間戳記對齊） | ✅ 已在 Windows 實測 |
 | — | 介面更新（吉祥物 Mono、首頁標題、操作引導） | ✅ 已在 Windows 驗收 |
 | — | 優化（完成通知、防睡眠、首頁精簡、引導） | ✅ 已在 Windows 驗收 |
-| 06 | LLM Integration（llama.cpp + Qwen3.5-4B 摘要） | 🟡 沙盒已用真實模型驗證，待你在 Windows 驗收 |
+| 06 | LLM Integration（llama.cpp + Qwen3.5-4B 摘要） | ✅ 已在 Windows 驗收 |
 | 07 – 12 | 心智圖、Session、Model Manager、硬體偵測、打包 | ⏳ |
 
 ## 環境需求
@@ -188,6 +188,8 @@ Phase 03 起**只需要一個終端機**。後端由 Electron 以 `apps/backend/
       （否則 Vite 會在喚醒後重新載入整頁，畫面被清空；正式版不會）
 - [ ] 引導對話框不再有「知道了／不再提示」；到「設定 → 操作引導」可以關閉或開啟（如果先前按過「不再提示」，請在這裡重新開啟）
 
+程式圖示：改 `apps/desktop/scripts/generate_icons.py` 後執行 `python apps/desktop/scripts/generate_icons.py`（不需要額外套件）。
+
 要改 Mono 的造型：改 `apps/desktop/scripts/generate_mono_sprite.py` 後執行 `python apps/desktop/scripts/generate_mono_sprite.py`。
 
 ## Phase 06 驗收清單（摘要）
@@ -204,7 +206,7 @@ Phase 03 起**只需要一個終端機**。後端由 Electron 以 `apps/backend/
 - [ ] 摘要完成後工作管理員中也沒有 `llama-server.exe`（模型用完即關閉，記憶體歸還）
 - [ ] 摘要進行中無法開始語音辨識或重新抽取音訊（顯示「另一個 AI 工作…」）
 - [ ] 切到其他程式時，摘要完成會跳出「摘要完成」通知
-- [ ] `npm test`、`npm run typecheck`、後端 pytest 全數通過；`tests/test_llm_real.py` 在已下載模型時會實際執行（約需數分鐘）
+- [ ] `npm test`、`npm run typecheck`、後端 pytest 全數通過；`tests/test_llm_real.py` 在已下載模型時會實際執行（約 25 分鐘；設定 `MVR2T_SKIP_LLM_REAL=1` 可略過）
 
 進階設定（環境變數）：
 - `MVR2T_LLM_CTX=4096`：記憶體不足時降低 context（預設 8192；長逐字稿會切成較多段）

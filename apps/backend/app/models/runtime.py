@@ -48,12 +48,13 @@ class LlamaCppRelease:
 
 
 # 與沙盒測試使用的原始碼相同的 commit（llama-cpp-python 0.3.36 內附的 llama.cpp，2026-10-01）。
-# tag 與 SHA-256 由使用者電腦上的 Claude Code 以 scripts/resolve_llama_release.py 查出後填入。
+# tag 與 SHA-256 由使用者電腦上的 Claude Code 以 scripts/resolve_llama_release.py 查出（2026-11-10，本機 519e8d7）。
 LLAMA_CPP = LlamaCppRelease(
     tag="b11312",
     commit="0c1e57098bba43ac29e6e3b677cdceebdd22334f",
     assets=(
         RuntimeAsset("win-cpu-x64", "llama-b11312-bin-win-cpu-x64.zip", 19265352, "d2d966c23e4d097d70633f9d92e4931245b575be7a5409201d8f352493f0e702"),
+        # macOS（.tar.gz）在 Phase 11 打包時以 scripts/resolve_llama_release 補上
     ),
 )
 
@@ -106,6 +107,39 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def extract_archive(archive: Path, name: str, dest: Path) -> None:
+    """解壓縮 .zip（Windows）或 .tar.gz（macOS）。任何會跳出 dest 的路徑或連結都拒絕（zip slip / tar 路徑穿越）。"""
+    root = dest.resolve()
+
+    def check(member_name: str) -> None:
+        target = (dest / member_name).resolve()
+        if not target.is_relative_to(root):
+            raise LlamaRuntimeError(f"{name} 內含不安全的路徑：{member_name}")
+
+    if name.endswith(".zip"):
+        with zipfile.ZipFile(archive) as zf:
+            for info in zf.infolist():
+                check(info.filename)
+            zf.extractall(dest)
+    elif name.endswith((".tar.gz", ".tgz")):
+        import tarfile
+
+        with tarfile.open(archive, "r:gz") as tf:
+            members = tf.getmembers()
+            for m in members:
+                check(m.name)
+                if m.issym() or m.islnk():
+                    # 連結目標也必須在資料夾內（macOS 版的 .dylib 會用相對連結）
+                    link_base = (dest / m.name).parent if m.issym() else dest
+                    if not (link_base / m.linkname).resolve().is_relative_to(root):
+                        raise LlamaRuntimeError(f"{name} 內含不安全的連結：{m.name} -> {m.linkname}")
+                elif not (m.isfile() or m.isdir()):
+                    raise LlamaRuntimeError(f"{name} 內含不支援的檔案類型：{m.name}")
+            tf.extractall(dest, members=members)
+    else:
+        raise LlamaRuntimeError(f"不支援的壓縮格式：{name}")
+
+
 def download_runtime(
     runtime_root: Path,
     release: LlamaCppRelease = LLAMA_CPP,
@@ -146,12 +180,7 @@ def download_runtime(
     staging = final.parent / f".{final.name}.partial"
     shutil.rmtree(staging, ignore_errors=True)
     staging.mkdir()
-    with zipfile.ZipFile(archive) as zf:
-        for member in zf.infolist():
-            target = (staging / member.filename).resolve()
-            if not target.is_relative_to(staging.resolve()):  # 防止壓縮檔路徑跳出資料夾（zip slip）
-                raise LlamaRuntimeError(f"{asset.filename} 內含不安全的路徑：{member.filename}")
-        zf.extractall(staging)
+    extract_archive(archive, asset.filename, staging)
     exe = next(iter(sorted(staging.rglob(exe_name()))), None)
     if exe is None:
         shutil.rmtree(staging, ignore_errors=True)

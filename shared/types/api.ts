@@ -146,6 +146,8 @@ export interface TranscribeResult {
   warnings: string[];
   elapsed_seconds: number;
   audio_seconds: number;
+  /** 各步驟耗時（含載入模型）：辨識、時間戳記對齊 */
+  timings?: { asr_seconds?: number; align_seconds?: number };
 }
 
 // ---------------------------------------------------------------------------

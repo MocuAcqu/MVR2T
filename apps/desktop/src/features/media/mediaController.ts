@@ -115,7 +115,16 @@ export async function importFile(file: File): Promise<void> {
   stopPolling();
   const controller = new AbortController();
   uploadController = controller;
-  store().set({ import: { status: 'uploading', file, progress: 0 }, extraction: idleExtraction });
+  // 新檔案：舊檔案的所有工作狀態都要清掉（後端上傳時會取消舊工作）。否則正在進行的辨識或摘要會一直顯示「進行中」，
+  // isBusy 也維持 true，防睡眠不會解除（2026-11-10 Windows 驗收：摘要中從首頁更換檔案）。
+  store().set({
+    import: { status: 'uploading', file, progress: 0 },
+    extraction: idleExtraction,
+    transcription: idleTranscription,
+    transcript: null,
+    summarizing: idleSummary,
+    summary: null,
+  });
 
   try {
     const conn = await connection();

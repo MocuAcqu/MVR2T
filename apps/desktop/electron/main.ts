@@ -107,6 +107,8 @@ function createMainWindow(): BrowserWindow {
     minWidth: 960,
     minHeight: 640,
     title: APP_NAME,
+    // 程式圖示（apps/desktop/scripts/generate_icons.py 產生）。dist-electron/ → ../build/
+    icon: path.join(__dirname, '../build', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
     backgroundColor: '#ffffff',
     autoHideMenuBar: true, // Windows/Linux：隱藏預設選單列，按 Alt 顯示
     show: false, // 內容準備好再顯示，避免白屏閃爍

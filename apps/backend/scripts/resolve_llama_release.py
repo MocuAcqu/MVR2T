@@ -17,7 +17,7 @@ import sys
 import urllib.request
 
 API = "https://api.github.com/repos/ggml-org/llama.cpp"
-PLATFORMS = {"win-cpu-x64": r"-bin-win-cpu-x64\.zip$", "macos-arm64": r"-bin-macos-arm64\.zip$"}
+PLATFORMS = {"win-cpu-x64": r"-bin-win-cpu-x64\.zip$", "macos-arm64": r"-bin-macos-arm64\.(zip|tar\.gz)$"}
 
 
 def _get(url: str) -> object:
