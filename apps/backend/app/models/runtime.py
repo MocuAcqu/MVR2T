@@ -50,9 +50,11 @@ class LlamaCppRelease:
 # 與沙盒測試使用的原始碼相同的 commit（llama-cpp-python 0.3.36 內附的 llama.cpp，2026-10-01）。
 # tag 與 SHA-256 由使用者電腦上的 Claude Code 以 scripts/resolve_llama_release.py 查出後填入。
 LLAMA_CPP = LlamaCppRelease(
-    tag="",
+    tag="b11312",
     commit="0c1e57098bba43ac29e6e3b677cdceebdd22334f",
-    assets=(),
+    assets=(
+        RuntimeAsset("win-cpu-x64", "llama-b11312-bin-win-cpu-x64.zip", 19265352, "d2d966c23e4d097d70633f9d92e4931245b575be7a5409201d8f352493f0e702"),
+    ),
 )
 
 
