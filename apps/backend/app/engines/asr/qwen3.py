@@ -109,8 +109,8 @@ class Qwen3Asr:
     def transcribe_batch(
         self, audios: list[np.ndarray], language: str | None, is_cancelled: Callable[[], bool]
     ) -> list[AsrResult]:
-        """一次辨識多段（同一次 generate）。CPU 上比逐段快：沙盒 5.5 分鐘中文，4 段一批快 1.7 倍、文字完全相同，
-        記憶體只多約 0.1 GB（docs/DEV_LOG.md「語音辨識加速」）。"""
+        """一次辨識多段（同一次 generate）。沙盒（2 核）4 段一批快 1.7 倍；使用者的多核筆電上沒有明顯效益、
+        尖峰記憶體多約 1.2 GB，所以預設不使用（docs/DEV_LOG.md「語音辨識加速」）。"""
         import torch
         from transformers import StoppingCriteria, StoppingCriteriaList
 

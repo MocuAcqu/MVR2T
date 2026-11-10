@@ -90,8 +90,10 @@ class Settings:
     asr_dtype: str = field(default_factory=lambda: os.environ.get("MVR2T_ASR_DTYPE", "float32"))
     # PyTorch 執行緒數；0 = 由 PyTorch 自動決定
     torch_threads: int = field(default_factory=lambda: int(os.environ.get("MVR2T_TORCH_THREADS", "0")))
-    # 語音辨識一次處理幾段（約 30 秒一段）。4 段一批在沙盒快 1.7 倍、文字相同；記憶體不足時會自動改回逐段。1 = 不批次
-    asr_batch: int = field(default_factory=lambda: max(1, int(os.environ.get("MVR2T_ASR_BATCH", "4"))))
+    # 語音辨識一次處理幾段（約 30 秒一段）。預設 1 = 逐段。
+    # 沙盒（2 核）4 段一批快 1.7 倍，但使用者的多核筆電上沒有明顯效益、尖峰記憶體多約 1.2 GB（2026-11-11），
+    # 所以預設不批次；核心少的電腦可設 MVR2T_ASR_BATCH=4 試試。記憶體不足時會自動改回逐段。
+    asr_batch: int = field(default_factory=lambda: max(1, int(os.environ.get("MVR2T_ASR_BATCH", "1"))))
 
     # 摘要模型（llama.cpp）的 context 長度與執行緒數；0 = llama.cpp 自動決定執行緒數（PROJECT_SPEC §5.3：4096–8192）
     llm_ctx: int = field(default_factory=lambda: int(os.environ.get("MVR2T_LLM_CTX", "8192")))

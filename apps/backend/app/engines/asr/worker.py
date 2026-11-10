@@ -31,7 +31,7 @@ class EngineSpec:
     aligner_dir: str | None
     dtype: str
     threads: int
-    asr_batch: int = 4  # 一次辨識幾段（MVR2T_ASR_BATCH）
+    asr_batch: int = 1  # 一次辨識幾段（MVR2T_ASR_BATCH，預設逐段）
 
 
 def _watch_parent() -> None:

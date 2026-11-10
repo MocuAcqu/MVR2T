@@ -82,3 +82,13 @@ def test_cancel_between_batches():
         recognize(manifest(10), Path("."), engines(asr, 4), None, lambda **kw: None, cancelled)
     assert asr.calls == [4]
     assert state["n"] == 0
+
+
+def test_batching_is_off_by_default(monkeypatch):
+    """No measurable gain on the user's multi-core laptop and ~1.2 GB more memory (2026-11-11): default is one segment at a time."""
+    from app.core.config import Settings
+
+    monkeypatch.delenv("MVR2T_ASR_BATCH", raising=False)
+    assert Settings().asr_batch == 1
+    monkeypatch.setenv("MVR2T_ASR_BATCH", "4")
+    assert Settings().asr_batch == 4
