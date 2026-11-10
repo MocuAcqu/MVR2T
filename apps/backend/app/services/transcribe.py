@@ -125,11 +125,12 @@ def run_transcription(task: Task, rec: MediaRecord, engines: EngineChoice, langu
     for s in raw:
         if s["text"] and s["language"]:
             lang_weight[s["language"]] += s["duration"]
-    timings = {s.timing for s in sentences}
+    # 不能叫 timings：那是上面記錄各步驟耗時的 dict（Windows 驗收時被這裡覆蓋，卡片沒有顯示辨識／對齊時間）
+    sentence_timing = {s.timing for s in sentences}
     transcript = {
         "media_id": rec.id,
         "language": lang_weight.most_common(1)[0][0] if lang_weight else None,
-        "timing": "aligned" if timings == {"aligned"} else ("estimated" if timings == {"estimated"} else "mixed"),
+        "timing": "aligned" if sentence_timing == {"aligned"} else ("estimated" if sentence_timing == {"estimated"} else "mixed"),
         "duration": manifest["duration"],
         "models": {
             "asr": f"{QWEN3_ASR_0_6B.repo}@{QWEN3_ASR_0_6B.revision[:7]}",
