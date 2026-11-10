@@ -33,11 +33,27 @@ const TIMING_LABEL: Record<Transcript['timing'], string> = {
   mixed: '部分估計',
 };
 
+/** 逐字稿句子的 DOM id：摘要的時間點會捲動到這裡（見 SummaryCard）。 */
+export const transcriptLineId = (id: number) => `transcript-line-${id}`;
+
+/** 捲動到逐字稿中的某一句並短暫標示。 */
+export function revealTranscriptLine(id: number): void {
+  const el = document.getElementById(transcriptLineId(id));
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.classList.add('bg-chip');
+  window.setTimeout(() => el.classList.remove('bg-chip'), 1800);
+}
+
 function TranscriptList({ transcript }: { transcript: Transcript }) {
   return (
     <ol className="max-h-[32rem] overflow-auto rounded-lg border border-chip" aria-label="逐字稿">
       {transcript.segments.map((s) => (
-        <li key={s.id} className="flex gap-4 border-t border-chip px-4 py-3 first:border-t-0">
+        <li
+          key={s.id}
+          id={transcriptLineId(s.id)}
+          className="flex scroll-mt-4 gap-4 border-t border-chip px-4 py-3 transition-colors first:border-t-0"
+        >
           <span
             className="w-28 shrink-0 pt-0.5 text-xs tabular-nums text-body-gray"
             title={s.timing === 'estimated' ? '依字數估計的時間' : `${formatTimestamp(s.start)} → ${formatTimestamp(s.end)}`}
@@ -140,7 +156,6 @@ export function TranscriptCard() {
         ) : null}
         {t.status === 'cancelled' ? <p role="status" className="text-sm text-body-gray">已取消語音辨識。</p> : null}
         <GuideCoach step="transcribe" />
-        <GuideCoach step="done" />
       </CardContent>
       <CardFooter className="flex-wrap">
         {busy ? (

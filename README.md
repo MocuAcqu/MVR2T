@@ -15,7 +15,8 @@
 | 05 | ASR Integration（Qwen3-ASR + 時間戳記對齊） | ✅ 已在 Windows 實測 |
 | — | 介面更新（吉祥物 Mono、首頁標題、操作引導） | ✅ 已在 Windows 驗收 |
 | — | 優化（完成通知、防睡眠、首頁精簡、引導） | ✅ 已在 Windows 驗收 |
-| 06 – 12 | LLM、心智圖、Session、Model Manager、硬體偵測、打包 | ⏳ |
+| 06 | LLM Integration（llama.cpp + Qwen3.5-4B 摘要） | 🟡 沙盒已用真實模型驗證，待你在 Windows 驗收 |
+| 07 – 12 | 心智圖、Session、Model Manager、硬體偵測、打包 | ⏳ |
 
 ## 環境需求
 
@@ -50,17 +51,20 @@ source .venv/bin/activate
 pip install -r requirements/dev.txt
 ```
 
-**2. 下載 AI 模型**（Phase 05 起；只需一次，約 3.4 GB，之後完全離線）
+**2. 下載 AI 模型**（只需一次，共約 6 GB，之後完全離線）
 
 ```powershell
 cd apps\backend
-.\.venv\Scripts\python.exe -m scripts.download_models          # 語音辨識 + 時間戳記對齊模型
+.\.venv\Scripts\python.exe -m scripts.download_models          # 全部：語音辨識、時間戳記對齊、摘要模型與 llama.cpp
+.\.venv\Scripts\python.exe -m scripts.download_models --llm    # 只下載摘要模型（2.6 GB）與 llama.cpp 執行檔（Phase 06）
 .\.venv\Scripts\python.exe -m scripts.download_models --list   # 查看安裝狀態與位置
 .\.venv\Scripts\python.exe -m scripts.download_models --verify # 重新檢查檔案完整性（SHA-256）
 ```
 
 模型放在 `%APPDATA%\MVR2T\models\`（macOS：`~/Library/Application Support/MVR2T/models/`），
 版本與雜湊固定在 `apps/backend/app/models/registry.py`。下載中斷可重新執行，會從中斷處繼續。
+llama.cpp 執行檔（`llama-server`）放在 `%APPDATA%\MVR2T\runtime\llama\`，版本與 SHA-256 固定在
+`apps/backend/app/models/runtime.py`（官方 GitHub Release 的 Windows CPU 版，不需要 C++ 編譯器）。
 
 **3. 前端套件**（在專案根目錄）
 
@@ -186,6 +190,27 @@ Phase 03 起**只需要一個終端機**。後端由 Electron 以 `apps/backend/
 
 要改 Mono 的造型：改 `apps/desktop/scripts/generate_mono_sprite.py` 後執行 `python apps/desktop/scripts/generate_mono_sprite.py`。
 
+## Phase 06 驗收清單（摘要）
+
+先完成「第一次設定」第 2 步的 `download_models --llm`。
+
+- [ ] 「模型管理」頁：Qwen3.5-4B Q4_K_M 與 llama.cpp 都顯示「已安裝」
+- [ ] 一段**中文**錄音完成語音辨識後，工作區「摘要」卡片可勾選 7 種內容（預設勾選全文摘要、重點整理、關鍵字、行動事項）
+- [ ] 按「產生摘要」：先顯示「正在載入摘要模型」，接著「正在產生摘要 ○○」與進度；完成後以分頁顯示各種內容，全部是**繁體中文**
+- [ ] 重點、行動事項等項目旁的時間，點一下會捲動到逐字稿中對應的句子並短暫標示
+- [ ] 摘要內容與錄音相符，沒有錄音中不存在的人名、數字、日期（請特別看行動事項的負責人與期限）
+- [ ] 一段 **20 分鐘以上**的錄音：顯示「正在閱讀逐字稿 第 N / M 段」，完成後摘要涵蓋前後段的內容；程式不會當掉
+- [ ] 產生中按「取消」：幾秒內停止；工作管理員中沒有殘留的 `llama-server.exe`
+- [ ] 摘要完成後工作管理員中也沒有 `llama-server.exe`（模型用完即關閉，記憶體歸還）
+- [ ] 摘要進行中無法開始語音辨識或重新抽取音訊（顯示「另一個 AI 工作…」）
+- [ ] 切到其他程式時，摘要完成會跳出「摘要完成」通知
+- [ ] `npm test`、`npm run typecheck`、後端 pytest 全數通過；`tests/test_llm_real.py` 在已下載模型時會實際執行（約需數分鐘）
+
+進階設定（環境變數）：
+- `MVR2T_LLM_CTX=4096`：記憶體不足時降低 context（預設 8192；長逐字稿會切成較多段）
+- `MVR2T_LLM_THREADS=8`：限制摘要使用的 CPU 執行緒數（預設由 llama.cpp 自動決定）
+- `MVR2T_LLAMA_SERVER=<路徑>`：改用指定的 llama-server 執行檔（例如自行編譯的版本）
+
 ## 開發注意事項
 
 - `requirements/*.txt`、`pytest.ini` 等會被 pip / pytest 以「系統編碼」讀取的檔案，**必須只含 ASCII**（註解請用英文）。繁體中文 Windows 的系統編碼是 cp950，讀到 UTF-8 中文會安裝失敗。
@@ -204,6 +229,6 @@ shared/          前後端共用的常數與型別
 
 ## 已知待辦（刻意留到後續 Phase）
 
-- Phase 06：llama.cpp + Qwen3-4B Q4_K_M 摘要（讀取本次 Session 的逐字稿）
+- Phase 07：心智圖（React Flow），使用摘要與逐字稿
 - 逐字稿編輯、依時間戳記播放原始影音：後續 Phase（Transcript Editor）
 - Phase 11：PyInstaller 打包後端（Electron 已預留 `resources/backend/mvr2t-backend(.exe)` 路徑）

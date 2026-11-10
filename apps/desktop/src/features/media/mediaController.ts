@@ -3,7 +3,7 @@
  * 元件只呼叫這裡的函式；這裡負責呼叫 services/api 並更新 sessionStore。
  */
 import { getMediaKind, MAX_MEDIA_BYTES, MEDIA_EXTENSIONS } from '@shared/constants/media';
-import type { AsrLanguage } from '@shared/types/api';
+import type { AsrLanguage, SummaryType } from '@shared/types/api';
 import { formatBytes } from '@/lib/format';
 import {
   AbortedError,
@@ -11,14 +11,16 @@ import {
   cancelTask,
   createSession,
   getBackendConnection,
+  getSummary,
   getTask,
   getTranscript,
   startExtraction as apiStartExtraction,
+  startSummary as apiStartSummary,
   startTranscription as apiStartTranscription,
   uploadMedia,
   type BackendConnection,
 } from '@/services/api';
-import { idleExtraction, idleTranscription, useSessionStore } from '@/stores/sessionStore';
+import { idleExtraction, idleSummary, idleTranscription, useSessionStore } from '@/stores/sessionStore';
 
 const POLL_MS = 400;
 /**
@@ -30,8 +32,12 @@ const MAX_RECONNECT_ATTEMPTS = 150;
 const store = () => useSessionStore.getState();
 
 let uploadController: AbortController | null = null;
-type TrackKind = 'extraction' | 'transcription';
-const pollTimers: Record<TrackKind, ReturnType<typeof setTimeout> | null> = { extraction: null, transcription: null };
+type TrackKind = 'extraction' | 'transcription' | 'summarizing';
+const pollTimers: Record<TrackKind, ReturnType<typeof setTimeout> | null> = {
+  extraction: null,
+  transcription: null,
+  summarizing: null,
+};
 let sessionPromise: Promise<string> | null = null;
 
 const keyOf = (conn: BackendConnection) => `${conn.url}|${conn.token ?? ''}`;
@@ -51,7 +57,11 @@ function stopPolling(kind?: TrackKind): void {
 }
 
 const patchTrack = (kind: TrackKind, patch: Record<string, unknown>) =>
-  kind === 'extraction' ? store().patchExtraction(patch) : store().patchTranscription(patch);
+  kind === 'extraction'
+    ? store().patchExtraction(patch)
+    : kind === 'transcription'
+      ? store().patchTranscription(patch)
+      : store().patchSummarizing(patch);
 
 /**
  * 確保有一個屬於「目前這個後端行程」的 Session。
@@ -203,11 +213,13 @@ export async function startExtraction(): Promise<void> {
   if (state.import.status !== 'ready' || !state.sessionId) return;
   const mediaId = state.import.info.media_id;
   stopPolling('extraction');
-  // 重新抽取後，舊逐字稿的時間就不再對應（後端也會清除）
+  // 重新抽取後，舊逐字稿的時間就不再對應（後端也會清除）；摘要依附在逐字稿上
   store().set({
     extraction: { ...idleExtraction, status: 'starting', stage: '準備中' },
     transcription: idleTranscription,
     transcript: null,
+    summarizing: idleSummary,
+    summary: null,
   });
   try {
     const conn = await connection();
@@ -241,7 +253,12 @@ export async function startTranscription(language: AsrLanguage | null): Promise<
   const mediaId = state.import.info.media_id;
   const sessionId = state.sessionId;
   stopPolling('transcription');
-  store().set({ transcription: { ...idleTranscription, status: 'starting', stage: '準備中' }, transcript: null });
+  store().set({
+    transcription: { ...idleTranscription, status: 'starting', stage: '準備中' },
+    transcript: null,
+    summarizing: idleSummary,
+    summary: null,
+  });
   try {
     const conn = await connection();
     const { task_id } = await apiStartTranscription(conn, sessionId, mediaId, language);
@@ -261,6 +278,42 @@ export async function cancelTranscription(): Promise<void> {
   store().patchTranscription({ stage: '正在取消' });
   try {
     await cancelTask(await connection(), sessionId, transcription.taskId);
+  } catch {
+    // 輪詢會回報最終狀態
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 06：摘要
+// ---------------------------------------------------------------------------
+
+/** 依勾選的類型產生摘要（需先完成語音辨識）。 */
+export async function startSummary(types: SummaryType[]): Promise<void> {
+  const state = store();
+  if (state.import.status !== 'ready' || !state.sessionId || !state.transcript || types.length === 0) return;
+  const mediaId = state.import.info.media_id;
+  const sessionId = state.sessionId;
+  stopPolling('summarizing');
+  store().set({ summarizing: { ...idleSummary, status: 'starting', stage: '準備中' }, summary: null });
+  try {
+    const conn = await connection();
+    const { task_id } = await apiStartSummary(conn, sessionId, mediaId, types);
+    store().patchSummarizing({ taskId: task_id, status: 'running' });
+    void poll('summarizing', conn, sessionId, task_id, async () => {
+      const summary = await getSummary(conn, sessionId, mediaId);
+      if (store().summarizing.taskId === task_id) store().set({ summary });
+    });
+  } catch (err) {
+    store().patchSummarizing({ status: 'failed', message: messageOf(err) });
+  }
+}
+
+export async function cancelSummary(): Promise<void> {
+  const { sessionId, summarizing } = store();
+  if (!sessionId || !summarizing.taskId) return;
+  store().patchSummarizing({ stage: '正在取消' });
+  try {
+    await cancelTask(await connection(), sessionId, summarizing.taskId);
   } catch {
     // 輪詢會回報最終狀態
   }

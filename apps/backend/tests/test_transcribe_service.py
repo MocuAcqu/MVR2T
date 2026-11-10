@@ -20,7 +20,7 @@ from app.engines.asr.text import Unit
 from app.main import create_app
 from app.api import models as models_api
 from app.models import store
-from app.models.registry import QWEN3_ASR_0_6B
+from app.models.registry import LLM_MODEL, QWEN3_ASR_0_6B
 from app.services import transcribe as transcribe_service
 from app.engines.asr.pipeline import Engines
 from tests.test_media_api import LOC, extract, new_session, upload, wait_task, write_signal_wav
@@ -315,7 +315,7 @@ def test_model_not_installed(tmp_path, two_segment_wav):
         assert r.status_code == 412 and "download_models" in r.json()["detail"]
         models = c.get("/api/models").json()
         assert {m["id"]: m["installed"] for m in models["models"]} == {
-            "qwen3-asr-0.6b": False, "qwen3-forcedaligner-0.6b": False, "qwen3-4b-q4_k_m": False,
+            "qwen3-asr-0.6b": False, "qwen3-forcedaligner-0.6b": False, LLM_MODEL.id: False,
         }
 
 
@@ -324,7 +324,8 @@ def test_models_endpoint_reports_installed(data_dir):
         body = c.get("/api/models").json()
         by_id = {m["id"]: m for m in body["models"]}
         assert by_id["qwen3-asr-0.6b"]["installed"] is True
-        assert by_id["qwen3-4b-q4_k_m"]["downloadable"] is False and by_id["qwen3-4b-q4_k_m"]["available_from_phase"] == 6
+        llm = next(m for m in body["models"] if m["kind"] == "llm")
+        assert llm["downloadable"] is True and llm["installed"] is False and llm["size_bytes"] > 2_000_000_000
         assert body["models_dir"].endswith("models")
 
 

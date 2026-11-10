@@ -16,8 +16,11 @@ export function SystemNotice({ className }: { className?: string }) {
   if (backend.status === 'error') problems.push('本機後端沒有正常啟動。');
   if (ffmpeg.status === 'done' && !ffmpeg.ffmpeg.available) problems.push('還沒安裝 FFmpeg，無法處理影音檔。');
   if (models.status === 'done') {
-    const missing = models.data.models.filter((m) => m.downloadable && !m.installed);
-    if (missing.length > 0) problems.push(`還沒下載：${missing.map((m) => m.display_name).join('、')}。`);
+    const missing = [
+      ...models.data.models.filter((m) => m.downloadable && !m.installed).map((m) => m.display_name),
+      ...models.data.runtimes.filter((r) => !r.installed).map((r) => `${r.name} 執行程式`),
+    ];
+    if (missing.length > 0) problems.push(`還沒下載：${missing.join('、')}。`);
   }
   if (problems.length === 0) return null;
 

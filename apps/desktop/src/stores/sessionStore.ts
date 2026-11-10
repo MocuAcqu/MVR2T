@@ -1,5 +1,13 @@
 import { create } from 'zustand';
-import type { ExtractAudioResult, MediaInfo, TaskStatus, TranscribeResult, Transcript } from '@shared/types/api';
+import type {
+  ExtractAudioResult,
+  MediaInfo,
+  SummarizeResult,
+  Summary,
+  TaskStatus,
+  TranscribeResult,
+  Transcript,
+} from '@shared/types/api';
 
 /**
  * 本次工作階段的狀態（只在記憶體中）。
@@ -28,6 +36,7 @@ export interface TaskTrack<TResult> {
 
 export type ExtractionState = TaskTrack<ExtractAudioResult>;
 export type TranscriptionState = TaskTrack<TranscribeResult>;
+export type SummaryState = TaskTrack<SummarizeResult>;
 
 const idle = <T,>(): TaskTrack<T> => ({
   taskId: null,
@@ -41,6 +50,7 @@ const idle = <T,>(): TaskTrack<T> => ({
 
 export const idleExtraction: ExtractionState = idle<ExtractAudioResult>();
 export const idleTranscription: TranscriptionState = idle<TranscribeResult>();
+export const idleSummary: SummaryState = idle<SummarizeResult>();
 
 interface SessionState {
   /** 後端的 Session ID；後端重新啟動（網址或憑證改變）時會重建。 */
@@ -52,11 +62,17 @@ interface SessionState {
   transcription: TranscriptionState;
   /** 本次 Session 的逐字稿（只在記憶體中，規格 §8.3） */
   transcript: Transcript | null;
+  summarizing: SummaryState;
+  /** 本次 Session 的摘要（只在記憶體中，規格 §8.3） */
+  summary: Summary | null;
   set: (
-    patch: Partial<Pick<SessionState, 'sessionId' | 'backendKey' | 'import' | 'extraction' | 'transcription' | 'transcript'>>,
+    patch: Partial<
+      Pick<SessionState, 'sessionId' | 'backendKey' | 'import' | 'extraction' | 'transcription' | 'transcript' | 'summarizing' | 'summary'>
+    >,
   ) => void;
   patchExtraction: (patch: Partial<ExtractionState>) => void;
   patchTranscription: (patch: Partial<TranscriptionState>) => void;
+  patchSummarizing: (patch: Partial<SummaryState>) => void;
   resetMedia: () => void;
 }
 
@@ -67,9 +83,19 @@ export const useSessionStore = create<SessionState>((set) => ({
   extraction: idleExtraction,
   transcription: idleTranscription,
   transcript: null,
+  summarizing: idleSummary,
+  summary: null,
   set: (patch) => set(patch),
   patchExtraction: (patch) => set((s) => ({ extraction: { ...s.extraction, ...patch } })),
   patchTranscription: (patch) => set((s) => ({ transcription: { ...s.transcription, ...patch } })),
+  patchSummarizing: (patch) => set((s) => ({ summarizing: { ...s.summarizing, ...patch } })),
   resetMedia: () =>
-    set({ import: { status: 'idle' }, extraction: idleExtraction, transcription: idleTranscription, transcript: null }),
+    set({
+      import: { status: 'idle' },
+      extraction: idleExtraction,
+      transcription: idleTranscription,
+      transcript: null,
+      summarizing: idleSummary,
+      summary: null,
+    }),
 }));

@@ -93,9 +93,18 @@ export interface ModelInfo {
   available_from_phase: number | null;
 }
 
+/** 模型以外需要下載的執行程式（Phase 06：llama.cpp 的 llama-server）。 */
+export interface RuntimeInfo {
+  name: string;
+  /** release tag；空字串 = 尚未固定版本 */
+  version: string;
+  installed: boolean;
+}
+
 export interface ModelsResponse {
   models_dir: string;
   models: ModelInfo[];
+  runtimes: RuntimeInfo[];
 }
 
 /** 可指定的辨識語言（Qwen3-ASR 的英文名稱）；null = 自動偵測 */
@@ -137,4 +146,75 @@ export interface TranscribeResult {
   warnings: string[];
   elapsed_seconds: number;
   audio_seconds: number;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 06：摘要
+// ---------------------------------------------------------------------------
+
+/** 可勾選的摘要內容（規格 §4-E 的七種）。順序即畫面上的顯示順序。 */
+export type SummaryType = 'overview' | 'key_points' | 'notes' | 'topics' | 'keywords' | 'action_items' | 'qa';
+
+/** 項目對應的原始時間範圍（由模型引用的句子編號換算，不是模型自己寫的時間）。 */
+export interface TimeSpan {
+  start: number;
+  end: number;
+}
+
+interface Referenced {
+  /** 引用的逐字稿句子編號（TranscriptSegment.id） */
+  refs: number[];
+  time: TimeSpan | null;
+}
+
+export interface SummaryPoint extends Referenced {
+  text: string;
+}
+export interface SummarySection extends Referenced {
+  title: string;
+  bullets: string[];
+}
+export interface SummaryTopic extends Referenced {
+  title: string;
+  description: string;
+}
+export interface SummaryAction extends Referenced {
+  task: string;
+  owner: string;
+  due: string;
+}
+export interface SummaryQa extends Referenced {
+  question: string;
+  conclusion: string;
+}
+
+export interface SummaryResults {
+  overview: string | null;
+  key_points: SummaryPoint[] | null;
+  notes: SummarySection[] | null;
+  topics: SummaryTopic[] | null;
+  keywords: string[] | null;
+  action_items: SummaryAction[] | null;
+  qa: SummaryQa[] | null;
+}
+
+export interface Summary {
+  media_id: string;
+  types: SummaryType[];
+  results: SummaryResults;
+  model: string;
+  /** 逐字稿被切成幾段（1 = 直接摘要） */
+  chunks: number;
+  /** 階層式整合的層數（0 = 直接摘要） */
+  levels: number;
+  elapsed_seconds: number;
+}
+
+/** 摘要工作完成時的結果（完整摘要另以 GET /api/summary 取得）。 */
+export interface SummarizeResult {
+  media_id: string;
+  types: SummaryType[];
+  chunks: number;
+  levels: number;
+  elapsed_seconds: number;
 }

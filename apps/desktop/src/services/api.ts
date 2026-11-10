@@ -16,6 +16,8 @@ import type {
   SessionResponse,
   TaskState,
   Transcript,
+  Summary,
+  SummaryType,
 } from '@shared/types/api';
 import type { AppInfo } from '@shared/types/ipc';
 
@@ -183,3 +185,9 @@ export const getTranscript = (conn: BackendConnection, sessionId: string, mediaI
     conn,
     `/api/transcript?session_id=${encodeURIComponent(sessionId)}&media_id=${encodeURIComponent(mediaId)}`,
   );
+
+export const startSummary = (conn: BackendConnection, sessionId: string, mediaId: string, types: SummaryType[]) =>
+  apiJson<{ task_id: string }>(conn, '/api/summary/generate', json({ session_id: sessionId, media_id: mediaId, types }));
+
+export const getSummary = (conn: BackendConnection, sessionId: string, mediaId: string) =>
+  apiJson<Summary>(conn, `/api/summary?session_id=${encodeURIComponent(sessionId)}&media_id=${encodeURIComponent(mediaId)}`);

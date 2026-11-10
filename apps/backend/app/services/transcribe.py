@@ -12,7 +12,6 @@
 from __future__ import annotations
 
 import json
-import threading
 import time
 from collections import Counter
 from collections.abc import Callable
@@ -33,13 +32,13 @@ from app.engines.asr.worker import EngineSpec, WorkerCancelled, WorkerCrashed, W
 from app.models.registry import QWEN3_ASR_0_6B, QWEN3_FORCED_ALIGNER_0_6B
 from app.models.store import is_installed
 from app.services.media import MediaError
+from app.services.model_lock import BUSY_MESSAGE, MODEL_LOCK
 from app.services.tasks import Task, TaskCancelled, UserFacingError
 from app.session.manager import MediaRecord, Session, SessionManager
 
 # 介面可選的語言（Qwen3-ASR 使用的英文名稱）；None = 自動偵測
 LANGUAGE_CHOICES = ("Chinese", "English", "Cantonese", "Japanese", "Korean")
 
-_transcribe_lock = threading.Lock()  # 一次只跑一個辨識工作（記憶體考量）
 
 #: engines_factory 的回傳：EngineSpec = 在獨立工作程序執行真實模型（正式路徑）；Engines = 在本程序執行（測試用假模型）
 EngineChoice = EngineSpec | Engines
@@ -182,14 +181,15 @@ def start_transcription(
             412,
             "尚未下載語音辨識模型。請在 apps\\backend 執行 .\\.venv\\Scripts\\python.exe -m scripts.download_models 後再試。",
         )
-    if not _transcribe_lock.acquire(blocking=False):
-        raise MediaError(409, "另一個語音辨識工作正在進行，請稍候。")
+    if not MODEL_LOCK.acquire(blocking=False):
+        raise MediaError(409, BUSY_MESSAGE)
     try:
         engines = engines_factory(cfg)
     except Exception:
-        _transcribe_lock.release()
+        MODEL_LOCK.release()
         raise
     rec.transcript = None  # 重新辨識前清除舊結果
+    rec.summary = None  # 摘要依附在逐字稿上
 
     def job(task: Task) -> dict[str, Any]:
         try:
@@ -197,6 +197,6 @@ def start_transcription(
         except MediaError as e:
             raise UserFacingError(e.message) from e
         finally:
-            _transcribe_lock.release()
+            MODEL_LOCK.release()
 
     return sessions.tasks.start(session.id, "transcribe", job)

@@ -74,9 +74,16 @@ class ModelInfo(BaseModel):
     available_from_phase: int | None
 
 
+class RuntimeInfo(BaseModel):
+    name: str  # llama.cpp
+    version: str  # release tag（空字串 = 尚未固定）
+    installed: bool
+
+
 class ModelsResponse(BaseModel):
     models_dir: str
     models: list[ModelInfo]
+    runtimes: list[RuntimeInfo]
 
 
 class TranscribeRequest(BaseModel):
@@ -109,3 +116,75 @@ class Transcript(BaseModel):
     models: dict[str, str | None]
     warnings: list[str]
     segments: list[TranscriptSegment]
+
+
+# --- Phase 06：摘要 -------------------------------------------------------------
+
+SummaryTypeName = Literal["overview", "key_points", "notes", "topics", "keywords", "action_items", "qa"]
+
+
+class SummaryRequest(BaseModel):
+    session_id: str
+    media_id: str
+    #: 要產生的內容（至少一種）
+    types: list[str]
+
+
+class TimeSpan(BaseModel):
+    start: float
+    end: float
+
+
+class SummaryPoint(BaseModel):
+    text: str
+    refs: list[int]
+    time: TimeSpan | None
+
+
+class SummarySection(BaseModel):
+    title: str
+    bullets: list[str]
+    refs: list[int]
+    time: TimeSpan | None
+
+
+class SummaryTopic(BaseModel):
+    title: str
+    description: str
+    refs: list[int]
+    time: TimeSpan | None
+
+
+class SummaryAction(BaseModel):
+    task: str
+    owner: str
+    due: str
+    refs: list[int]
+    time: TimeSpan | None
+
+
+class SummaryQa(BaseModel):
+    question: str
+    conclusion: str
+    refs: list[int]
+    time: TimeSpan | None
+
+
+class SummaryResults(BaseModel):
+    overview: str | None = None
+    key_points: list[SummaryPoint] | None = None
+    notes: list[SummarySection] | None = None
+    topics: list[SummaryTopic] | None = None
+    keywords: list[str] | None = None
+    action_items: list[SummaryAction] | None = None
+    qa: list[SummaryQa] | None = None
+
+
+class Summary(BaseModel):
+    media_id: str
+    types: list[SummaryTypeName]
+    results: SummaryResults
+    model: str
+    chunks: int
+    levels: int
+    elapsed_seconds: float

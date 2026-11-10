@@ -9,6 +9,8 @@ const api = vi.hoisted(() => ({
   cancelTask: vi.fn(),
   startTranscription: vi.fn(),
   getTranscript: vi.fn(),
+  startSummary: vi.fn(),
+  getSummary: vi.fn(),
 }));
 
 vi.mock('@/services/api', async (importOriginal) => {
@@ -25,6 +27,7 @@ import {
   ensureSession,
   importFile,
   startExtraction,
+  startSummary,
   startTranscription,
   validateFile,
 } from '../mediaController';
@@ -246,5 +249,51 @@ describe('startTranscription', () => {
     api.getTask.mockResolvedValue({ status: 'running', progress: 0, stage: '', detail: '', message: null, result: null });
     await startExtraction();
     expect(useSessionStore.getState().transcript).toBeNull();
+  });
+});
+
+describe('startSummary', () => {
+  const transcribed = () =>
+    useSessionStore.setState({
+      sessionId: 's1',
+      backendKey: `${conn.url}|a`,
+      import: { status: 'ready', file: file('a.mp4'), info },
+      extraction: { ...idleExtraction, status: 'completed' },
+      transcription: { ...idleTranscription, status: 'completed' },
+      transcript: { media_id: 'm1', segments: [{ id: 0, text: '你好' }] } as never,
+    });
+
+  it('does nothing without a transcript or without any type', async () => {
+    await startSummary(['overview']);
+    transcribed();
+    await startSummary([]);
+    expect(api.startSummary).not.toHaveBeenCalled();
+  });
+
+  it('polls the task and fetches the summary when it completes', async () => {
+    vi.useFakeTimers();
+    transcribed();
+    const summary = { media_id: 'm1', types: ['overview'], results: { overview: '摘要' } };
+    api.startSummary.mockResolvedValue({ task_id: 'sum1' });
+    api.getTask
+      .mockResolvedValueOnce({ status: 'running', progress: 0, stage: '正在載入摘要模型', detail: '', message: null, result: null })
+      .mockResolvedValueOnce({ status: 'completed', progress: 1, stage: '完成', detail: '', message: null, result: { types: ['overview'] } });
+    api.getSummary.mockResolvedValue(summary);
+    await startSummary(['overview', 'qa']);
+    expect(api.startSummary).toHaveBeenCalledWith(conn, 's1', 'm1', ['overview', 'qa']);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(useSessionStore.getState().summarizing.stage).toBe('正在載入摘要模型');
+    await vi.advanceTimersByTimeAsync(500);
+    expect(useSessionStore.getState().summarizing.status).toBe('completed');
+    expect(useSessionStore.getState().summary).toEqual(summary);
+  });
+
+  it('re-transcribing clears the old summary', async () => {
+    transcribed();
+    useSessionStore.setState({ summary: { media_id: 'm1' } as never });
+    api.startTranscription.mockResolvedValue({ task_id: 't2' });
+    api.getTask.mockResolvedValue({ status: 'running', progress: 0, stage: '', detail: '', message: null, result: null });
+    await startTranscription(null);
+    expect(useSessionStore.getState().summary).toBeNull();
   });
 });

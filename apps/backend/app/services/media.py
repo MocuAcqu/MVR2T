@@ -262,7 +262,10 @@ def start_extraction(cfg: Settings, sessions: SessionManager, session: Session, 
         raise MediaError(409, "音訊抽取已在進行中。")
     if any(t.kind == "transcribe" for t in busy):
         raise MediaError(409, "語音辨識進行中，請等它完成或取消後再重新抽取。")
+    if any(t.kind == "summarize" for t in busy):
+        raise MediaError(409, "摘要產生中，請等它完成或取消後再重新抽取。")
     rec.transcript = None  # 音訊重新抽取後，舊的逐字稿時間就不再對應
+    rec.summary = None
     loc = require_ffmpeg(cfg)
     _check_free_space(session.dir, int(float(rec.info["duration"]) * WAV_BYTES_PER_SECOND * 2.2))
     return sessions.tasks.start(session.id, "extract-audio", lambda task: run_extraction(task, loc, rec, sessions.root))

@@ -5,16 +5,19 @@ from fastapi import APIRouter, Request
 
 from app.api.deps import app_settings
 from app.models.registry import ALL_MODELS
+from app.models.runtime import LLAMA_CPP, find_llama_server
 from app.models.store import is_installed
-from app.schemas.media import ModelInfo, ModelsResponse
+from app.schemas.media import ModelInfo, ModelsResponse, RuntimeInfo
 
 router = APIRouter(tags=["models"])
 
 
 @router.get("/models", response_model=ModelsResponse)
 def list_models(request: Request) -> ModelsResponse:
-    root = app_settings(request).models_root
+    cfg = app_settings(request)
+    root = cfg.models_root
     return ModelsResponse(
+        runtimes=[RuntimeInfo(name="llama.cpp", version=LLAMA_CPP.tag, installed=find_llama_server(cfg.runtime_root) is not None)],
         models_dir=str(root),
         models=[
             ModelInfo(

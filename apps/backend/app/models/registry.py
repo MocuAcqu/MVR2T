@@ -87,19 +87,53 @@ QWEN3_FORCED_ALIGNER_0_6B = ModelSpec(
     ),
 )
 
+# --- 摘要模型（Phase 06，llama.cpp GGUF）---------------------------------------
+# 三個候選都經過沙盒比較（docs/DEV_LOG.md「Phase 06 模型比較」）；LLM_MODEL 是目前的預設。
 QWEN3_4B_Q4_K_M = ModelSpec(
     id="qwen3-4b-q4_k_m",
     kind="llm",
     display_name="Qwen3-4B Q4_K_M",
     role="摘要與心智圖",
-    repo="Qwen/Qwen3-4B-GGUF",
-    revision="",
+    repo="Qwen/Qwen3-4B-GGUF",  # Qwen 官方 GGUF（規格 §5.3）
+    revision="bc640142c66e1fdd12af0bd68f40445458f3869b",
     license="Apache-2.0",
-    available_from_phase=6,
+    files=(ModelFile("Qwen3-4B-Q4_K_M.gguf", 2497280256, "sha256", "7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5"),),
 )
 
-ALL_MODELS: tuple[ModelSpec, ...] = (QWEN3_ASR_0_6B, QWEN3_FORCED_ALIGNER_0_6B, QWEN3_4B_Q4_K_M)
-BY_ID = {m.id: m for m in ALL_MODELS}
+QWEN3_4B_INSTRUCT_2507_Q4_K_M = ModelSpec(
+    id="qwen3-4b-instruct-2507-q4_k_m",
+    kind="llm",
+    display_name="Qwen3-4B-Instruct-2507 Q4_K_M",
+    role="摘要與心智圖",
+    repo="unsloth/Qwen3-4B-Instruct-2507-GGUF",  # Qwen 官方未發布 GGUF；由 Unsloth 從官方權重量化
+    revision="a06e946bb6b655725eafa393f4a9745d460374c9",
+    license="Apache-2.0",
+    files=(
+        ModelFile("Qwen3-4B-Instruct-2507-Q4_K_M.gguf", 2497281120, "sha256", "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597"),
+    ),
+)
+
+QWEN3_5_4B_Q4_K_M = ModelSpec(
+    id="qwen3.5-4b-q4_k_m",
+    kind="llm",
+    display_name="Qwen3.5-4B Q4_K_M",
+    role="摘要與心智圖",
+    repo="unsloth/Qwen3.5-4B-GGUF",
+    revision="e87f176479d0855a907a41277aca2f8ee7a09523",
+    license="Apache-2.0",
+    files=(ModelFile("Qwen3.5-4B-Q4_K_M.gguf", 2740937888, "sha256", "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4"),),
+)
+
+LLM_CANDIDATES: tuple[ModelSpec, ...] = (QWEN3_4B_Q4_K_M, QWEN3_4B_INSTRUCT_2507_Q4_K_M, QWEN3_5_4B_Q4_K_M)
+LLM_MODEL: ModelSpec = QWEN3_5_4B_Q4_K_M  # 2026-11-09 使用者依沙盒比較結果選定（DEV_LOG「Phase 06 模型比較」）
+
+
+def gguf_path(spec: ModelSpec, models_root: Path) -> Path:
+    return spec.local_dir(models_root) / spec.files[0].name
+
+
+ALL_MODELS: tuple[ModelSpec, ...] = (QWEN3_ASR_0_6B, QWEN3_FORCED_ALIGNER_0_6B, LLM_MODEL)
+BY_ID = {m.id: m for m in (*ALL_MODELS, *LLM_CANDIDATES)}
 
 # 時間戳記對齊模型支援的語言（Qwen3-ASR 回報的英文名稱）。其餘語言退回切段層級的時間。
 ALIGNER_LANGUAGES = frozenset(

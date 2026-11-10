@@ -91,6 +91,10 @@ class Settings:
     # PyTorch 執行緒數；0 = 由 PyTorch 自動決定
     torch_threads: int = field(default_factory=lambda: int(os.environ.get("MVR2T_TORCH_THREADS", "0")))
 
+    # 摘要模型（llama.cpp）的 context 長度與執行緒數；0 = llama.cpp 自動決定執行緒數（PROJECT_SPEC §5.3：4096–8192）
+    llm_ctx: int = field(default_factory=lambda: int(os.environ.get("MVR2T_LLM_CTX", "8192")))
+    llm_threads: int = field(default_factory=lambda: int(os.environ.get("MVR2T_LLM_THREADS", "0")))
+
     @property
     def sessions_root(self) -> Path:
         return self.data_dir / "temp" / "sessions"
@@ -104,6 +108,10 @@ class Settings:
     def models_root(self) -> Path:
         """模型資料夾（規格 §7.3）：<models_dir 或 userData/models>/<kind>/<id>/"""
         return self.models_dir if self.models_dir is not None else self.data_dir / "models"
+
+    @property
+    def runtime_root(self) -> Path:
+        return self.data_dir / "runtime"
 
     @property
     def runtime_ffmpeg_dir(self) -> Path:

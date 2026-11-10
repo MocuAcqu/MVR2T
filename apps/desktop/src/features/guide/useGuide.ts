@@ -9,7 +9,8 @@ export function useActiveGuideStep(): GuideStepId | null {
   const importStatus = useSessionStore((s) => s.import.status);
   const extractionStatus = useSessionStore((s) => s.extraction.status);
   const transcriptionStatus = useSessionStore((s) => s.transcription.status);
+  const summaryStatus = useSessionStore((s) => s.summarizing.status);
   const enabled = useGuideStore((s) => s.enabled);
   if (!enabled) return null;
-  return nextGuideStep({ page, importStatus, extractionStatus, transcriptionStatus });
+  return nextGuideStep({ page, importStatus, extractionStatus, transcriptionStatus, summaryStatus });
 }

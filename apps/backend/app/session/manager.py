@@ -31,6 +31,7 @@ class MediaRecord:
     info: dict[str, Any]  # 回傳給前端的 MediaInfo
     audio: dict[str, Any] | None = None  # 抽取完成後的結果（給 Phase 05 使用）
     transcript: dict[str, Any] | None = None  # 語音辨識結果（Phase 05；只存在本次 Session）
+    summary: dict[str, Any] | None = None  # 摘要結果（Phase 06；只存在本次 Session）
 
     @property
     def dir(self) -> Path:

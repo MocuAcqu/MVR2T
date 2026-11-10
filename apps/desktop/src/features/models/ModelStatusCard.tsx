@@ -14,7 +14,11 @@ function StatusBadge({ m }: { m: ModelInfo }) {
 export function ModelStatusCard() {
   const { models, refreshModels } = useSystemStatus();
   const list = models.status === 'done' ? models.data.models : [];
-  const missing = list.filter((m) => m.downloadable && !m.installed);
+  const runtimes = models.status === 'done' ? models.data.runtimes : [];
+  const missing = [
+    ...list.filter((m) => m.downloadable && !m.installed).map((m) => m.display_name),
+    ...runtimes.filter((r) => !r.installed).map((r) => `${r.name} 執行程式`),
+  ];
 
   return (
     <Card>
@@ -26,7 +30,16 @@ export function ModelStatusCard() {
         {models.status !== 'done' ? (
           <p className="border-t border-chip py-3 text-sm text-body-gray">{models.status === 'loading' ? '檢查中…' : '等待本機後端連線。'}</p>
         ) : (
-          <ul>
+          <ul className="flex flex-col">
+            {runtimes.map((r) => (
+              <li key={r.name} className="order-last flex items-center justify-between gap-3 border-t border-chip py-3">
+                <div className="min-w-0">
+                  <p className="font-medium">{r.name} {r.version}</p>
+                  <p className="text-sm text-body-gray">執行摘要模型的程式（MIT 授權）</p>
+                </div>
+                {r.installed ? <Badge variant="solid">已安裝</Badge> : <Badge variant="outline">未安裝</Badge>}
+              </li>
+            ))}
             {list.map((m) => (
               <li key={m.id} className="flex items-center justify-between gap-3 border-t border-chip py-3">
                 <div className="min-w-0">
@@ -43,7 +56,7 @@ export function ModelStatusCard() {
         )}
         {missing.length > 0 ? (
           <div className="mt-2 flex flex-col gap-2 rounded-lg bg-chip p-4 text-sm">
-            <p className="font-medium">尚未下載：{missing.map((m) => m.display_name).join('、')}</p>
+            <p className="font-medium">尚未下載：{missing.join('、')}</p>
             <p>
               開發階段請在 <code className="rounded bg-background px-1 font-mono">apps\backend</code> 執行{' '}
               <code className="rounded bg-background px-1 font-mono">.\.venv\Scripts\python.exe -m scripts.download_models</code>

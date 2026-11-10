@@ -1,6 +1,6 @@
 # 開發紀錄（給接手的 Claude / Claude Code）
 
-最後更新：2026-11-09。Phase 05 與之後的介面／通知／防睡眠優化都已在 Windows 驗收，下一步 Phase 06。Phase 05 已在 Windows 實測通過；吉祥物 Mono、首頁標題動畫與操作引導已在 Windows 驗收；ASR 預設精度定為 float32。
+最後更新：2026-11-10。Phase 06（摘要）完成並在沙盒以真實模型驗證，待 Windows 驗收。
 
 ## 目前進度
 
@@ -14,7 +14,7 @@
 | 05 ASR Integration | ✅ Windows 實測通過（24 分鐘中文錄音 → 320 句，float32 約 32 分鐘）；benchmark 待使用者執行 |
 | 介面更新（Mono／標題／引導） | ✅ Windows 驗收通過（2026-11-09） |
 | 優化（通知／防睡眠／首頁／引導） | ✅ Windows 驗收通過（2026-11-09） |
-| 06 LLM Integration | ⬜ 下一步 |
+| 06 LLM Integration | 🟡 沙盒以真實模型驗證通過（Qwen3.5-4B），**待 Windows 驗收** |
 
 ## 沙盒驗證結果（2026-11-06）
 
@@ -110,6 +110,67 @@
 - `tsc` 只要有選項層級錯誤（例如缺型別套件）就會略過語意檢查，「沒有報錯」不代表通過。
 - 沙盒的 init 不會立即回收殭屍行程，`kill -0` 對殭屍也成功；判斷行程是否存活請看 `/proc/<pid>/stat` 狀態不是 `Z`。
 - 在沙盒跑 Electron：`xvfb-run -a`，並加 `--no-sandbox`（root）。
+
+## Phase 06 LLM Integration — 實作與驗證（2026-11-09～10）
+
+### 使用者決策
+- 執行方式：**官方預先編譯的 llama-server**（獨立程序），不用 llama-cpp-python（Windows 沒有官方 wheel，需 C++ 編譯器）。
+- 模型：先比較再決定 → 使用者看過比較後選 **Qwen3.5-4B Q4_K_M**（unsloth/Qwen3.5-4B-GGUF，Apache-2.0）。
+  **與規格 §5.3 不同**：規格寫 Qwen/Qwen3-4B-GGUF（Qwen 官方），但 Qwen 官方沒有發布 Qwen3.5 / 2507 的 GGUF，只有第三方量化。
+  三個候選都登錄在 registry.LLM_CANDIDATES（含 SHA-256），改預設只要改 LLM_MODEL。
+- 摘要內容：**讓使用者勾選**規格 §4-E 的 7 種（預設勾全文摘要、重點整理、關鍵字、行動事項）。
+- 先只做 CPU 版（GPU 在 Phase 10）。
+
+### 架構
+- `app/engines/llm/server.py`：LlamaServer。摘要時才啟動（隨機埠、127.0.0.1、每次新 API key、`--parallel 1`、
+  `--reasoning-budget 0` + `enable_thinking:false` 關閉思考模式、`--cache-ram 0`），用完 terminate；取消 = kill 程序。
+  `/health` 503 = 載入中。啟動失敗依 log 給中文原因（記憶體不足、架構不支援、模型損壞）。
+- `app/core/childproc.py`：spawn_tied。**後端當機也不留孤兒 llama-server**：Windows 用 Job Object
+  （KILL_ON_JOB_CLOSE，handle 只有後端持有），Linux 用 PR_SET_PDEATHSIG（prctl 在父程序準備好，fork 後的子程序不 import 任何東西）。
+- `app/engines/llm/summarize.py`：
+  - token 估計（中日韓字元各 1、其他 3.2 字元 1，偏保守）；依預算切段，句子不拆。
+  - 每種摘要類型一次請求，**輸入放前面、指示放最後**，同一份輸入只算一次（llama-server prompt cache；實測 7 次請求共用 85% prompt）。
+  - 回應用 JSON schema 約束（llama.cpp 轉成 grammar），**每個字串都有 maxLength**：沒有上限時分段筆記的 summary
+    寫超過 900 tokens 被截斷成無效 JSON（沙盒實測）。最壞情況長度都小於 max_tokens。
+  - 時間戳記：模型只引用句子編號 refs，程式驗證後換成時間範圍，模型不會編造時間。
+  - 長逐字稿（§5.5）：分段 → 每段筆記（摘要、重點、關鍵字、待辦、問題）→ 筆記太長時兩兩整合，必要時多層 →
+    最終每種類型。**整合只濃縮「摘要與重點」，待辦、問題、關鍵字原樣保留到最後**：
+    第一版連同待辦一起整合三層後，5 個負責人只剩 3 個（沙盒實測），改版後全部保留。
+  - 後處理：OpenCC s2twp 轉繁體；去掉字串尾的 `} }` 殘渣；「空字串／未提及／無」等字樣視為空白（Qwen3-4B 會把「留空」寫成文字）。
+  - Budget（8192 context）：每段 3000、筆記 4800、輸出 1600；`MVR2T_LLM_CTX` 較小時等比縮小。
+- `app/services/summary.py`＋`app/api/summary.py`：POST /api/summary/generate（types）→ task；GET /api/summary。
+  `app/services/model_lock.py` 的 MODEL_LOCK 取代原本的 _transcribe_lock：**語音辨識與摘要不會同時載入模型**（§5.4）；
+  摘要中也不能重新抽取音訊。重新辨識／重新抽取會清除摘要。結果存在 Session（記憶體＋summary.json，§8.3）。
+- `app/models/runtime.py`：llama.cpp 版本固定（tag、commit、各平台壓縮檔 SHA-256）、下載驗證解壓（防 zip slip）、尋找執行檔；
+  `MVR2T_LLAMA_SERVER` 可指定執行檔（沙盒用自行編譯的版本）。
+  `scripts/resolve_llama_release.py --commit <sha>`：從 GitHub 查 tag 與 SHA-256，印出可貼到 runtime.py 的設定。
+  **沙盒連不到 GitHub（403）**，所以 tag 與 SHA-256 由使用者電腦上的 Claude Code 查出填入。
+- 前端：SummaryCard（7 種內容勾選、載入時 Mono 跳、整理時 Mono 捧螢幕、分頁顯示、時間標籤點擊捲動到逐字稿句子）、
+  引導新增「summarize」步驟、摘要完成通知、處理中防睡眠、模型管理頁顯示 llama.cpp 狀態。
+
+### Phase 06 模型比較（沙盒，2 核 CPU，llama.cpp 0c1e570 自行編譯）
+同一份 8.5 分鐘虛構中文會議（tests/fixtures/meeting_zh.json，有標準答案），7 種摘要一次產生：
+
+| 模型 | 總時間 | 生成 tok/s | 行動事項（5 人） | 備註 |
+|---|---|---|---|---|
+| Qwen3-4B（Qwen 官方 GGUF） | 20.3 分 | 2.8 | 5/5，另誤列 2 個討論事項；owner 寫「空字串」 | 關鍵字較空泛、重點只有 5 個 |
+| Qwen3-4B-Instruct-2507（unsloth） | 24.1 分 | 2.7 | 5/5 | 內容最詳細，全文摘要偏長（約 430 字） |
+| Qwen3.5-4B（unsloth） | 15.2 分 | 3.7 | 5/5，期限正確 | 精簡準確、每項都有 refs；**選定** |
+
+速度數字受當時沙盒負載影響，只能相對參考。記憶體：llama-server 匿名記憶體約 3.1～3.7 GB（CPU 版會把權重重新排列成較快的格式，
+另佔一份）＋模型檔的記憶體映射（可回收）；ctx 4096 或 KV q8_0 約省 0.5 GB。
+**使用者電腦（10 執行緒）預期快 3～4 倍，請以 Windows 實測為準。**
+
+### 沙盒驗證
+- 後端 pytest（不含真實模型）全數通過；新增 test_llm_engine（切段、refs→時間、階層整合保留待辦、假 llama-server 的啟動／
+  記憶體不足訊息／取消／後端當機時子程序一併結束）、test_summary_api（依序載入、取消、MODEL_LOCK、缺模型時的下載說明）。
+- test_llm_real（真實 Qwen3.5-4B）：會議的 5 個負責人全部正確、時間有效、關鍵字含「中山店」；
+  分段＋整合模式下全文摘要保留 LINE 與 9/20、問題含 POS、5 個負責人全部保留；任務結束後 llama-server 程序確實結束。
+- 前端 vitest、typecheck、build 通過；SummaryCard 以真實輸出截圖檢查（分頁、時間標籤捲動、處理中狀態）。
+
+### 待使用者電腦確認
+- Claude Code 執行 resolve_llama_release 填入 tag／SHA-256，`download_models --llm` 下載並驗證 Windows CPU 版 llama-server。
+- Windows 上 Job Object 測試（test_child_dies_when_the_backend_process_dies）、真實模型測試、實際摘要時間與記憶體。
 
 ## 防睡眠修正與開發模式重新載入（2026-11-09）
 
