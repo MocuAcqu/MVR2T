@@ -42,5 +42,5 @@ export const GUIDE_MESSAGES: Record<GuideStepId, { title: string; body: string }
     title: '逐字稿完成了！',
     body: '勾選想要的摘要內容，再按「產生摘要」。第一次需要約 1 分鐘載入摘要模型，長錄音會分段整理，需要多一點時間。',
   },
-  done: { title: '摘要完成了！', body: '點項目旁的時間，可以跳到逐字稿中對應的句子。心智圖會在之後的版本加入。' },
+  done: { title: '摘要完成了！', body: '點項目旁的時間，可以跳到逐字稿中對應的句子。心智圖在下方，可以拖曳、編輯，也能匯出成圖片。' },
 };

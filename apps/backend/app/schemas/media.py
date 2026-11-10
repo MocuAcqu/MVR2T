@@ -120,7 +120,7 @@ class Transcript(BaseModel):
 
 # --- Phase 06：摘要 -------------------------------------------------------------
 
-SummaryTypeName = Literal["overview", "key_points", "notes", "topics", "keywords", "action_items", "qa"]
+SummaryTypeName = Literal["overview", "key_points", "notes", "topics", "keywords", "action_items", "qa", "mindmap"]
 
 
 class SummaryRequest(BaseModel):
@@ -170,6 +170,20 @@ class SummaryQa(BaseModel):
     time: TimeSpan | None
 
 
+class MindMapNode(BaseModel):
+    id: str
+    text: str
+    kind: Literal["central", "main", "sub", "detail", "conclusion"]
+    refs: list[int]
+    time: TimeSpan | None
+    children: list[MindMapNode]
+
+
+class MindMapRequest(BaseModel):
+    session_id: str
+    media_id: str
+
+
 class SummaryResults(BaseModel):
     overview: str | None = None
     key_points: list[SummaryPoint] | None = None
@@ -178,6 +192,7 @@ class SummaryResults(BaseModel):
     keywords: list[str] | None = None
     action_items: list[SummaryAction] | None = None
     qa: list[SummaryQa] | None = None
+    mindmap: MindMapNode | None = None
 
 
 class Summary(BaseModel):

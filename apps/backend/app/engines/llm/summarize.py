@@ -20,8 +20,8 @@ from typing import Any, Literal, Protocol
 
 from app.engines.asr.text import to_traditional
 
-SummaryType = Literal["overview", "key_points", "notes", "topics", "keywords", "action_items", "qa"]
-ALL_TYPES: tuple[SummaryType, ...] = ("overview", "key_points", "notes", "topics", "keywords", "action_items", "qa")
+SummaryType = Literal["overview", "key_points", "notes", "topics", "keywords", "action_items", "qa", "mindmap"]
+ALL_TYPES: tuple[SummaryType, ...] = ("overview", "key_points", "notes", "topics", "keywords", "action_items", "qa", "mindmap")
 TYPE_LABELS: dict[SummaryType, str] = {
     "overview": "全文摘要",
     "key_points": "重點整理",
@@ -30,6 +30,7 @@ TYPE_LABELS: dict[SummaryType, str] = {
     "keywords": "關鍵字",
     "action_items": "行動事項",
     "qa": "問題與結論",
+    "mindmap": "心智圖",
 }
 
 
@@ -58,6 +59,7 @@ class Budget:
     notes_input: int = 4800  # 最終摘要時，筆記最多幾個 token（超過才做階層式整合）
     map_output: int = 1600
     final_output: int = 1600
+    mindmap_output: int = 2600  # 心智圖節點多，輸出上限另計（Phase 07）
 
     @classmethod
     def for_ctx(cls, ctx: int) -> Budget:
@@ -65,17 +67,20 @@ class Budget:
         if ctx >= 8192:
             return cls(ctx=ctx)
         scale = ctx / 8192
+        mindmap_output = max(1400, int(2600 * scale))
         return cls(
             ctx=ctx,
             chunk_input=int(3000 * scale),
-            notes_input=int(4800 * scale),
+            notes_input=min(int(4800 * scale), ctx - mindmap_output - 700),
             map_output=max(900, int(1600 * scale)),
             final_output=max(900, int(1600 * scale)),
+            mindmap_output=mindmap_output,
         )
 
     def check(self) -> None:
         overhead = 700  # 系統提示與指示
-        if self.chunk_input + self.map_output + overhead > self.ctx or self.notes_input + self.final_output + overhead > self.ctx:
+        final = max(self.final_output, self.mindmap_output)
+        if self.chunk_input + self.map_output + overhead > self.ctx or self.notes_input + final + overhead > self.ctx:
             raise ValueError("budget exceeds context")
 
 
@@ -152,6 +157,13 @@ FINAL_SCHEMAS: dict[SummaryType, dict[str, Any]] = {
     "qa": _obj({"qa": _list(_obj({"question": _s(60), "conclusion": _s(90), "refs": _REFS}), 10)}),
 }
 
+# 心智圖（PROJECT_SPEC §4-F）：中心主題 → 主要分支 → 子題 → 細節／結論，固定最多三層，避免 grammar 遞迴。
+# 最壞情況約 100 個節點、2500 tokens，小於 mindmap_output。
+_MM_DETAIL = _obj({"title": _s(30), "refs": _REFS, "conclusion": {"type": "boolean"}})
+_MM_SUB = _obj({"title": _s(24), "refs": _REFS, "children": _list(_MM_DETAIL, 3)})
+_MM_MAIN = _obj({"title": _s(20), "refs": _REFS, "children": _list(_MM_SUB, 4)})
+FINAL_SCHEMAS["mindmap"] = _obj({"title": _s(24), "children": _list(_MM_MAIN, 6)})
+
 # 分段筆記：最壞情況約 1300 個中文字，小於 map_output
 NOTES_SCHEMA = _obj({
     "summary": _s(260),
@@ -190,6 +202,14 @@ FINAL_INSTRUCTIONS: dict[SummaryType, str] = {
         "沒有結論就寫「尚未定論」並簡述目前的看法。附上 refs。沒有就回傳空陣列。"
     ),
 }
+
+FINAL_INSTRUCTIONS["mindmap"] = (
+    "請把內容整理成心智圖。title 是中心主題（一句話概括整份內容，24 字內）；children 是 4～6 個主要分支（依內容的主題或先後順序），"
+    "每個分支 2～4 個子題，子題下可以有 0～3 個細節（具體的事實、數字、負責人與期限）。"
+    "細節如果是結論、決定或待辦，conclusion 設為 true，否則 false。"
+    "標題都要簡短，用名詞片語而不是完整句子（主要分支 10 字內、子題 16 字內、細節 24 字內），同一層不要重複。"
+    "每個分支、子題、細節都附上 refs。"
+)
 
 MAP_INSTRUCTION = (
     "這是一份長逐字稿的其中一段。請為這一段做筆記：summary（3～6 句）、points（這段的重點，3～8 個）、"
@@ -340,7 +360,37 @@ def normalize(kind: SummaryType, raw: dict[str, Any], by_id: dict[int, Line]) ->
         return items
     if kind == "qa":
         return nonempty(data.get("qa"), "question")
+    if kind == "mindmap":
+        return _mindmap(data, valid, by_id)
     raise ValueError(kind)
+
+
+MINDMAP_KINDS = ("central", "main", "sub", "detail")
+
+
+def _mindmap(data: dict[str, Any], valid: set[int], by_id: dict[int, Line]) -> dict[str, Any] | None:
+    """模型輸出 → 心智圖樹：{id, text, kind, refs, time, children}。kind：central / main / sub / detail / conclusion。
+    空白標題的節點（含其子節點）丟掉；id 依位置產生（n、n-1、n-1-2…），前端用它做為 React Flow 節點 id。"""
+    def node(raw: Any, level: int, node_id: str) -> dict[str, Any] | None:
+        if not isinstance(raw, dict):
+            return None
+        text = str(raw.get("title", "")).strip()
+        if not text:
+            return None
+        refs = _clean_refs(raw.get("refs"), valid) if level > 0 else []
+        kind = MINDMAP_KINDS[level]
+        if level == 3 and raw.get("conclusion") is True:
+            kind = "conclusion"
+        children: list[dict[str, Any]] = []
+        if level < 3:
+            for item in raw.get("children", []) if isinstance(raw.get("children"), list) else []:
+                child = node(item, level + 1, f"{node_id}-{len(children) + 1}")
+                if child is not None:
+                    children.append(child)
+        return {"id": node_id, "text": text, "kind": kind, "refs": refs, "time": _span(refs, by_id), "children": children}
+
+    root = node(data, 0, "n")
+    return root if root is not None and root["children"] else None
 
 
 def _clean_notes(raw: dict[str, Any], valid: set[int]) -> dict[str, Any]:
@@ -396,12 +446,13 @@ def plan(lines: Sequence[Line], types: Sequence[SummaryType], budget: Budget) ->
 
 
 def _call_json(llm: Chat, messages: list[dict[str, str]], schema: dict[str, Any], max_tokens: int) -> tuple[dict[str, Any], Any]:
-    """呼叫一次；JSON 解析失敗（字串有長度上限後應不會發生）時以較低溫度、加倍上限重試一次。"""
+    """呼叫一次；JSON 解析失敗（字串與陣列都有上限後應不會發生）時以較低溫度重試一次。
+    不加大 max_tokens：心智圖的輸入＋輸出已接近 8192 context，加倍會超過。"""
     res = llm.chat(messages, max_tokens=max_tokens, json_schema=schema)
     try:
         return _parse_json(res.content), res
     except ValueError:
-        res = llm.chat(messages, max_tokens=max_tokens * 2, json_schema=schema, temperature=0.1)
+        res = llm.chat(messages, max_tokens=max_tokens, json_schema=schema, temperature=0.1)
         return _parse_json(res.content), res
 
 
@@ -477,8 +528,9 @@ def summarize(
 
     results: dict[str, Any] = {}
     for t in p.types:
-        step("正在產生摘要", TYPE_LABELS[t])
-        raw, res = _call_json(llm, _messages(context, FINAL_INSTRUCTIONS[t]), FINAL_SCHEMAS[t], budget.final_output)
+        step("正在產生心智圖" if t == "mindmap" else "正在產生摘要", TYPE_LABELS[t])
+        max_out = budget.mindmap_output if t == "mindmap" else budget.final_output
+        raw, res = _call_json(llm, _messages(context, FINAL_INSTRUCTIONS[t]), FINAL_SCHEMAS[t], max_out)
         record(res)
         results[t] = normalize(t, raw, by_id)
         done += 1

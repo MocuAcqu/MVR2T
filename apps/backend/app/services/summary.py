@@ -65,7 +65,9 @@ def start_summary(
     media_id: str,
     types: Sequence[str],
     llm_factory: LlmFactory = default_llm,
+    merge: bool = False,
 ) -> Task:
+    """merge=True：只重新產生指定的類型，保留現有摘要的其他內容（例如「重新產生心智圖」）。"""
     rec = session.media
     if rec is None or rec.id != media_id:
         raise MediaError(404, "找不到這個媒體，請重新匯入。")
@@ -90,7 +92,8 @@ def start_summary(
     except Exception:
         MODEL_LOCK.release()
         raise
-    rec.summary = None
+    previous = rec.summary if merge else None
+    rec.summary = previous  # merge 時舊內容在產生期間仍可讀；否則清除
     budget = Budget.for_ctx(cfg.llm_ctx)
 
     def job(task: Task) -> dict[str, Any]:
@@ -120,10 +123,12 @@ def start_summary(
             if task.cancelled:
                 raise TaskCancelled()
             elapsed = time.monotonic() - started
+            results = {**(previous["results"] if previous else {}), **out["results"]}
+            types_done = [t for t in ALL_TYPES if t in results]
             summary = {
                 "media_id": rec.id,
-                "types": out["types"],
-                "results": out["results"],
+                "types": types_done,
+                "results": results,
                 "model": f"{LLM_MODEL.repo}@{LLM_MODEL.revision[:7]}",
                 "chunks": out["chunks"],
                 "levels": out["levels"],

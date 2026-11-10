@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isAppUrl, isSafeExternalUrl, parseNotification, rendererOrigins } from './security';
+import { isAppUrl, isSafeExternalUrl, parseNotification, parseSaveRequest, rendererOrigins } from './security';
 
 const prod = { indexFileUrl: 'file:///C:/Users/User/Desktop/MVR2T%20AI/apps/desktop/dist/index.html' };
 const dev = { devServerUrl: 'http://127.0.0.1:5173', indexFileUrl: prod.indexFileUrl };
@@ -55,5 +55,24 @@ describe('parseNotification', () => {
     expect(n?.title).not.toMatch(/\n/);
     expect(n?.title.length).toBe(80);
     expect(n?.body.length).toBe(240);
+  });
+});
+
+describe('parseSaveRequest', () => {
+  const png = Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.from('rest')]).toString('base64');
+  it('accepts a PNG (base64) and an SVG (text)', () => {
+    expect(parseSaveRequest({ defaultName: '心智圖', kind: 'png', data: png })?.fileName).toBe('心智圖.png');
+    const svg = parseSaveRequest({ defaultName: 'map.svg', kind: 'svg', data: '<svg xmlns="http://www.w3.org/2000/svg"></svg>' });
+    expect(svg?.fileName).toBe('map.svg');
+  });
+  it('strips folders and characters Windows does not allow from the name', () => {
+    expect(parseSaveRequest({ defaultName: '..\\..\\Windows\\a:b?.png', kind: 'png', data: png })?.fileName).toBe('a_b_.png');
+    expect(parseSaveRequest({ defaultName: '', kind: 'png', data: png })?.fileName).toBe('MVR2T.png');
+  });
+  it('rejects unknown kinds and content that is not what it claims to be', () => {
+    expect(parseSaveRequest({ defaultName: 'x', kind: 'exe', data: png })).toBeNull();
+    expect(parseSaveRequest({ defaultName: 'x', kind: 'png', data: Buffer.from('MZ').toString('base64') })).toBeNull();
+    expect(parseSaveRequest({ defaultName: 'x', kind: 'svg', data: '<script>alert(1)</script>' })).toBeNull();
+    expect(parseSaveRequest(null)).toBeNull();
   });
 });

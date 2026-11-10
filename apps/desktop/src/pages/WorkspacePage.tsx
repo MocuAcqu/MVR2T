@@ -4,13 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { removeMedia } from '@/features/media/mediaController';
 import { ExtractionCard } from '@/features/workspace/ExtractionCard';
+import { MindMapCard } from '@/features/mindmap/MindMapCard';
 import { MediaInfoCard } from '@/features/workspace/MediaInfoCard';
 import { SummaryCard } from '@/features/workspace/SummaryCard';
 import { TranscriptCard } from '@/features/workspace/TranscriptCard';
 import { useSessionStore } from '@/stores/sessionStore';
 import { useUiStore } from '@/stores/uiStore';
 
-/** Media workspace: media info, audio extraction (Phase 04), transcript (Phase 05), summary (Phase 06). Mind map comes later. */
+/** Media workspace: media info, audio extraction (Phase 04), transcript (Phase 05), summary (Phase 06), mind map (Phase 07). */
 export function WorkspacePage() {
   const imp = useSessionStore((s) => s.import);
   const setPage = useUiStore((s) => s.setPage);
@@ -65,6 +66,9 @@ export function WorkspacePage() {
       </div>
       <div className="mt-6">
         <SummaryCard />
+      </div>
+      <div className="mt-6">
+        <MindMapCard />
       </div>
     </PageContainer>
   );

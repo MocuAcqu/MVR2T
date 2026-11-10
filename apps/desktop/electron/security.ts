@@ -47,3 +47,40 @@ export function parseNotification(input: unknown): { title: string; body: string
   const t = clean(title, 80);
   return t ? { title: t, body: clean(body, 240) } : null;
 }
+
+const SAVE_KINDS = { png: { ext: 'png', label: 'PNG 圖片', binary: true }, svg: { ext: 'svg', label: 'SVG 向量圖', binary: false } } as const;
+export const MAX_SAVE_BYTES = 50 * 1024 * 1024;
+
+export interface ParsedSave {
+  fileName: string;
+  ext: string;
+  label: string;
+  bytes: Buffer;
+}
+
+/**
+ * IPC 傳入的「另存新檔」內容不可信：只接受已知種類、檢查大小與檔案格式，檔名去掉路徑與 Windows 不允許的字元。
+ * 實際寫入的路徑一律由使用者在系統對話框中選擇，renderer 無法指定。
+ */
+export function parseSaveRequest(input: unknown): ParsedSave | null {
+  if (!input || typeof input !== 'object') return null;
+  const { defaultName, kind, data } = input as Record<string, unknown>;
+  if (typeof defaultName !== 'string' || typeof data !== 'string' || typeof kind !== 'string') return null;
+  if (!Object.prototype.hasOwnProperty.call(SAVE_KINDS, kind)) return null;
+  const spec = SAVE_KINDS[kind as keyof typeof SAVE_KINDS];
+  if (data.length > MAX_SAVE_BYTES * (spec.binary ? 1.4 : 1)) return null;
+  let bytes: Buffer;
+  if (spec.binary) {
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(data)) return null;
+    bytes = Buffer.from(data, 'base64');
+    if (bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') return null; // PNG signature
+  } else {
+    if (!/^\s*(<\?xml[^>]*>\s*)?<svg[\s>]/.test(data)) return null;
+    bytes = Buffer.from(data, 'utf8');
+  }
+  if (bytes.length === 0 || bytes.length > MAX_SAVE_BYTES) return null;
+  // eslint-disable-next-line no-control-regex
+  const base = (defaultName.split(/[\\/]/).pop() ?? '').replace(/[<>:"|?*\u0000-\u001f]/g, '_').replace(/^\.+/, '').trim().slice(0, 120);
+  const stem = (base || 'MVR2T').replace(new RegExp(`\\.${spec.ext}$`, 'i'), '');
+  return { fileName: `${stem}.${spec.ext}`, ext: spec.ext, label: spec.label, bytes };
+}

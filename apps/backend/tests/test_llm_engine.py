@@ -26,6 +26,19 @@ from app.engines.llm.summarize import (
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
+MINDMAP_REPLY = {
+    "title": "中山店开幕会议",
+    "children": [
+        {"title": "开幕", "refs": [4, 5], "children": [
+            {"title": "咖啡机", "refs": [6, 7], "children": [
+                {"title": "九月十号确认", "refs": [8], "conclusion": True},
+                {"title": "", "refs": [], "conclusion": False},
+            ]},
+        ]},
+        {"title": "", "refs": [1], "children": []},
+        {"title": "会员点数", "refs": [25, 999], "children": []},
+    ],
+}
 MEETING = json.loads((FIXTURES / "meeting_zh.json").read_text(encoding="utf-8"))
 LINES = [Line(s["id"], s["start"], s["end"], s["text"]) for s in MEETING["segments"]]
 
@@ -61,6 +74,8 @@ class FakeLlm:
                 "questions": [],
             }, ensure_ascii=False))
         key = next(iter(json_schema["properties"]))
+        if json_schema is FINAL_SCHEMAS["mindmap"]:
+            return Res(json.dumps(MINDMAP_REPLY, ensure_ascii=False))
         values = {
             "overview": "这是摘要。 } }",
             "key_points": [{"text": "开幕日期", "refs": [5, 3, 3, -1]}],
@@ -210,3 +225,27 @@ def test_child_dies_when_the_backend_process_dies(tmp_path):
     finally:
         if parent.poll() is None:
             parent.kill()
+
+
+def test_mindmap_is_a_validated_tree_with_ids_kinds_and_times():
+    by_id = {ln.id: ln for ln in LINES}
+    tree = normalize("mindmap", MINDMAP_REPLY, by_id)
+    assert tree["id"] == "n" and tree["kind"] == "central" and tree["text"] == "中山店開幕會議"
+    assert [c["text"] for c in tree["children"]] == ["開幕", "會員點數"]  # empty branch dropped, Traditional
+    main = tree["children"][0]
+    assert main["id"] == "n-1" and main["kind"] == "main" and main["time"] == {"start": LINES[4].start, "end": LINES[5].end}
+    sub = main["children"][0]
+    assert sub["kind"] == "sub" and sub["id"] == "n-1-1"
+    assert [d["kind"] for d in sub["children"]] == ["conclusion"]  # empty detail dropped
+    assert tree["children"][1]["refs"] == [25]  # unknown sentence id removed
+    assert normalize("mindmap", {"title": "x", "children": []}, by_id) is None  # nothing to show
+
+
+def test_mindmap_uses_its_own_output_budget():
+    llm = FakeLlm()
+    out = summarize(llm, LINES, ["mindmap"], Budget())
+    assert out["results"]["mindmap"]["children"]
+    b = Budget()
+    b.check()
+    assert b.mindmap_output > b.final_output
+    Budget.for_ctx(4096).check()

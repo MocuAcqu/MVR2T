@@ -16,7 +16,8 @@
 | — | 介面更新（吉祥物 Mono、首頁標題、操作引導） | ✅ 已在 Windows 驗收 |
 | — | 優化（完成通知、防睡眠、首頁精簡、引導） | ✅ 已在 Windows 驗收 |
 | 06 | LLM Integration（llama.cpp + Qwen3.5-4B 摘要） | ✅ 已在 Windows 驗收 |
-| 07 – 12 | 心智圖、Session、Model Manager、硬體偵測、打包 | ⏳ |
+| 07 | Mind Map（React Flow 心智圖：編輯、拖曳、匯出 PNG／SVG） | 🧪 待 Windows 驗收 |
+| 08 – 12 | Session、Model Manager、硬體偵測、打包 | ⏳ |
 
 ## 環境需求
 
@@ -207,12 +208,27 @@ Phase 03 起**只需要一個終端機**。後端由 Electron 以 `apps/backend/
 - [ ] 摘要完成後工作管理員中也沒有 `llama-server.exe`（模型用完即關閉，記憶體歸還）
 - [ ] 摘要進行中無法開始語音辨識或重新抽取音訊（顯示「另一個 AI 工作…」）
 - [ ] 切到其他程式時，摘要完成會跳出「摘要完成」通知
-- [ ] `npm test`、`npm run typecheck`、後端 pytest 全數通過；`tests/test_llm_real.py` 在已下載模型時會實際執行（約 25 分鐘；設定 `MVR2T_SKIP_LLM_REAL=1` 可略過）
+- [ ] `npm test`、`npm run typecheck`、後端 pytest 全數通過；`tests/test_llm_real.py` 在已下載模型時會實際執行（沙盒約 40 分鐘，含心智圖；設定 `MVR2T_SKIP_LLM_REAL=1` 可略過）
 
 進階設定（環境變數）：
 - `MVR2T_LLM_CTX=4096`：記憶體不足時降低 context（預設 8192；長逐字稿會切成較多段）
 - `MVR2T_LLM_THREADS=8`：限制摘要使用的 CPU 執行緒數（預設由 llama.cpp 自動決定）
 - `MVR2T_LLAMA_SERVER=<路徑>`：改用指定的 llama-server 執行檔（例如自行編譯的版本）
+
+## Phase 07 驗收清單（心智圖）
+
+- [ ] 「摘要」卡片多了「心智圖」選項（預設勾選）；產生時會出現「正在產生心智圖」
+- [ ] 摘要完成後，下方「心智圖」卡片顯示：黑底的中心主題在中間，主要分支平均分在左右兩側，往外依序是子主題、細節；決定事項或待辦標有黑色「結論」標籤；全部是**繁體中文**
+- [ ] 節點上的時間點一下，會捲動到逐字稿中對應的句子
+- [ ] 拖曳節點：子節點一起移動；把左邊的主要分支拖到中心右邊，放開後會換到右側
+- [ ] 雙擊節點（或選取後按 F2）可以改文字，Enter 確定、Esc 取消；不能存成空白
+- [ ] 選取節點後：Tab 新增子節點、Enter 新增同層、Delete 刪除；工具列的按鈕也可以；中心主題不能刪除
+- [ ] 節點外側的「−」收合子節點，收合後顯示隱藏的數量；「全部收合／全部展開」正常
+- [ ] Ctrl+Z 復原、Ctrl+Shift+Z（或 Ctrl+Y）重做；「重新排列」清除拖曳位置
+- [ ] 「放大」讓心智圖佔滿視窗，Esc 或「縮小」回來
+- [ ] 「匯出 PNG」「匯出 SVG」跳出另存新檔視窗（預設在「文件」、檔名「<檔名>-心智圖」）；開啟檔案：白底、內容完整、中文正常、含時間標籤、沒有收合按鈕
+- [ ] 「重新產生心智圖」先詢問確認；只重新產生心智圖，其他摘要內容不變
+- [ ] 換一個檔案或重新語音辨識後，心智圖清空
 
 ## 開發注意事項
 
@@ -232,6 +248,5 @@ shared/          前後端共用的常數與型別
 
 ## 已知待辦（刻意留到後續 Phase）
 
-- Phase 07：心智圖（React Flow），使用摘要與逐字稿
 - 逐字稿編輯、依時間戳記播放原始影音：後續 Phase（Transcript Editor）
 - Phase 11：PyInstaller 打包後端（Electron 已預留 `resources/backend/mvr2t-backend(.exe)` 路徑）

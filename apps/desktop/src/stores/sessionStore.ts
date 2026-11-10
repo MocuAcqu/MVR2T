@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { MindNode } from '@/features/mindmap/model';
 import type {
   ExtractAudioResult,
   MediaInfo,
@@ -65,9 +66,14 @@ interface SessionState {
   summarizing: SummaryState;
   /** 本次 Session 的摘要（只在記憶體中，規格 §8.3） */
   summary: Summary | null;
+  /** 可編輯的心智圖（由摘要的心智圖建立，之後的編輯只在記憶體中，§8.3） */
+  mindmap: MindNode | null;
   set: (
     patch: Partial<
-      Pick<SessionState, 'sessionId' | 'backendKey' | 'import' | 'extraction' | 'transcription' | 'transcript' | 'summarizing' | 'summary'>
+      Pick<
+        SessionState,
+        'sessionId' | 'backendKey' | 'import' | 'extraction' | 'transcription' | 'transcript' | 'summarizing' | 'summary' | 'mindmap'
+      >
     >,
   ) => void;
   patchExtraction: (patch: Partial<ExtractionState>) => void;
@@ -85,6 +91,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   transcript: null,
   summarizing: idleSummary,
   summary: null,
+  mindmap: null,
   set: (patch) => set(patch),
   patchExtraction: (patch) => set((s) => ({ extraction: { ...s.extraction, ...patch } })),
   patchTranscription: (patch) => set((s) => ({ transcription: { ...s.transcription, ...patch } })),
@@ -97,5 +104,6 @@ export const useSessionStore = create<SessionState>((set) => ({
       transcript: null,
       summarizing: idleSummary,
       summary: null,
+      mindmap: null,
     }),
 }));

@@ -15,11 +15,13 @@ import {
   getTask,
   getTranscript,
   startExtraction as apiStartExtraction,
+  startMindmap as apiStartMindmap,
   startSummary as apiStartSummary,
   startTranscription as apiStartTranscription,
   uploadMedia,
   type BackendConnection,
 } from '@/services/api';
+import { fromSummary } from '@/features/mindmap/model';
 import { idleExtraction, idleSummary, idleTranscription, useSessionStore } from '@/stores/sessionStore';
 
 const POLL_MS = 400;
@@ -124,6 +126,7 @@ export async function importFile(file: File): Promise<void> {
     transcript: null,
     summarizing: idleSummary,
     summary: null,
+    mindmap: null,
   });
 
   try {
@@ -229,6 +232,7 @@ export async function startExtraction(): Promise<void> {
     transcript: null,
     summarizing: idleSummary,
     summary: null,
+    mindmap: null,
   });
   try {
     const conn = await connection();
@@ -267,6 +271,7 @@ export async function startTranscription(language: AsrLanguage | null): Promise<
     transcript: null,
     summarizing: idleSummary,
     summary: null,
+    mindmap: null,
   });
   try {
     const conn = await connection();
@@ -303,15 +308,38 @@ export async function startSummary(types: SummaryType[]): Promise<void> {
   const mediaId = state.import.info.media_id;
   const sessionId = state.sessionId;
   stopPolling('summarizing');
-  store().set({ summarizing: { ...idleSummary, status: 'starting', stage: '準備中' }, summary: null });
+  store().set({ summarizing: { ...idleSummary, status: 'starting', stage: '準備中' }, summary: null, mindmap: null });
   try {
     const conn = await connection();
     const { task_id } = await apiStartSummary(conn, sessionId, mediaId, types);
     store().patchSummarizing({ taskId: task_id, status: 'running' });
-    void poll('summarizing', conn, sessionId, task_id, async () => {
-      const summary = await getSummary(conn, sessionId, mediaId);
-      if (store().summarizing.taskId === task_id) store().set({ summary });
-    });
+    void poll('summarizing', conn, sessionId, task_id, () => fetchSummary(conn, sessionId, mediaId, task_id));
+  } catch (err) {
+    store().patchSummarizing({ status: 'failed', message: messageOf(err) });
+  }
+}
+
+/** 取回摘要；有心智圖時建立可編輯的心智圖（取代之前的編輯）。 */
+async function fetchSummary(conn: BackendConnection, sessionId: string, mediaId: string, taskId: string): Promise<void> {
+  const summary = await getSummary(conn, sessionId, mediaId);
+  if (store().summarizing.taskId !== taskId) return;
+  const mm = summary.results.mindmap;
+  store().set({ summary, mindmap: mm ? fromSummary(mm) : store().mindmap });
+}
+
+/** 只重新產生心智圖（保留其他摘要內容）。 */
+export async function startMindmap(): Promise<void> {
+  const state = store();
+  if (state.import.status !== 'ready' || !state.sessionId || !state.transcript) return;
+  const mediaId = state.import.info.media_id;
+  const sessionId = state.sessionId;
+  stopPolling('summarizing');
+  store().set({ summarizing: { ...idleSummary, status: 'starting', stage: '準備中' } });
+  try {
+    const conn = await connection();
+    const { task_id } = await apiStartMindmap(conn, sessionId, mediaId);
+    store().patchSummarizing({ taskId: task_id, status: 'running' });
+    void poll('summarizing', conn, sessionId, task_id, () => fetchSummary(conn, sessionId, mediaId, task_id));
   } catch (err) {
     store().patchSummarizing({ status: 'failed', message: messageOf(err) });
   }

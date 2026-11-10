@@ -42,6 +42,22 @@ export interface AppNotification {
   body: string;
 }
 
+/** 可匯出的檔案種類。png：data 為 base64；其他：data 為 UTF-8 文字。 */
+export type SaveFileKind = 'png' | 'svg';
+
+export interface SaveFileRequest {
+  /** 建議檔名（不含路徑；副檔名會依 kind 補上） */
+  defaultName: string;
+  kind: SaveFileKind;
+  data: string;
+}
+
+export interface SaveFileResult {
+  saved: boolean;
+  /** 使用者選擇的路徑（取消時為 null） */
+  path: string | null;
+}
+
 /**
  * Preload 透過 contextBridge 暴露給 Renderer 的「有限 API」（規格 §11-8）。
  * Renderer 只能呼叫這裡列出的方法，無法直接取得 Node.js / Electron 權限。
@@ -56,4 +72,6 @@ export interface Mvr2tBridge {
   notify(notification: AppNotification): Promise<boolean>;
   /** true：處理中，防止電腦因閒置自動睡眠（螢幕仍可關閉）；false：解除。 */
   setKeepAwake(on: boolean): Promise<void>;
+  /** 跳出「另存新檔」對話框並寫入檔案；使用者取消時 saved = false。 */
+  saveFile(request: SaveFileRequest): Promise<SaveFileResult>;
 }

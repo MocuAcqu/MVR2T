@@ -22,9 +22,12 @@ export const SUMMARY_TYPES: { value: SummaryType; label: string; hint: string }[
   { value: 'keywords', label: '關鍵字', hint: '人名、地名、專有名詞' },
   { value: 'action_items', label: '行動事項', hint: '誰要做什麼、期限' },
   { value: 'qa', label: '問題與結論', hint: '討論的問題與結論' },
+  { value: 'mindmap', label: '心智圖', hint: '從中心主題向左右展開，顯示在下方，可以編輯與匯出' },
 ];
 const LABEL = Object.fromEntries(SUMMARY_TYPES.map((t) => [t.value, t.label])) as Record<SummaryType, string>;
-const DEFAULT_TYPES: SummaryType[] = ['overview', 'key_points', 'keywords', 'action_items'];
+const DEFAULT_TYPES: SummaryType[] = ['overview', 'key_points', 'keywords', 'action_items', 'mindmap'];
+/** 心智圖顯示在自己的卡片（MindMapCard），不在摘要分頁中 */
+const tabTypes = (summary: Summary) => summary.types.filter((t) => t !== 'mindmap');
 
 /** 時間標籤：點一下捲動到逐字稿中對應的句子。 */
 function TimeChip({ time, refs }: { time: TimeSpan | null; refs: number[] }) {
@@ -168,7 +171,8 @@ export function SummaryCard() {
   const ready = !!transcript && transcript.segments.length > 0;
   const busy = s.status === 'starting' || s.status === 'queued' || s.status === 'running';
   const loadingModel = busy && (s.status === 'starting' || s.stage.includes('載入'));
-  const activeTab = summary ? (tab && summary.types.includes(tab) ? tab : summary.types[0]) : null;
+  const tabs: SummaryType[] = summary ? tabTypes(summary) : [];
+  const activeTab = tab && tabs.includes(tab) ? tab : (tabs[0] ?? null);
 
   const toggle = (t: SummaryType) => setTypes((cur) => (cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t]));
 
@@ -242,7 +246,7 @@ export function SummaryCard() {
         {summary && activeTab ? (
           <div className="flex flex-col gap-4">
             <div role="tablist" aria-label="摘要內容" className="flex flex-wrap gap-2">
-              {summary.types.map((t) => (
+              {tabs.map((t) => (
                 <button
                   key={t}
                   type="button"

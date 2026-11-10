@@ -1,6 +1,6 @@
 # 開發紀錄（給接手的 Claude / Claude Code）
 
-最後更新：2026-11-11。Phase 06 已驗收；語音辨識批次在使用者電腦沒有效益，預設改回逐段。下一步 Phase 07 心智圖。
+最後更新：2026-11-11。Phase 07 心智圖已在沙盒完成，待 Windows 驗收。
 
 ## 目前進度
 
@@ -15,6 +15,7 @@
 | 介面更新（Mono／標題／引導） | ✅ Windows 驗收通過（2026-11-09） |
 | 優化（通知／防睡眠／首頁／引導） | ✅ Windows 驗收通過（2026-11-09） |
 | 06 LLM Integration | ✅ Windows 驗收通過（2026-11-10，llama.cpp b11312＋Qwen3.5-4B） |
+| 07 Mind Map | 🧪 沙盒完成（2026-11-11），待 Windows 驗收 |
 
 ## 沙盒驗證結果（2026-11-06）
 
@@ -110,6 +111,44 @@
 - `tsc` 只要有選項層級錯誤（例如缺型別套件）就會略過語意檢查，「沒有報錯」不代表通過。
 - 沙盒的 init 不會立即回收殭屍行程，`kill -0` 對殭屍也成功；判斷行程是否存活請看 `/proc/<pid>/stat` 狀態不是 `Z`。
 - 在沙盒跑 Electron：`xvfb-run -a`，並加 `--no-sandbox`（root）。
+
+## Phase 07 Mind Map（2026-11-11）
+
+使用者決定：心智圖併入「產生摘要」的勾選（另有「重新產生心智圖」）；中心向左右展開；時間顯示在節點上（可點、會匯出）。
+
+### 後端
+- `summarize.py`：新增摘要類型 `mindmap`。Schema（grammar）限制：主要分支 ≤6、子主題 ≤4、細節 ≤3，標題 maxLength 20–30，
+  所以輸出一定放得進 `Budget.mindmap_output`（2600 tokens，依 ctx 縮放；`notes_input` 由 ctx 推算以通過 `check()`）。
+  模型輸出 refs → 程式轉成時間；`_mindmap()` 產生 `{id, text, kind, refs, time, children}`，id 為 `n`、`n-1`、`n-1-2`…；
+  第三層 `conclusion: true` → kind `conclusion`；空白標題丟棄；沒有分支則回傳 None。
+- `_call_json` 重試時不再加倍 max_tokens（加倍會超過 context），改用相同上限、溫度 0.1。
+- `POST /api/mindmap/generate`：只產生心智圖，`merge=True` 保留其他摘要結果。
+- 實測（沙盒、Qwen3.5-4B、會議 fixture）：`test_mindmap_is_a_valid_tree_about_the_meeting` 通過，約 13.6 分鐘（沙盒 CPU 慢）；
+  分支：開幕進度與風險／人力招募與教育訓練／…，結論節點對應「下週三安裝招牌」「阿傑週五前寄出資訊」等。
+
+### 前端
+- `features/mindmap/model.ts`：純函式的可編輯樹（`MindNode`：collapsed、offset、side）與排版 `layout()`。
+  - 中心在 (0,0)，每一側由內往外一欄一欄排；節點高度以**量測值優先**（`layout(root, measured)`），沒有才用估計值。
+  - 主要分支的左右在 `fromSummary` 時固定（`balanceSides`），之後收合／新增不會跳邊；新分支放在較短的一側；
+    拖曳主要分支越過中心 → `setSide`；「重新排列」清除位移並重新分配左右。
+- `MindMapCard.tsx`（@xyflow/react 12.12.0）：自訂節點 `MindMapNode.tsx`；拖曳時子孫一起移動、放開才寫回樹；
+  復原／重做堆疊（100 步）；鍵盤 Tab／Enter／Delete／F2／Ctrl+Z；放大到整個視窗。
+  React Flow 內建的選取／刪除快捷鍵都關閉，選取由我們自己管理。
+- **陷阱**：以 `setNodes(baseNodes)` 同步受控 nodes 會丟掉 `measured`，React Flow 會把節點設成 `visibility: hidden` 重新量測
+  → 畫面閃爍，且 html-to-image 匯出是全白。同步時要保留舊的 `measured`。
+- **陷阱**：新節點在量測完成前是隱藏的，`focus()` 無效；編輯框以 rAF 重試聚焦。
+- 匯出：html-to-image 1.11.11（React Flow 文件指出較新版匯出有問題）對 `.react-flow__viewport` 截圖；
+  `getViewportForBounds(bounds, w+2p, h+2p, 1, 1, 0)` 已含置中留白，不要再加 padding。`skipFonts`（不嵌入字型），
+  收合按鈕以 `mm-noexport` class 排除。存檔：IPC `file:save` → `dialog.showSaveDialog`（預設「文件」資料夾）；
+  `parseSaveRequest` 只接受 png（base64 且有 PNG 簽章）／svg（`<svg` 開頭）、≤50 MB、清除檔名中的路徑與 Windows 禁用字元。
+  瀏覽器預覽改用下載。
+- React Flow 的 attribution 以 `proOptions.hideAttribution` 隱藏（MIT 授權允許；避免在 Electron 內點到外部連結）。
+- 心智圖與其編輯只在記憶體中（§8.3）；換檔、重新辨識、重新產生摘要時清空。
+
+### 驗證（沙盒）
+- vitest：model 11 tests；pytest：19 passed（含 merge 與 mindmap 預算測試）；electron security tests 含 saveFile 驗證。
+- Playwright（Vite 預覽，注入 store）：Tab 新增並輸入、收合、拖曳、拖過中心換邊、雙擊編輯、復原、PNG／SVG 匯出內容完整。
+- Electron（Xvfb，替換 `dialog.showSaveDialog`）：PNG 存檔位元組一致、SVG 存檔成功、非 PNG 資料與未知類型被拒。
 
 ## 語音辨識加速（2026-11-10）
 

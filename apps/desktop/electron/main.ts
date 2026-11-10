@@ -2,11 +2,13 @@
  * Electron Main Process（規格 §3.2）
  * 職責：視窗管理、應用程式生命週期、IPC、Python Backend 生命週期（Phase 03）。
  */
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   app,
   BrowserWindow,
+  dialog,
   ipcMain,
   Notification,
   powerMonitor,
@@ -16,9 +18,9 @@ import {
   type IpcMainInvokeEvent,
 } from 'electron';
 import { APP_NAME, IPC_CHANNELS } from '@shared/constants/app';
-import type { AppInfo, BackendState } from '@shared/types/ipc';
+import type { AppInfo, BackendState, SaveFileResult } from '@shared/types/ipc';
 import { BackendManager, resolveBackendCommand } from './backend';
-import { isAppUrl, isSafeExternalUrl, parseNotification, rendererOrigins } from './security';
+import { isAppUrl, isSafeExternalUrl, parseNotification, parseSaveRequest, rendererOrigins } from './security';
 
 // 開發模式：由 `npm run dev` 注入 Vite dev server 位址；正式版則載入打包後的 index.html。
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
@@ -161,6 +163,26 @@ function handle<T>(channel: string, fn: (arg: unknown) => T | Promise<T>): void 
 }
 
 // ---------------------------------------------------------------------------
+// 另存新檔（匯出）：路徑一律由使用者在系統對話框中選擇
+// ---------------------------------------------------------------------------
+
+async function saveFile(input: unknown): Promise<SaveFileResult> {
+  const req = parseSaveRequest(input);
+  if (!req) throw new Error('Invalid save request');
+  const win = mainWindow();
+  const options = {
+    title: '另存新檔',
+    defaultPath: path.join(app.getPath('documents'), req.fileName),
+    filters: [{ name: req.label, extensions: [req.ext] }],
+  };
+  const { canceled, filePath } = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
+  if (canceled || !filePath) return { saved: false, path: null };
+  const target = path.extname(filePath).toLowerCase() === `.${req.ext}` ? filePath : `${filePath}.${req.ext}`;
+  await writeFile(target, req.bytes);
+  return { saved: true, path: target };
+}
+
+// ---------------------------------------------------------------------------
 // 通知與防止睡眠
 // ---------------------------------------------------------------------------
 
@@ -220,6 +242,7 @@ function registerIpc(): void {
   });
   handle(IPC_CHANNELS.notify, showNotification);
   handle(IPC_CHANNELS.setKeepAwake, setKeepAwake);
+  handle(IPC_CHANNELS.saveFile, saveFile);
 }
 
 // ---------------------------------------------------------------------------

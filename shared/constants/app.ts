@@ -30,6 +30,8 @@ export const IPC_CHANNELS = {
   notify: 'app:notify',
   /** Renderer → Main：處理中時防止電腦自動睡眠。 */
   setKeepAwake: 'power:keep-awake',
+  /** Renderer → Main：以「另存新檔」對話框儲存匯出的檔案（心智圖 PNG／SVG；Phase 08 起更多格式）。 */
+  saveFile: 'file:save',
   /** Main → Renderer 推送後端狀態變化。 */
   backendStateChanged: 'backend:state-changed',
 } as const;

@@ -77,3 +77,29 @@ def test_long_transcript_hierarchical_summary_keeps_the_key_decisions():
     owners = " ".join(i["owner"] + i["task"] for i in out["results"]["action_items"])
     for who in ["小美", "阿傑", "Kevin", "Amy", "Joyce"]:
         assert who in owners, who
+
+
+def test_mindmap_is_a_valid_tree_about_the_meeting():
+    """Phase 07: the model produces a usable mind map (validated tree, short labels, timestamps)."""
+    with server() as srv:
+        out = summarize(srv, LINES, ["mindmap"], Budget())
+    tree = out["results"]["mindmap"]
+    print(json.dumps(tree, ensure_ascii=False, indent=1)[:4000])
+    assert tree and tree["kind"] == "central"
+    mains = tree["children"]
+    assert 3 <= len(mains) <= 6
+    texts = []
+
+    def walk(n: dict) -> None:
+        texts.append(n["text"])
+        if n["kind"] != "central":
+            assert n["time"] is None or 0 <= n["time"]["start"] <= MEETING["duration"]
+        for c in n["children"]:
+            walk(c)
+
+    walk(tree)
+    joined = " ".join(texts)
+    assert "LINE" in joined and "咖啡" in joined
+    assert sum(1 for m in mains for _ in m["children"]) >= len(mains)  # branches have sub-topics
+    for simp in ("会员", "开幕"):
+        assert simp not in joined

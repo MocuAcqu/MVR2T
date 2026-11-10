@@ -135,3 +135,20 @@ def test_missing_model_gives_download_instructions(data_dir, two_segment_wav):  
         transcribe(c, sid, mid)
         r = generate(c, sid, mid, ["overview"])
         assert r.status_code == 412 and "download_models --llm" in r.json()["detail"]
+
+
+def test_regenerating_the_mindmap_keeps_the_other_summary_results(data_dir, two_segment_wav):  # noqa: F811
+    events: list[str] = []
+    with client(data_dir, events) as c:
+        sid, mid, _ = prepare(c, two_segment_wav)
+        transcribe(c, sid, mid)
+        wait_task(c, sid, generate(c, sid, mid, ["overview", "mindmap"]).json()["task_id"], timeout=30)
+        s = c.get("/api/summary", params={"session_id": sid, "media_id": mid}).json()
+        assert s["types"] == ["overview", "mindmap"] and s["results"]["mindmap"]["kind"] == "central"
+        r = c.post("/api/mindmap/generate", json={"session_id": sid, "media_id": mid})
+        assert r.status_code == 200, r.text
+        assert wait_task(c, sid, r.json()["task_id"], timeout=30)["status"] == "completed"
+        s2 = c.get("/api/summary", params={"session_id": sid, "media_id": mid}).json()
+        assert s2["types"] == ["overview", "mindmap"]
+        assert s2["results"]["overview"] == s["results"]["overview"]  # kept
+        assert events == ["load", "unload", "load", "unload"]

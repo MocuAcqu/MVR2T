@@ -155,7 +155,7 @@ export interface TranscribeResult {
 // ---------------------------------------------------------------------------
 
 /** 可勾選的摘要內容（規格 §4-E 的七種）。順序即畫面上的顯示順序。 */
-export type SummaryType = 'overview' | 'key_points' | 'notes' | 'topics' | 'keywords' | 'action_items' | 'qa';
+export type SummaryType = 'overview' | 'key_points' | 'notes' | 'topics' | 'keywords' | 'action_items' | 'qa' | 'mindmap';
 
 /** 項目對應的原始時間範圍（由模型引用的句子編號換算，不是模型自己寫的時間）。 */
 export interface TimeSpan {
@@ -190,6 +190,17 @@ export interface SummaryQa extends Referenced {
   conclusion: string;
 }
 
+/** 心智圖節點（Phase 07）。kind：中心主題 → 主要分支 → 子題 → 細節／結論。 */
+export type MindMapKind = 'central' | 'main' | 'sub' | 'detail' | 'conclusion';
+
+export interface MindMapNode extends Referenced {
+  /** 依位置產生（n、n-1、n-1-2…），在同一份心智圖中唯一 */
+  id: string;
+  text: string;
+  kind: MindMapKind;
+  children: MindMapNode[];
+}
+
 export interface SummaryResults {
   overview: string | null;
   key_points: SummaryPoint[] | null;
@@ -198,6 +209,7 @@ export interface SummaryResults {
   keywords: string[] | null;
   action_items: SummaryAction[] | null;
   qa: SummaryQa[] | null;
+  mindmap: MindMapNode | null;
 }
 
 export interface Summary {
