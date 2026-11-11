@@ -3,9 +3,11 @@
 Uses a local HTTP server that behaves like Hugging Face (`/<repo>/resolve/<revision>/<file>`, Range requests),
 so nothing is downloaded from the internet.
 
-Timeouts are short here (2 s) on purpose. On the user's Windows PC (Avast installed) a loopback HTTP response
-sometimes stalls even though the server has written everything (2026-11-11). The downloader must recover from that:
-read timeout -> reconnect -> resume with Range. The stall/truncate tests below exercise exactly that path.
+Timeouts are short here (5 s) on purpose. On the user's Windows PC (Avast installed) a loopback HTTP response
+sometimes stalls even though the server has written everything (2026-11-11), often at the same offset several
+times in a row (the tail of the stream held back while it is scanned). The downloader must recover from that:
+read timeout -> reconnect -> resume with Range. So tests never assert an exact number of requests for a file
+(only "resumed at least once" / "an unchanged file was never requested"), and allow many retries.
 """
 from __future__ import annotations
 
@@ -52,6 +54,8 @@ class Server:
         #: paths whose next response sends half the body, then stalls (longer than the client timeout) or closes
         self.stall_once: set[str] = set()
         self.truncate_once: set[str] = set()
+        #: path -> how many responses stall once they reach the last quarter of the file (what Avast seemed to do)
+        self.hold_tail: dict[str, int] = {}
         outer = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -86,10 +90,16 @@ class Server:
                 truncate = self.path in outer.truncate_once
                 outer.stall_once.discard(self.path)
                 outer.truncate_once.discard(self.path)
+                hold = outer.hold_tail.get(self.path, 0) > 0
+                if hold:
+                    outer.hold_tail[self.path] -= 1
                 for i in range(0, len(body), step):
+                    if hold and start + i >= len(data) * 3 // 4:
+                        time.sleep(8)
+                        return
                     if (stall or truncate) and i >= len(body) // 2:
                         if stall:
-                            time.sleep(4)
+                            time.sleep(8)  # longer than the client timeout
                         return
                     try:
                         self.wfile.write(body[i : i + step])
@@ -125,8 +135,9 @@ def make_spec(revision: str = "rev1", big: bytes = BIG) -> ModelSpec:
 
 @pytest.fixture(autouse=True)
 def short_timeouts(monkeypatch):
-    monkeypatch.setattr(fetch_module, "TIMEOUT", 2.0)
+    monkeypatch.setattr(fetch_module, "TIMEOUT", 5.0)
     monkeypatch.setattr(fetch_module, "BACKOFF", 0.05)
+    monkeypatch.setattr(fetch_module, "RETRIES", 20)
 
 
 @pytest.fixture()
@@ -150,7 +161,7 @@ def env(tmp_path, monkeypatch, server):
     m.shutdown()
 
 
-def wait_idle(m: mgr.ModelManager, timeout: float = 90) -> dict:
+def wait_idle(m: mgr.ModelManager, timeout: float = 240) -> dict:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         snap = m.snapshot()
@@ -192,7 +203,18 @@ def test_fetch_recovers_from_a_stalled_or_truncated_response_by_resuming(tmp_pat
         got: list[int] = []
         fetch(server.url + "/f", dest, len(BIG), got.append)
         assert dest.read_bytes() == BIG and sum(got) == len(BIG)
-        assert len(server.hits) == 2 and server.hits[1][1] and server.hits[1][1].startswith("bytes=")  # resumed
+        assert len(server.hits) >= 2 and all(rng and rng.startswith("bytes=") for _, rng in server.hits[1:])  # resumed, never restarted
+
+
+def test_fetch_survives_the_tail_being_held_back_several_times_in_a_row(tmp_path, server):
+    """Windows + Avast: the last part of a response stalled at the same offset up to 4 times in a row."""
+    server.files["/f"] = BIG
+    server.hold_tail["/f"] = 3
+    dest = tmp_path / "f"
+    fetch(server.url + "/f", dest, len(BIG))
+    assert dest.read_bytes() == BIG
+    tail_requests = [rng for _, rng in server.hits if rng]
+    assert len(tail_requests) >= 3 and len(set(tail_requests)) <= 2  # retried at (about) the same offset, no restart
 
 
 def test_fetch_gives_up_only_after_repeated_failures_without_progress(tmp_path, server):
@@ -215,15 +237,26 @@ def test_fetch_gives_up_only_after_repeated_failures_without_progress(tmp_path, 
     assert tries["n"] == 3  # 1 try + 2 retries
 
 
-def test_fetch_retries_server_errors_and_explains_missing_files(tmp_path, server):
+def test_fetch_retries_server_errors_and_explains_missing_files(tmp_path, server, monkeypatch):
     server.files["/f"] = SMALL
     server.fail_once.add("/f")
     fetch(server.url + "/f", tmp_path / "f", len(SMALL), sleep=lambda s: None)
     assert (tmp_path / "f").read_bytes() == SMALL
     with pytest.raises(FetchError, match="404"):
         fetch(server.url + "/missing", tmp_path / "g", 10, sleep=lambda s: None)
-    with pytest.raises(FetchError, match="無法連線"):
-        fetch("http://127.0.0.1:1/x", tmp_path / "h", 10, retries=1, sleep=lambda s: None)
+    # Not a real closed port: on Windows a connection to an unused loopback port is retried for ~2 s before
+    # it is refused, so the result depends on the timeout. Simulate the two errors instead.
+    import socket
+    import urllib.error
+
+    for err, words in ((urllib.error.URLError(ConnectionRefusedError()), "無法連線"), (socket.timeout("timed out"), "逾時")):
+
+        def fail(*a, _err=err, **k):  # noqa: ANN002, ANN003
+            raise _err
+
+        monkeypatch.setattr(fetch_module.urllib.request, "urlopen", fail)
+        with pytest.raises(FetchError, match=words):
+            fetch("https://example.invalid/x", tmp_path / "h", 10, retries=1, sleep=lambda s: None)
 
 
 def test_fetch_can_be_cancelled(tmp_path, server):
@@ -295,7 +328,7 @@ def test_verify_finds_damage_and_repair_downloads_only_the_bad_file(env, server)
     m.request("asr", "download")  # 「修復」
     p = wait_idle(m)
     assert p["status"] == "installed", p
-    assert server.gets("model.bin") == 1 and server.gets("config.json") == 0
+    assert server.gets("model.bin") >= 1 and server.gets("config.json") == 0  # only the damaged file
     assert store.verify_installed(spec, m.models_root) == []
 
 
@@ -315,7 +348,7 @@ def test_new_version_is_outdated_and_update_reuses_unchanged_files(env, server, 
     m.request("asr", "download")
     p = wait_idle(m)
     assert p["status"] == "installed" and store.installed_revision(v2, m.models_root) == "rev2"
-    assert server.gets("model.bin") == 1 and server.gets("config.json") == 0  # config.json unchanged -> reused
+    assert server.gets("model.bin") >= 1 and server.gets("config.json") == 0  # config.json unchanged -> reused
 
 
 def test_delete_waits_for_ai_work_and_removes_everything(env):
@@ -413,4 +446,4 @@ def test_a_stalled_connection_during_a_model_download_recovers_by_itself(env, se
     m.request("asr", "download")
     p = wait_idle(m)
     assert p["status"] == "installed" and p["last"]["ok"]
-    assert sum(1 for path, rng in server.hits if path.endswith("model.bin") and rng) == 1  # resumed once
+    assert sum(1 for path, rng in server.hits if path.endswith("model.bin") and rng) >= 1  # resumed

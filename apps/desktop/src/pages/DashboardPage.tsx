@@ -7,15 +7,15 @@ import { ImportCard } from '@/features/import/ImportCard';
 export function DashboardPage() {
   return (
     <PageContainer>
+      {/* 第一次使用必須先下載模型：提示放在最上方，不會漏看（2026-11-11 使用者建議）；一切正常時不顯示 */}
+      <SystemNotice className="mb-8" />
+
       <section className="grid items-start gap-8 lg:grid-cols-2 lg:gap-12">
         <div className="min-w-0 lg:pt-4">
           <HeroTitle />
         </div>
         <ImportCard />
       </section>
-
-      {/* 模型與這台電腦的詳細狀態已移到「模型管理」；首頁只在有問題時提醒 */}
-      <SystemNotice className="mt-10" />
 
       <HowItWorks className="mt-14" />
     </PageContainer>

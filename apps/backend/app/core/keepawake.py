@@ -18,7 +18,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Protocol
 
-REASON = "MVR2T：正在處理影音（抽取音訊／語音辨識）"
+REASON = "MVR2T：正在處理（AI 工作或模型下載）"
 
 
 class _Backend(Protocol):

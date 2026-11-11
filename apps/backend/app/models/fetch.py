@@ -57,7 +57,7 @@ def fetch(
     on_bytes: Callable[[int], None] = lambda n: None,
     is_cancelled: Callable[[], bool] = lambda: False,
     timeout: float | None = None,
-    retries: int = RETRIES,
+    retries: int | None = None,
     sleep: Callable[[float], None] = time.sleep,
 ) -> None:
     """把 url 下載到 dest（續傳）。完成時 dest 大小 = size（雜湊由呼叫端驗證）。on_bytes 收到「這次新增的位元組數」。
@@ -66,6 +66,7 @@ def fetch(
     （長時間下載中偶爾斷線不會累積到放棄）。連續 retries 次沒有進展才放棄。"""
     dest.parent.mkdir(parents=True, exist_ok=True)
     timeout = TIMEOUT if timeout is None else timeout
+    retries = RETRIES if retries is None else retries
     attempt = 0
     while True:
         have = dest.stat().st_size if dest.exists() else 0

@@ -18,7 +18,7 @@
 | 06 | LLM Integration（llama.cpp + Qwen3.5-4B 摘要） | ✅ 已在 Windows 驗收 |
 | 07 | Mind Map（React Flow 心智圖：編輯、拖曳、匯出 PNG／SVG） | ✅ 已在 Windows 驗收 |
 | 08 | Session and Export（匯出面板：TXT／CSV／Word／PDF／字幕／JSON／Markdown／ZIP） | ✅ 已在 Windows 驗收 |
-| 09 | Model Manager（程式內下載、進度、取消與續傳、驗證、修復、刪除、版本更新） | 🧪 待 Windows 驗收 |
+| 09 | Model Manager（程式內下載、進度、取消與續傳、驗證、修復、刪除、版本更新） | ✅ 已在 Windows 驗收（fix1 待確認） |
 | 10 – 12 | 硬體偵測、打包 | ⏳ |
 
 ## 環境需求
@@ -280,6 +280,11 @@ Phase 08 fix2（防毒軟體阻擋）：
 - [ ] 沒有網路時按下載：顯示「無法連線到下載伺服器…」，而不是英文錯誤
 - [ ] 「不再使用的檔案」：如果之前（Phase 06 比較時）下載過 Qwen3-4B 等模型，會列在這裡並可刪除
 - [ ] （選做）用記事本修改模型資料夾中的 `config.json` 一個字元 →「驗證完整性」顯示損壞 →「修復」只重新下載那個小檔
+
+Phase 09 fix1：
+- [ ] 首頁的「還需要下載 AI 模型」提示在最上方（標題之上）
+- [ ] 下載或語音辨識時，`powercfg /requests` 的原因文字是「MVR2T：正在處理（AI 工作或模型下載）」
+- [ ] `tests/test_model_manager.py` 在這台電腦（Avast）上連續執行都通過
 
 ## 開發注意事項
 
