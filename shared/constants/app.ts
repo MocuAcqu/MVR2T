@@ -36,6 +36,10 @@ export const IPC_CHANNELS = {
   exportFiles: 'file:export',
   /** Renderer → Main：在檔案總管中開啟「最近一次匯出」的資料夾（renderer 不能指定路徑）。 */
   openExportFolder: 'file:open-export-folder',
+  /** 匯出資料夾偏好（上次的資料夾、設定中的固定資料夾） */
+  getExportPrefs: 'prefs:get-export',
+  chooseFixedExportFolder: 'prefs:choose-export-folder',
+  clearFixedExportFolder: 'prefs:clear-export-folder',
   /** Main → Renderer 推送後端狀態變化。 */
   backendStateChanged: 'backend:state-changed',
 } as const;

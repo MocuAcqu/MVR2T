@@ -1,6 +1,6 @@
 # 開發紀錄（給接手的 Claude / Claude Code）
 
-最後更新：2026-11-11。Phase 08 匯出已在沙盒完成，待 Windows 驗收（基準：本機 880149a）。
+最後更新：2026-11-11。Phase 08 已在 Windows 驗收（本機 d948bf2）；fix1（Word 標題字型＋三項優化）待套用。
 
 ## 目前進度
 
@@ -16,7 +16,7 @@
 | 優化（通知／防睡眠／首頁／引導） | ✅ Windows 驗收通過（2026-11-09） |
 | 06 LLM Integration | ✅ Windows 驗收通過（2026-11-10，llama.cpp b11312＋Qwen3.5-4B） |
 | 07 Mind Map | ✅ Windows 驗收通過（2026-11-11，含 fix1，本機 880149a） |
-| 08 Session and Export | 🧪 沙盒完成（2026-11-11），待 Windows 驗收 |
+| 08 Session and Export | ✅ Windows 驗收通過（2026-11-11，本機 d948bf2）；fix1 待確認 |
 
 ## 沙盒驗證結果（2026-11-06）
 
@@ -166,6 +166,33 @@
   勾選只記在記憶體（這次開啟的程式中）。
 - Session 部分盤點：Session 管理、暫存目錄、Session 清除（換檔／重新整理會建立新 Session 並刪除舊的）、
   後端啟動時清除殘留暫存（Phase 04 已完成）。本 Phase 只補了列印暫存的清除；匯出檔案在使用者資料夾，不受 Session 清除影響。
+
+### Windows 驗收（2026-11-11，本機 d948bf2）
+- 前端 165、後端 140 passed／8 skipped。Claude Code 的環境連 pypi 出現 SSL CERTIFICATE_VERIFY_FAILED，
+  python-docx／lxml 由使用者在自己的終端機安裝。
+- 23:57 錄音：20 個檔案全部成功；逐字稿／摘要／心智圖 17 個檔案約 24 秒（PDF 每份 4～20 秒）；
+  切段音檔 ZIP 43.9 MB（48 個 WAV）。PDF 內嵌 MicrosoftJhengHei Regular／Bold 子集，A4。
+  列印時沒有跳出視窗；匯出中關閉主視窗正常結束、沒有殘留 .partial。
+- 使用者確認：Excel 開 CSV 正常、PDF 版面滿意、VLC 字幕時間對上、心智圖是編輯後的樣子。
+- **問題**：Word 的標題顯示為 MS Gothic。python-docx 範本的標題樣式（以及表格樣式）帶有
+  `w:asciiTheme／w:eastAsiaTheme="majorEastAsia"` 等主題字型屬性，Word 中主題屬性優先於明確字型名稱；
+  範本主題的東亞字型是空的，Word 依腳本挑到日文的 ＭＳ ゴシック。內文（Normal）沒有主題屬性所以正常。
+
+### fix1（2026-11-11）
+- DOCX：`_force_fonts()` 對 styles.xml 中**所有** rFonts（含 docDefaults、表格樣式的條件格式）移除
+  asciiTheme／hAnsiTheme／eastAsiaTheme／cstheme，設定為微軟正黑體，並把 `w:lang w:eastAsia` 設為 zh-TW。
+  測試檢查 styles.xml 中不再有主題字型屬性。（注意：測試字串很大時 pytest 的斷言差異比對會極慢，
+  用 regex 取出殘留屬性再斷言。）
+- 使用者的三項優化（都已實作）：
+  1. 匯出面板「摘要」下可勾選摘要類型（預設全選）→ `summary_types`（後端只輸出這些；不含心智圖時 Word／PDF 不附圖、也不產生圖片）。
+  2. 匯出資料夾偏好：Main 的 `userData/preferences.json`（`electron/prefs.ts`，只存兩個絕對路徑，損壞時忽略）。
+     記住上次的資料夾（對話框從那裡開始）；「設定 → 匯出資料夾」可指定固定資料夾，指定後不再詢問
+     （面板可勾「這次改選其他資料夾」；資料夾不存在時改為詢問）。不保存任何媒體或內容，符合 Session-based。
+  3. 切段、逐字稿、摘要、心智圖卡片下方的「匯出」：打開同一個面板（`useExportUi.openPanel(focus)`），
+     只預先勾選該卡片的內容（之前勾過的格式優先，否則 CSV／ZIP、TXT＋SRT、Word、PNG）。
+- 驗證：pytest export 11 個（新增主題字型與摘要類型）；vitest 170（prefs 3、exportPlan 6）；
+  Electron E2E：逐字稿卡片只預選逐字稿、摘要只匯出重點＋行動事項（Word 無心智圖圖片）、
+  指定固定資料夾後匯出時對話框呼叫 0 次。
 
 ### 驗證（沙盒）
 - pytest：`tests/test_export.py` 9 個（每個組合都能產生、CSV BOM／CRLF／逗號引號、SRT／VTT 時間、DOCX 字型與圖片、

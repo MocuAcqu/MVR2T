@@ -17,7 +17,7 @@
 | — | 優化（完成通知、防睡眠、首頁精簡、引導） | ✅ 已在 Windows 驗收 |
 | 06 | LLM Integration（llama.cpp + Qwen3.5-4B 摘要） | ✅ 已在 Windows 驗收 |
 | 07 | Mind Map（React Flow 心智圖：編輯、拖曳、匯出 PNG／SVG） | ✅ 已在 Windows 驗收 |
-| 08 | Session and Export（匯出面板：TXT／CSV／Word／PDF／字幕／JSON／Markdown／ZIP） | 🧪 待 Windows 驗收 |
+| 08 | Session and Export（匯出面板：TXT／CSV／Word／PDF／字幕／JSON／Markdown／ZIP） | ✅ 已在 Windows 驗收（fix1 待確認） |
 | 09 – 12 | Model Manager、硬體偵測、打包 | ⏳ |
 
 ## 環境需求
@@ -246,6 +246,14 @@ Phase 03 起**只需要一個終端機**。後端由 Electron 以 `apps/backend/
 - [ ] Markdown／TXT 摘要：心智圖以條列方式附在最後，結論標示【結論】
 - [ ] 匯出後按「換一個檔案」或重新整理，已匯出的檔案仍在資料夾中
 - [ ] 長錄音（20 分鐘以上）匯出全部格式：記錄所需時間；程式不會卡住
+
+Phase 08 fix1：
+- [ ] Word 的**標題**也是微軟正黑體（不再是 MS Gothic）
+- [ ] 匯出面板的「摘要」下方可以勾選要匯出的摘要類型（預設全選）；全部取消時無法匯出並提示
+- [ ] 切段、逐字稿、摘要、心智圖卡片下方有「匯出」：打開同一個面板，只預先勾選那張卡片的內容
+- [ ] 第二次匯出時，資料夾對話框從上次選的資料夾開始
+- [ ] 「設定 → 匯出資料夾」指定資料夾後，匯出不再詢問、直接存到那裡；面板中勾「這次改選其他資料夾」仍會詢問；
+      資料夾不存在（例如拔掉隨身碟）時改為詢問；「改為每次詢問」可取消
 
 ## 開發注意事項
 

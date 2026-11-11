@@ -215,3 +215,5 @@ class ExportRequest(BaseModel):
     # 摘要：前端編輯後的心智圖（樹）與它的 PNG（base64）；沒有就用 AI 產生的原始心智圖
     mindmap: MindMapNode | None = None
     mindmap_png: str | None = Field(default=None, max_length=28_000_000)
+    # 只匯出這些摘要類型（含 mindmap）；不給 = 全部
+    summary_types: list[SummaryTypeName] | None = None

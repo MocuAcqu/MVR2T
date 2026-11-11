@@ -73,6 +73,20 @@ export interface ExportFilesRequest {
   mindmapPng?: string;
   /** 心智圖 SVG（UTF-8 文字） */
   mindmapSvg?: string;
+  /** 只匯出這些摘要類型（含 'mindmap'）；不給 = 全部 */
+  summaryTypes?: string[];
+  /** 已在設定指定固定資料夾時，這次仍跳出對話框選資料夾 */
+  askFolder?: boolean;
+}
+
+/** 匯出資料夾的偏好（只存路徑，不存任何媒體或逐字稿內容）。存在 Main 的 userData/preferences.json。 */
+export interface ExportPrefs {
+  /** 上次選的資料夾（下次對話框從這裡開始） */
+  lastFolder: string | null;
+  /** 設定中指定的固定資料夾：指定後匯出不再詢問 */
+  fixedFolder: string | null;
+  /** 固定資料夾目前是否存在（例如隨身碟拔掉時為 false，匯出會改為詢問） */
+  fixedFolderAvailable: boolean;
 }
 
 export interface ExportItemResult extends ExportItem {
@@ -115,4 +129,10 @@ export interface Mvr2tBridge {
   exportFiles(request: ExportFilesRequest): Promise<ExportFilesResult>;
   /** 開啟最近一次匯出的資料夾 */
   openExportFolder(): Promise<void>;
+  /** 匯出資料夾偏好 */
+  getExportPrefs(): Promise<ExportPrefs>;
+  /** 跳出對話框選擇固定匯出資料夾；取消則不變 */
+  chooseFixedExportFolder(): Promise<ExportPrefs>;
+  /** 取消固定資料夾（匯出時改為每次詢問） */
+  clearFixedExportFolder(): Promise<ExportPrefs>;
 }

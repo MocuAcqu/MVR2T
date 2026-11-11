@@ -1,9 +1,9 @@
-import { useState } from 'react';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Mono } from '@/components/mono/Mono';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { ExportDialog } from '@/features/export/ExportDialog';
+import { useExportUi } from '@/features/export/exportStore';
 import { removeMedia } from '@/features/media/mediaController';
 import { ExtractionCard } from '@/features/workspace/ExtractionCard';
 import { MindMapCard } from '@/features/mindmap/MindMapCard';
@@ -17,7 +17,7 @@ import { useUiStore } from '@/stores/uiStore';
 export function WorkspacePage() {
   const imp = useSessionStore((s) => s.import);
   const setPage = useUiStore((s) => s.setPage);
-  const [exporting, setExporting] = useState(false);
+  const openExport = useExportUi((s) => s.openPanel);
 
   if (imp.status !== 'ready') {
     const inProgress = imp.status === 'uploading' || imp.status === 'probing';
@@ -50,7 +50,7 @@ export function WorkspacePage() {
           <p className="mt-1 truncate text-body-gray" title={imp.info.filename}>{imp.info.filename}</p>
         </div>
         <div className="flex flex-wrap gap-3">
-          <Button onClick={() => setExporting(true)}>匯出</Button>
+          <Button onClick={() => openExport()} title="一次匯出切段、逐字稿、摘要與心智圖">匯出</Button>
           <Button
             variant="secondary"
             onClick={() => {
@@ -76,7 +76,7 @@ export function WorkspacePage() {
       <div className="mt-6">
         <MindMapCard />
       </div>
-      <ExportDialog open={exporting} onClose={() => setExporting(false)} />
+      <ExportDialog />
     </PageContainer>
   );
 }

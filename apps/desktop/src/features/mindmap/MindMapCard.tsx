@@ -16,6 +16,7 @@ import type { SaveFileKind } from '@shared/types/ipc';
 import { Mono } from '@/components/mono/Mono';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { useExportUi } from '@/features/export/exportStore';
 import { startMindmap } from '@/features/media/mediaController';
 import { cn } from '@/lib/utils';
 import { useSessionStore } from '@/stores/sessionStore';
@@ -478,6 +479,11 @@ export function MindMapCard() {
           </Button>
         )}
         {busy && mindmap ? <span className="text-sm text-body-gray">處理中，進度請看上方「摘要」。</span> : null}
+        {mindmap && !confirming ? (
+          <Button variant="secondary" className="ml-auto" onClick={() => useExportUi.getState().openPanel(['mindmap'])}>
+            匯出
+          </Button>
+        ) : null}
       </CardFooter>
     </Card>
   );

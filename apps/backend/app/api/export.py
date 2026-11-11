@@ -26,6 +26,7 @@ def export(request: Request, body: ExportRequest) -> Response:
             summary=rec.summary,
             mindmap=body.mindmap.model_dump() if body.mindmap else None,
             mindmap_png=decode_png(body.mindmap_png),
+            summary_types=list(body.summary_types) if body.summary_types is not None else None,
         )
         data, media_type = build_export(src, body.content, body.format)
     except ExportError as e:

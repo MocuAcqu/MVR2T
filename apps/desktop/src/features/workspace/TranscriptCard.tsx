@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { useExportUi } from '@/features/export/exportStore';
 import { KeepAwakeNote } from '@/features/media/KeepAwakeNote';
 import { cancelTranscription, startTranscription } from '@/features/media/mediaController';
 import { GuideCoach } from '@/features/guide/GuideCoach';
@@ -186,6 +187,11 @@ export function TranscriptCard() {
                 {t.status === 'completed' ? '重新辨識' : t.status === 'idle' ? '開始語音辨識' : '再試一次'}
               </Button>
             </GuideTarget>
+            {transcript && transcript.segments.length > 0 ? (
+              <Button variant="secondary" className="ml-auto" onClick={() => useExportUi.getState().openPanel(['transcript'])}>
+                匯出
+              </Button>
+            ) : null}
           </>
         )}
       </CardFooter>

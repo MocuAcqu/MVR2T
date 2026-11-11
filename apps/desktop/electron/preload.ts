@@ -10,6 +10,7 @@ import type {
   BackendState,
   ExportFilesRequest,
   ExportFilesResult,
+  ExportPrefs,
   Mvr2tBridge,
   SaveFileRequest,
   SaveFileResult,
@@ -32,6 +33,9 @@ const bridge: Mvr2tBridge = {
   saveFile: (request: SaveFileRequest): Promise<SaveFileResult> => ipcRenderer.invoke(IPC_CHANNELS.saveFile, request),
   exportFiles: (request: ExportFilesRequest): Promise<ExportFilesResult> => ipcRenderer.invoke(IPC_CHANNELS.exportFiles, request),
   openExportFolder: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openExportFolder),
+  getExportPrefs: (): Promise<ExportPrefs> => ipcRenderer.invoke(IPC_CHANNELS.getExportPrefs),
+  chooseFixedExportFolder: (): Promise<ExportPrefs> => ipcRenderer.invoke(IPC_CHANNELS.chooseFixedExportFolder),
+  clearFixedExportFolder: (): Promise<ExportPrefs> => ipcRenderer.invoke(IPC_CHANNELS.clearFixedExportFolder),
 };
 
 contextBridge.exposeInMainWorld('mvr2t', bridge);

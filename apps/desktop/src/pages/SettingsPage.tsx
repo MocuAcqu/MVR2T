@@ -3,10 +3,11 @@ import { PageContainer } from '@/components/layout/PageContainer';
 import { Mono } from '@/components/mono/Mono';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ExportFolderSetting } from '@/features/export/ExportFolderSetting';
 import { useGuideStore } from '@/features/guide/guideStore';
 import { cn } from '@/lib/utils';
 
-/** 設定：目前只有「操作引導」開關；其他設定在後續版本提供。 */
+/** 設定：操作引導、匯出資料夾；其他設定在後續版本提供。 */
 export function SettingsPage() {
   const id = useId();
   const enabled = useGuideStore((s) => s.enabled);
@@ -43,6 +44,7 @@ export function SettingsPage() {
             </button>
           </CardHeader>
         </Card>
+        <ExportFolderSetting />
         <Card>
           <CardHeader className="pb-6">
             <Badge className="mb-2 self-start">開發中</Badge>

@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Progress } from '@/components/ui/progress';
 import { GuideCoach } from '@/features/guide/GuideCoach';
 import { GuideTarget } from '@/features/guide/GuideTarget';
+import { useExportUi } from '@/features/export/exportStore';
 import { KeepAwakeNote } from '@/features/media/KeepAwakeNote';
 import { cancelSummary, startSummary } from '@/features/media/mediaController';
 import { revealTranscriptLine } from '@/features/workspace/TranscriptCard';
@@ -273,7 +274,7 @@ export function SummaryCard() {
         <GuideCoach step="summarize" />
         <GuideCoach step="done" />
       </CardContent>
-      <CardFooter>
+      <CardFooter className="flex-wrap">
         {busy ? (
           <Button variant="secondary" onClick={() => void cancelSummary()} disabled={s.status === 'starting'}>
             取消
@@ -285,6 +286,11 @@ export function SummaryCard() {
             </Button>
           </GuideTarget>
         )}
+        {summary && !busy ? (
+          <Button variant="secondary" className="ml-auto" onClick={() => useExportUi.getState().openPanel(['summary'])}>
+            匯出
+          </Button>
+        ) : null}
       </CardFooter>
     </Card>
   );

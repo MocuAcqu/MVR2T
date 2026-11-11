@@ -2,6 +2,7 @@ import { Mono } from '@/components/mono/Mono';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { useExportUi } from '@/features/export/exportStore';
 import { KeepAwakeNote } from '@/features/media/KeepAwakeNote';
 import { cancelExtraction, removeMedia, startExtraction } from '@/features/media/mediaController';
 import { GuideCoach } from '@/features/guide/GuideCoach';
@@ -85,6 +86,11 @@ export function ExtractionCard() {
             {stopped ? (
               <Button variant="secondary" onClick={changeFile}>
                 換一個檔案
+              </Button>
+            ) : null}
+            {x.status === 'completed' ? (
+              <Button variant="secondary" className="ml-auto" onClick={() => useExportUi.getState().openPanel(['segments', 'segments_audio'])}>
+                匯出
               </Button>
             ) : null}
           </>

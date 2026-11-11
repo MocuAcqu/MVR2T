@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EXPORT_FORMATS } from '@shared/constants/app';
-import { EXPORT_ROWS, needsMindmapImage, selectedItems, toggleFormat, unavailableReason, type Availability } from '../exportPlan';
+import { EXPORT_ROWS, needsMindmapImage, presetSelection, selectedItems, toggleFormat, unavailableReason, type Availability } from '../exportPlan';
 
 const all: Availability = { segments: true, transcript: true, summary: true, mindmap: true };
 
@@ -34,5 +34,14 @@ describe('export plan', () => {
     expect(needsMindmapImage([{ content: 'summary', format: 'md' }])).toEqual({ png: false, svg: false });
     expect(needsMindmapImage([{ content: 'summary', format: 'pdf' }])).toEqual({ png: true, svg: false });
     expect(needsMindmapImage([{ content: 'mindmap', format: 'svg' }])).toEqual({ png: false, svg: true });
+  });
+
+  it('does not capture the picture for a summary without the mind map', () => {
+    expect(needsMindmapImage([{ content: 'summary', format: 'docx' }], false)).toEqual({ png: false, svg: false });
+  });
+
+  it('opening from a card pre-selects only that card (remembered formats first)', () => {
+    expect(presetSelection(['segments', 'segments_audio'], {})).toEqual({ segments: ['csv'], segments_audio: ['zip'] });
+    expect(presetSelection(['transcript'], { transcript: ['vtt'], summary: ['md'] })).toEqual({ transcript: ['vtt'] });
   });
 });

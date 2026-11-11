@@ -78,6 +78,7 @@ class ExportSource:
     summary: dict[str, Any] | None
     mindmap: dict[str, Any] | None = None  # 前端編輯後的心智圖
     mindmap_png: bytes | None = None
+    summary_types: list[str] | None = None  # 只匯出這些摘要類型（含 "mindmap"）；None = 全部
 
 
 # ---------------------------------------------------------------------------
@@ -132,25 +133,54 @@ def _text(lines: list[str]) -> bytes:
     return ("\r\n".join(lines).rstrip() + "\r\n").encode("utf-8")
 
 
+THEME_FONT_ATTRS = ("asciiTheme", "hAnsiTheme", "eastAsiaTheme", "cstheme")
+
+
+def _force_fonts(rpr: Any) -> None:
+    """把 rPr 的字型固定為微軟正黑體，並移除主題字型屬性。
+    Word 中主題字型（w:eastAsiaTheme 等）的優先權高於明確的字型名稱；python-docx 範本的標題樣式帶有
+    majorEastAsia，而範本主題的東亞字型是空的，Word 會改用日文的 MS Gothic（2026-11-11 Windows 驗收發現）。"""
+    from docx.oxml.ns import qn
+
+    fonts = rpr.find(qn("w:rFonts"))
+    if fonts is None:
+        fonts = rpr.makeelement(qn("w:rFonts"), {})
+        rpr.insert(0, fonts)
+    for attr in THEME_FONT_ATTRS:
+        fonts.attrib.pop(qn(f"w:{attr}"), None)
+    for attr in ("ascii", "hAnsi", "eastAsia", "cs"):
+        fonts.set(qn(f"w:{attr}"), CJK_FONT)
+    lang = rpr.find(qn("w:lang"))
+    if lang is not None:
+        lang.set(qn("w:eastAsia"), "zh-TW")
+
+
 def _new_doc(title: str, meta: str) -> Any:
     from docx import Document
     from docx.oxml.ns import qn
     from docx.shared import Pt, RGBColor
 
     doc = Document()
+    styles_el = doc.styles.element
+    # 文件預設值（docDefaults）＋所有樣式：都改成微軟正黑體、東亞語言 zh-TW
+    defaults = styles_el.find(qn("w:docDefaults"))
+    if defaults is not None:
+        rpr_default = defaults.find(qn("w:rPrDefault"))
+        if rpr_default is not None:
+            rpr = rpr_default.find(qn("w:rPr"))
+            if rpr is None:
+                rpr = rpr_default.makeelement(qn("w:rPr"), {})
+                rpr_default.append(rpr)
+            _force_fonts(rpr)
+    # 所有樣式（含表格樣式的條件格式）裡的 rFonts
+    for rpr in [f.getparent() for f in styles_el.iter(qn("w:rFonts"))]:
+        _force_fonts(rpr)
     for name in ("Normal", "Title", "Heading 1", "Heading 2", "Heading 3", "List Bullet", "List Number"):
         try:
             style = doc.styles[name]
         except KeyError:
             continue
-        style.font.name = CJK_FONT
-        rpr = style.element.get_or_add_rPr()
-        fonts = rpr.find(qn("w:rFonts"))
-        if fonts is None:
-            fonts = rpr.makeelement(qn("w:rFonts"), {})
-            rpr.append(fonts)
-        for attr in ("w:ascii", "w:hAnsi", "w:eastAsia", "w:cs"):
-            fonts.set(qn(attr), CJK_FONT)
+        _force_fonts(style.element.get_or_add_rPr())
         if name != "Normal":
             style.font.color.rgb = RGBColor(0, 0, 0)
     doc.styles["Normal"].font.size = Pt(11)
@@ -350,10 +380,16 @@ def _summary(src: ExportSource) -> tuple[dict[str, Any], list[str], dict[str, An
     if not src.summary:
         raise ExportError(404, "還沒有摘要，請先「產生摘要」。")
     results = src.summary.get("results", {})
-    types = [t for t in SUMMARY_ORDER if t in src.summary.get("types", []) and results.get(t) not in (None, [], "")]
+    wanted = set(src.summary_types) if src.summary_types is not None else None
+    types = [
+        t for t in SUMMARY_ORDER
+        if t in src.summary.get("types", []) and results.get(t) not in (None, [], "") and (wanted is None or t in wanted)
+    ]
     mindmap = src.mindmap if src.mindmap is not None else results.get("mindmap")
+    if wanted is not None and "mindmap" not in wanted:
+        mindmap = None
     if not types and not mindmap:
-        raise ExportError(404, "摘要沒有內容可以匯出。")
+        raise ExportError(404 if wanted is None else 422, "摘要沒有內容可以匯出。" if wanted is None else "請至少勾選一種摘要類型。")
     return results, types, mindmap
 
 

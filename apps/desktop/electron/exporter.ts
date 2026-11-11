@@ -11,6 +11,7 @@ import { EXPORT_FORMATS, EXPORT_LABELS } from '@shared/constants/app';
 import type { ExportContent, ExportFormat, ExportItem, ExportItemResult } from '@shared/types/ipc';
 
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+const SUMMARY_TYPES = ['overview', 'key_points', 'notes', 'topics', 'keywords', 'action_items', 'qa', 'mindmap'] as const;
 const MAX_ITEMS = 40;
 const MAX_PNG_BASE64 = 28_000_000; // 約 20 MB
 const MAX_SVG_CHARS = 50 * 1024 * 1024;
@@ -24,6 +25,10 @@ export interface ParsedExport {
   mindmap: unknown;
   mindmapPng: string | null;
   mindmapSvg: string | null;
+  /** 只匯出這些摘要類型；null = 全部 */
+  summaryTypes: string[] | null;
+  /** 已設定固定資料夾時，這次仍要詢問 */
+  askFolder: boolean;
 }
 
 /** 去掉路徑、Windows 不允許的字元與結尾的點／空白。 */
@@ -70,12 +75,28 @@ export function parseExportRequest(input: unknown): ParsedExport | null {
     if (typeof r.mindmapSvg !== 'string' || r.mindmapSvg.length > MAX_SVG_CHARS || !/^\s*(<\?xml[^>]*>\s*)?<svg[\s>]/.test(r.mindmapSvg)) return null;
     mindmapSvg = r.mindmapSvg;
   }
+  let summaryTypes: string[] | null = null;
+  if (r.summaryTypes !== undefined && r.summaryTypes !== null) {
+    if (!Array.isArray(r.summaryTypes) || r.summaryTypes.length > SUMMARY_TYPES.length) return null;
+    if (!r.summaryTypes.every((t) => typeof t === 'string' && (SUMMARY_TYPES as readonly string[]).includes(t))) return null;
+    summaryTypes = [...new Set(r.summaryTypes as string[])];
+  }
   let mindmap: unknown = null;
   if (r.mindmap !== undefined && r.mindmap !== null) {
     if (typeof r.mindmap !== 'object' || JSON.stringify(r.mindmap).length > MAX_MINDMAP_JSON) return null;
     mindmap = r.mindmap;
   }
-  return { sessionId: r.sessionId, mediaId: r.mediaId, baseName: safeBaseName(r.baseName), items, mindmap, mindmapPng, mindmapSvg };
+  return {
+    sessionId: r.sessionId,
+    mediaId: r.mediaId,
+    baseName: safeBaseName(r.baseName),
+    items,
+    mindmap,
+    mindmapPng,
+    mindmapSvg,
+    summaryTypes,
+    askFolder: r.askFolder === true,
+  };
 }
 
 export function fileNameFor(baseName: string, item: ExportItem): string {
@@ -132,6 +153,7 @@ export async function runExport(req: ParsedExport, folder: string, deps: ExportD
     const body: Record<string, unknown> = { session_id: req.sessionId, media_id: req.mediaId, content: item.content, format };
     if (item.content === 'summary') {
       if (req.mindmap) body.mindmap = req.mindmap;
+      if (req.summaryTypes) body.summary_types = req.summaryTypes;
       if (req.mindmapPng && (format === 'docx' || format === 'html')) body.mindmap_png = req.mindmapPng;
     }
     const res = await fetchFn(`${deps.backendUrl}/api/export`, { method: 'POST', headers, body: JSON.stringify(body) });

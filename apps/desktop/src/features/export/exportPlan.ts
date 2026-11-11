@@ -57,13 +57,30 @@ export function toggleFormat(sel: Selection, content: ExportContent, format: Exp
   return { ...sel, [content]: cur.includes(format) ? cur.filter((f) => f !== format) : [...cur, format] };
 }
 
-/** 需要心智圖圖片嗎：心智圖 PNG，或摘要的 Word／PDF（附圖）。 */
-export function needsMindmapImage(items: ExportItem[]): { png: boolean; svg: boolean } {
+/** 需要心智圖圖片嗎：心智圖 PNG，或摘要的 Word／PDF（摘要包含心智圖時附圖）。 */
+export function needsMindmapImage(items: ExportItem[], summaryIncludesMindmap = true): { png: boolean; svg: boolean } {
   const has = (c: ExportContent, f: ExportFormat) => items.some((i) => i.content === c && i.format === f);
-  return { png: has('mindmap', 'png') || has('summary', 'docx') || has('summary', 'pdf'), svg: has('mindmap', 'svg') };
+  const forSummary = summaryIncludesMindmap && (has('summary', 'docx') || has('summary', 'pdf'));
+  return { png: has('mindmap', 'png') || forSummary, svg: has('mindmap', 'svg') };
 }
 
 /** 切段音檔 ZIP 的估計大小（16 kHz、16-bit、單聲道 = 每秒 32 KB；切段重疊約多 3%）。 */
 export const estimateZipBytes = (durationSeconds: number) => Math.round(durationSeconds * 32_000 * 1.03);
 
 export const DEFAULT_SELECTION: Selection = { transcript: ['txt', 'srt'], summary: ['docx'] };
+
+/** 從卡片的「匯出」打開時，每種內容預設勾選的格式（之前勾過就用之前的）。 */
+export const CARD_DEFAULTS: Record<ExportContent, ExportFormat[]> = {
+  segments: ['csv'],
+  segments_audio: ['zip'],
+  transcript: ['txt', 'srt'],
+  summary: ['docx'],
+  mindmap: ['png'],
+};
+
+/** 從卡片打開：只勾選那張卡片的內容。 */
+export function presetSelection(focus: ExportContent[], remembered: Selection): Selection {
+  const sel: Selection = {};
+  for (const c of focus) sel[c] = remembered[c]?.length ? [...remembered[c]!] : [...CARD_DEFAULTS[c]];
+  return sel;
+}

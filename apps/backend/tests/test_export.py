@@ -135,6 +135,18 @@ def test_transcript_docx_and_print_html(src: ExportSource) -> None:
     doc = Document(io.BytesIO(build_export(src, "transcript", "docx")[0]))
     rfonts = doc.styles["Normal"].element.rPr.rFonts
     assert rfonts.get("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}eastAsia") == "Microsoft JhengHei"
+
+
+def test_docx_has_no_theme_fonts_so_word_uses_jhenghei_for_headings(src: ExportSource) -> None:
+    """Windows: theme font attributes (w:eastAsiaTheme ...) win over explicit names; headings came out in MS Gothic."""
+    for content in ("segments", "transcript", "summary"):
+        styles = zipfile.ZipFile(io.BytesIO(build_export(src, content, "docx")[0])).read("word/styles.xml").decode("utf-8")
+        import re
+
+        leftover = set(re.findall(r"w:(?:asciiTheme|hAnsiTheme|eastAsiaTheme|cstheme)=", styles))
+        assert not leftover, leftover
+        assert 'w:eastAsia="zh-TW"' in styles
+        assert 'w:eastAsia="Microsoft JhengHei"' in styles
     page = build_export(src, "transcript", "html")[0].decode()
     assert page.startswith("<!DOCTYPE html>") and "@page" in page and "Microsoft JhengHei" in page
     assert "&quot;可能&quot;" in page  # escaped
@@ -183,3 +195,17 @@ def test_a_broken_mindmap_picture_falls_back_to_an_outline(src: ExportSource) ->
     broken = ExportSource(**{**src.__dict__, "mindmap": EDITED, "mindmap_png": b"\x89PNG\r\n\x1a\n" + bytes(10)})
     text = docx_text(build_export(broken, "summary", "docx")[0])
     assert "【結論】九月十號確認" in text
+
+
+def test_only_the_chosen_summary_types_are_exported(src: ExportSource) -> None:
+    chosen = ExportSource(**{**src.__dict__, "summary_types": ["action_items", "key_points"]})
+    md = build_export(chosen, "summary", "md")[0].decode()
+    assert "## 重點整理" in md and "## 行動事項" in md
+    assert "## 全文摘要" not in md and "## 心智圖" not in md and "AI 原始心智圖" not in md
+    rows = read_csv(build_export(chosen, "summary", "csv")[0])
+    assert {r[0] for r in rows[1:]} == {"重點整理", "行動事項"}
+    only_map = ExportSource(**{**src.__dict__, "summary_types": ["mindmap"]})
+    assert "## 心智圖" in build_export(only_map, "summary", "md")[0].decode()
+    with pytest.raises(ExportError) as e:
+        build_export(ExportSource(**{**src.__dict__, "summary_types": []}), "summary", "md")
+    assert e.value.status == 422 and "至少勾選" in e.value.message

@@ -18,9 +18,10 @@ import {
   type IpcMainInvokeEvent,
 } from 'electron';
 import { APP_NAME, IPC_CHANNELS } from '@shared/constants/app';
-import type { AppInfo, BackendState, ExportFilesResult, SaveFileResult } from '@shared/types/ipc';
+import type { AppInfo, BackendState, ExportFilesResult, ExportPrefs, SaveFileResult } from '@shared/types/ipc';
 import { BackendManager, resolveBackendCommand } from './backend';
 import { parseExportRequest, runExport } from './exporter';
+import { isDirectory, loadPrefs, savePrefs } from './prefs';
 import { isAppUrl, isSafeExternalUrl, parseNotification, parseSaveRequest, rendererOrigins } from './security';
 
 // 開發模式：由 `npm run dev` 注入 Vite dev server 位址；正式版則載入打包後的 index.html。
@@ -223,6 +224,32 @@ async function printHtmlToPdf(html: string): Promise<Buffer> {
 
 let lastExportFolder: string | null = null;
 
+const prefsFile = () => path.join(app.getPath('userData'), 'preferences.json');
+
+async function pickFolder(title: string, buttonLabel: string, start: string | null): Promise<string | null> {
+  const win = mainWindow();
+  const options = {
+    title,
+    defaultPath: (await isDirectory(start)) ? (start as string) : app.getPath('documents'),
+    properties: ['openDirectory', 'createDirectory'] as Array<'openDirectory' | 'createDirectory'>,
+    buttonLabel,
+  };
+  const { canceled, filePaths } = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+  return canceled || !filePaths[0] ? null : filePaths[0];
+}
+
+async function exportPrefs(): Promise<ExportPrefs> {
+  const p = await loadPrefs(prefsFile());
+  return { lastFolder: p.lastExportFolder, fixedFolder: p.fixedExportFolder, fixedFolderAvailable: await isDirectory(p.fixedExportFolder) };
+}
+
+async function chooseFixedExportFolder(): Promise<ExportPrefs> {
+  const p = await loadPrefs(prefsFile());
+  const folder = await pickFolder('選擇固定的匯出資料夾', '使用這個資料夾', p.fixedExportFolder ?? p.lastExportFolder);
+  if (folder) await savePrefs(prefsFile(), { fixedExportFolder: folder });
+  return exportPrefs();
+}
+
 /** 上次異常結束時留下的列印暫存資料夾（規格 §8.4）：啟動時清除。 */
 async function cleanupStalePrintDirs(): Promise<void> {
   const tmp = app.getPath('temp');
@@ -237,16 +264,17 @@ async function exportFiles(input: unknown): Promise<ExportFilesResult> {
   if (!req) throw new Error('Invalid export request');
   const state = currentBackendState();
   if (state.phase !== 'running' || !state.url) throw new Error('後端尚未就緒，請稍後再試。');
-  const win = mainWindow();
-  const options = {
-    title: '選擇匯出資料夾',
-    defaultPath: app.getPath('documents'),
-    properties: ['openDirectory', 'createDirectory'] as Array<'openDirectory' | 'createDirectory'>,
-    buttonLabel: '匯出到這裡',
-  };
-  const { canceled, filePaths } = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
-  if (canceled || !filePaths[0]) return { folder: null, results: [] };
-  const folder = filePaths[0];
+  // 設定中指定了固定資料夾（且存在）就直接使用；否則詢問，對話框從上次的資料夾開始
+  const prefs = await loadPrefs(prefsFile());
+  let folder: string;
+  if (!req.askFolder && prefs.fixedExportFolder && (await isDirectory(prefs.fixedExportFolder))) {
+    folder = prefs.fixedExportFolder;
+  } else {
+    const picked = await pickFolder('選擇匯出資料夾', '匯出到這裡', prefs.lastExportFolder);
+    if (!picked) return { folder: null, results: [] };
+    folder = picked;
+    await savePrefs(prefsFile(), { lastExportFolder: folder }).catch(() => undefined);
+  }
   lastExportFolder = folder;
   const results = await runExport(req, folder, { backendUrl: state.url, token: state.token, printToPdf: printHtmlToPdf });
   console.log(`[export] ${results.filter((r) => r.ok).length}/${results.length} file(s) -> ${folder}`);
@@ -315,6 +343,12 @@ function registerIpc(): void {
   handle(IPC_CHANNELS.setKeepAwake, setKeepAwake);
   handle(IPC_CHANNELS.saveFile, saveFile);
   handle(IPC_CHANNELS.exportFiles, exportFiles);
+  handle(IPC_CHANNELS.getExportPrefs, exportPrefs);
+  handle(IPC_CHANNELS.chooseFixedExportFolder, chooseFixedExportFolder);
+  handle(IPC_CHANNELS.clearFixedExportFolder, async () => {
+    await savePrefs(prefsFile(), { fixedExportFolder: null });
+    return exportPrefs();
+  });
   handle(IPC_CHANNELS.openExportFolder, async () => {
     if (lastExportFolder) await shell.openPath(lastExportFolder);
   });
