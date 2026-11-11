@@ -24,6 +24,7 @@ from app.core.security import TokenAuthMiddleware
 from app.services.tasks import TaskManager
 from app.services.summary import default_llm
 from app.services.transcribe import default_engines
+from app.models.manager import ModelManager
 from app.session.manager import SessionManager
 
 
@@ -32,6 +33,7 @@ def create_app(cfg: Settings = settings) -> FastAPI:
     docs_enabled = not cfg.auth_required
     task_manager = TaskManager()
     session_manager = SessionManager(cfg.sessions_root, task_manager)
+    model_manager = ModelManager(cfg.models_root, cfg.runtime_root)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -40,6 +42,7 @@ def create_app(cfg: Settings = settings) -> FastAPI:
         if removed:
             print(f"Removed {removed} stale session folder(s)", flush=True)
         yield
+        model_manager.shutdown()  # 下載中結束程式：停止下載，已下載的部分保留，下次可續傳
         session_manager.end_all()
 
     app = FastAPI(
@@ -67,6 +70,7 @@ def create_app(cfg: Settings = settings) -> FastAPI:
     app.state.llm_factory = default_llm  # 同上（摘要模型）
     app.state.tasks = task_manager
     app.state.sessions = session_manager
+    app.state.model_manager = model_manager
     app.include_router(api_router)
     return app
 

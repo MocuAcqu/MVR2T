@@ -1,6 +1,6 @@
 # 開發紀錄（給接手的 Claude / Claude Code）
 
-最後更新：2026-11-11。Phase 08 與 fix1 已在 Windows 驗收（本機 796660f）；fix2（防毒軟體阻擋時的訊息與重試）待套用。
+最後更新：2026-11-11。Phase 09 模型管理重新交付（下載逾時與續傳加強、測試在防毒軟體環境下穩定），待 Windows 驗收（基準：本機 b8ff860）。
 
 ## 目前進度
 
@@ -16,7 +16,8 @@
 | 優化（通知／防睡眠／首頁／引導） | ✅ Windows 驗收通過（2026-11-09） |
 | 06 LLM Integration | ✅ Windows 驗收通過（2026-11-10，llama.cpp b11312＋Qwen3.5-4B） |
 | 07 Mind Map | ✅ Windows 驗收通過（2026-11-11，含 fix1，本機 880149a） |
-| 08 Session and Export | ✅ Windows 驗收通過（2026-11-11，含 fix1，本機 796660f）；fix2 待確認 |
+| 08 Session and Export | ✅ Windows 驗收通過（2026-11-11，含 fix1、fix2，本機 b8ff860） |
+| 09 Model Manager | 🧪 沙盒完成（2026-11-11），待 Windows 驗收 |
 
 ## 沙盒驗證結果（2026-11-06）
 
@@ -112,6 +113,58 @@
 - `tsc` 只要有選項層級錯誤（例如缺型別套件）就會略過語意檢查，「沒有報錯」不代表通過。
 - 沙盒的 init 不會立即回收殭屍行程，`kill -0` 對殭屍也成功；判斷行程是否存活請看 `/proc/<pid>/stat` 狀態不是 `Z`。
 - 在沙盒跑 Electron：`xvfb-run -a`，並加 `--no-sandbox`（root）。
+
+## Phase 09 Model Manager（2026-11-11）
+
+使用者決定：摘要模型只提供 Qwen3.5-4B（不提供切換）；首頁提示卡片＋一鍵「全部下載」；
+時間戳記對齊模型是**必要的**，與語音辨識一起安裝、一起刪除（語音辨識需要兩個模型都安裝才能開始）。
+
+### 後端
+- `app/models/fetch.py`：標準函式庫下載單一檔案。Range 續傳（206 接著寫、200 從頭寫並把進度退回）、
+  5xx／網路中斷自動重試（等待時可取消）、讀取區塊 256 KB（取消反應時間）、錯誤訊息繁體中文
+  （404、SSL 憑證〔防毒 HTTPS 掃描／公司代理〕、逾時、無法連線、磁碟滿、沒有權限）。
+  使用作業系統的憑證存放區（不是 certifi），Avast 之類的 HTTPS 掃描憑證也能通過。
+  沙盒實測 Hugging Face：小檔與 LFS 大檔（轉址到 CDN）都能下載並通過雜湊；中途取消後續傳只下載剩下的部分。
+- `store.install()`：取代 huggingface_hub 下載（它無法回報進度與取消）。`https://huggingface.co/<repo>/resolve/<revision>/<file>`，
+  暫存資料夾 `.<id>.partial` → 每個檔案下載後驗證 → 全部通過才換成正式資料夾（換資料夾時持有 MODEL_LOCK）。
+  暫存中已有的檔案驗證不通過會重新下載一次。`MVR2T_HF_ENDPOINT` 可改下載來源（測試、鏡像站）。
+  `scripts/download_models.py` 改用同一個 `install()`（保留給開發與疑難排解）。huggingface_hub 仍是 transformers 的相依套件，保留固定版本。
+- `runtime.download_runtime()` 改用 fetch（可續傳、進度、取消）。
+- `app/models/manager.py` `ModelManager`：以套件為單位（asr = ASR＋對齊；llm = Qwen3.5-4B＋llama.cpp）。
+  一個背景執行緒＋佇列，一次只做一個下載或驗證；狀態 installed／not_installed／partial／outdated／damaged／queued／downloading／verifying；
+  進度（位元組、速度 EMA、目前檔案）；下載期間 KEEP_AWAKE（不讓電腦閒置睡眠）；程式結束時停止下載，已下載的部分保留。
+  - 修復：驗證失敗（damaged）後的下載會把現有檔案移到暫存，雜湊一致的沿用，只重新下載壞掉的。
+  - 版本：已安裝的 revision 與登錄表不同 → outdated；更新時同樣沿用雜湊一致的檔案。
+  - 刪除：需要 MODEL_LOCK（語音辨識或摘要進行中不能刪，Windows 也無法刪除開啟中的檔案）。
+  - 不再使用的檔案：models/<kind>/ 中不在登錄表的資料夾（例如 Phase 06 比較用的 Qwen3-4B、Qwen3-4B-Instruct-2507）、
+    runtime/llama/ 中舊版本的 llama.cpp；可個別刪除（只接受清單中的 key，路徑必須在模型資料夾內）。
+- API：`GET /api/models`（新格式 ModelManagerState）、`/api/models/legacy`（舊格式）、`POST /api/models/download-all`、
+  `POST /api/models/{asr|llm}/{download|verify|cancel}`、`DELETE /api/models/{asr|llm}`、`DELETE /api/models/unused/{key}`。
+- 語音辨識與摘要缺模型時的訊息改為「請到『模型管理』下載…」。
+
+### 前端
+- `useModels`：下載或驗證進行中每秒輪詢，結束後停止；動作的回應直接套用（`applyModels`）。
+- 模型管理頁：兩張套件卡片（`ModelPackageCard`：模型、版本、授權、建議硬體、進度、取消、驗證、修復、更新、刪除確認）、
+  「不再使用的檔案」卡片、存放位置與剩餘空間、全部下載。刪除 `ModelStatusCard.tsx`（被取代）。
+- 首頁 `SystemNotice`：缺模型時顯示提示卡片（大小、剩餘空間、全部下載）；下載中顯示每個套件的進度。
+
+### 第一次 Windows 套用（2026-11-11，未 commit，還原為 b8ff860）
+- 前端 173 passed；後端 tests/test_model_manager.py **偶發失敗**（每次 1～5 個不同的測試，wait_idle 等滿 20 秒）。
+  Claude Code 用 faulthandler 查到：本機測試伺服器已把資料全部送出，下載端卻卡在 socket 讀取；
+  自寫的 ThreadingHTTPServer＋urllib 小程式也偶爾 19 秒後 WinError 10054。這台電腦裝有 Avast，
+  暫停網頁防護後仍偶發 → 推測是防毒軟體的網路過濾偶爾讓 loopback 連線停住。Electron ↔ 後端一直正常。
+- 修正（重新交付）：
+  - fetch 讀取逾時由 60 秒改為 30 秒（`fetch.TIMEOUT`），逾時後重連並以 Range 續傳；
+    「有下載到新資料」的那次不算失敗次數（長時間下載中偶爾停住不會累積到放棄）；連線提早結束（資料不足）也續傳，不再直接報錯。
+  - 測試：逾時 2 秒、重試等待 0.05 倍（`fetch.BACKOFF`），wait_idle 90 秒；新增「回應送一半後停住／提早結束 → 續傳完成」
+    （fetch 與模型管理兩層）以及「連續沒有進展才放棄」的測試。
+
+### 驗證（沙盒）
+- pytest 158 passed（新增 tests/test_model_manager.py 16 個：續傳、伺服器不支援 Range、5xx 重試、404／無法連線訊息、取消、
+  下載進度、取消後續傳、驗證→損壞→修復只重下壞檔、新版本沿用相同檔案、刪除需等 AI 工作、不再使用的檔案、磁碟空間、
+  已安裝時完全不連網、API）。vitest 173。
+- Playwright（Vite＋假後端：本機 HTTP 伺服器模擬 Hugging Face，每檔 24 MB）：首頁提示 → 全部下載 → 首頁進度 →
+  模型管理進度（百分比、速度、剩餘時間）→ 取消排隊中的項目 → 繼續下載 → 驗證 → 刪除確認 → 刪除不再使用的模型。
 
 ## Phase 08 Session and Export（2026-11-11）
 
@@ -213,6 +266,9 @@
   - Phase 11 待辦：在有第三方防毒軟體的電腦上驗收匯出 Word／PDF；打包後執行檔改變，防毒軟體可能再次詢問，考慮程式碼簽章。
 - 驗證：vitest 173；Electron E2E 模擬改名 EPERM（main 的 fs.rename 被替換）：顯示防毒軟體說明 →
   解除後「重新匯出失敗的項目」→ 2 / 2，沒有殘留 .partial。
+- fix2 Windows 套用（b8ff860）：Claude Code 比對確認 renameWithRetry 完全涵蓋 796660f（條件、等待時間相同）；
+  前端 173 passed；資料夾無殘留 .partial。**Avast 阻擋時的訊息與「重新匯出失敗的項目」使用者選擇不測**，
+  只由單元測試與沙盒 E2E 驗證 → Phase 11 正式版在這台電腦上驗證。
 
 ### 驗證（沙盒）
 - pytest：`tests/test_export.py` 9 個（每個組合都能產生、CSV BOM／CRLF／逗號引號、SRT／VTT 時間、DOCX 字型與圖片、

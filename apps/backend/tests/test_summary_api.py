@@ -134,7 +134,7 @@ def test_missing_model_gives_download_instructions(data_dir, two_segment_wav):  
         sid, mid, _ = prepare(c, two_segment_wav)
         transcribe(c, sid, mid)
         r = generate(c, sid, mid, ["overview"])
-        assert r.status_code == 412 and "download_models --llm" in r.json()["detail"]
+        assert r.status_code == 412 and "模型管理" in r.json()["detail"]
 
 
 def test_regenerating_the_mindmap_keeps_the_other_summary_results(data_dir, two_segment_wav):  # noqa: F811

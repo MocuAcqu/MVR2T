@@ -12,7 +12,8 @@ import type {
   FfmpegStatus,
   HealthResponse,
   MediaInfo,
-  ModelsResponse,
+  ModelManagerState,
+  PackageId,
   SessionResponse,
   TaskState,
   Transcript,
@@ -174,8 +175,21 @@ export function uploadMedia(
 // Phase 05：模型與語音辨識
 // ---------------------------------------------------------------------------
 
+// Phase 09：模型管理
 export const getModels = (conn: BackendConnection, signal?: AbortSignal) =>
-  apiJson<ModelsResponse>(conn, '/api/models', { signal });
+  apiJson<ModelManagerState>(conn, '/api/models', { signal });
+
+export const modelAction = (conn: BackendConnection, pkg: PackageId, action: 'download' | 'verify' | 'cancel') =>
+  apiJson<ModelManagerState>(conn, `/api/models/${pkg}/${action}`, { method: 'POST' });
+
+export const downloadAllModels = (conn: BackendConnection) =>
+  apiJson<ModelManagerState>(conn, '/api/models/download-all', { method: 'POST' });
+
+export const deleteModelPackage = (conn: BackendConnection, pkg: PackageId) =>
+  apiJson<void>(conn, `/api/models/${pkg}`, { method: 'DELETE' });
+
+export const deleteUnusedModel = (conn: BackendConnection, key: string) =>
+  apiJson<void>(conn, `/api/models/unused/${key.split('/').map(encodeURIComponent).join('/')}`, { method: 'DELETE' });
 
 export const startTranscription = (conn: BackendConnection, sessionId: string, mediaId: string, language: AsrLanguage | null) =>
   apiJson<{ task_id: string }>(conn, '/api/asr/transcribe', json({ session_id: sessionId, media_id: mediaId, language }));

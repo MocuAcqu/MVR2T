@@ -16,11 +16,12 @@ import os
 import platform
 import shutil
 import sys
-import urllib.request
 import zipfile
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from app.models.fetch import FetchError, fetch
 
 MARKER = ".mvr2t-runtime.json"
 
@@ -80,6 +81,11 @@ def install_dir(runtime_root: Path, release: LlamaCppRelease = LLAMA_CPP, plat: 
 
 def asset_for(release: LlamaCppRelease, plat: str | None) -> RuntimeAsset | None:
     return next((a for a in release.assets if a.platform == plat), None)
+
+
+def runtime_size(release: LlamaCppRelease = LLAMA_CPP, plat: str | None = None) -> int:
+    asset = asset_for(release, plat or current_platform())
+    return asset.size if asset else 0
 
 
 def find_llama_server(runtime_root: Path, release: LlamaCppRelease = LLAMA_CPP) -> Path | None:
@@ -144,6 +150,8 @@ def download_runtime(
     runtime_root: Path,
     release: LlamaCppRelease = LLAMA_CPP,
     on_progress: Callable[[str], None] = print,
+    on_bytes: Callable[[int], None] = lambda n: None,
+    is_cancelled: Callable[[], bool] = lambda: False,
 ) -> Path:
     """下載、驗證並解壓縮 llama-server；成功回傳執行檔路徑。"""
     override = os.environ.get("MVR2T_LLAMA_SERVER", "").strip()
@@ -170,9 +178,12 @@ def download_runtime(
     archive = final.parent / f".{asset.filename}.partial"
     if not (archive.is_file() and archive.stat().st_size == asset.size and _sha256(archive) == asset.sha256):
         on_progress(f"  下載 {asset.filename}（{asset.size / 1024**2:,.1f} MB）…")
-        req = urllib.request.Request(release.url(asset), headers={"User-Agent": "MVR2T-model-downloader"})
-        with urllib.request.urlopen(req, timeout=60) as res, archive.open("wb") as out:  # noqa: S310 - fixed https URL
-            shutil.copyfileobj(res, out, 1024 * 1024)
+        try:
+            fetch(release.url(asset), archive, asset.size, on_bytes, is_cancelled)
+        except FetchError as e:
+            raise LlamaRuntimeError(f"llama.cpp：{e}") from None
+    else:
+        on_bytes(asset.size)
     if archive.stat().st_size != asset.size or _sha256(archive) != asset.sha256:
         archive.unlink(missing_ok=True)
         raise LlamaRuntimeError(f"{asset.filename} 驗證失敗（大小或 SHA-256 不符），請重新執行下載。")

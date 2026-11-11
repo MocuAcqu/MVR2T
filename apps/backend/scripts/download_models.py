@@ -1,4 +1,4 @@
-"""下載並驗證模型與 llama.cpp 執行檔（開發用；Phase 09 會改由程式內的模型管理處理）。
+"""下載並驗證模型與 llama.cpp 執行檔（開發與疑難排解用；一般使用者請用程式內的「模型管理」，Phase 09）。
 
 用法（在 apps/backend，使用 .venv 的 Python）：
     python -m scripts.download_models            # 全部：語音辨識、時間戳記對齊、摘要模型＋llama.cpp

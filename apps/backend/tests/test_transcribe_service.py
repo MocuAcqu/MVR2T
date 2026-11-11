@@ -20,7 +20,8 @@ from app.engines.asr.text import Unit
 from app.main import create_app
 from app.api import models as models_api
 from app.models import store
-from app.models.registry import LLM_MODEL, QWEN3_ASR_0_6B
+from app.models import manager as model_manager_module
+from app.models.registry import LLM_MODEL, QWEN3_ASR_0_6B, QWEN3_FORCED_ALIGNER_0_6B
 from app.services import transcribe as transcribe_service
 from app.engines.asr.pipeline import Engines
 from tests.test_media_api import LOC, extract, new_session, upload, wait_task, write_signal_wav
@@ -101,7 +102,7 @@ def read_audio(path: Path) -> np.ndarray:
 
 @pytest.fixture()
 def data_dir(tmp_path, monkeypatch) -> Path:
-    """userData folder where the ASR model counts as installed.
+    """userData folder where the speech recognition package (ASR + aligner) counts as installed.
 
     Patches the installed-check instead of creating placeholder model files: a 1.5 GB file made with
     truncate() is sparse on Linux, but on Windows/NTFS the space is really allocated (and pytest keeps
@@ -110,10 +111,11 @@ def data_dir(tmp_path, monkeypatch) -> Path:
     real = store.is_installed
 
     def fake_is_installed(spec, root):
-        return spec.id == QWEN3_ASR_0_6B.id or real(spec, root)
+        return spec.id in (QWEN3_ASR_0_6B.id, QWEN3_FORCED_ALIGNER_0_6B.id) or real(spec, root)
 
     monkeypatch.setattr(transcribe_service, "is_installed", fake_is_installed)
     monkeypatch.setattr(models_api, "is_installed", fake_is_installed)
+    monkeypatch.setattr(model_manager_module, "is_installed", fake_is_installed)
     return tmp_path / "userData"
 
 
@@ -315,16 +317,20 @@ def test_model_not_installed(tmp_path, two_segment_wav):
     with make_client(tmp_path / "empty", engines) as c:
         sid, mid, _ = prepare(c, two_segment_wav)
         r = c.post("/api/asr/transcribe", json={"session_id": sid, "media_id": mid})
-        assert r.status_code == 412 and "download_models" in r.json()["detail"]
-        models = c.get("/api/models").json()
+        assert r.status_code == 412 and "模型管理" in r.json()["detail"]
+        models = c.get("/api/models/legacy").json()
         assert {m["id"]: m["installed"] for m in models["models"]} == {
             "qwen3-asr-0.6b": False, "qwen3-forcedaligner-0.6b": False, LLM_MODEL.id: False,
         }
+        packages = {p["id"]: p for p in c.get("/api/models").json()["packages"]}
+        assert packages["asr"]["status"] == "not_installed" and packages["asr"]["missing_bytes"] > 3_000_000_000
 
 
 def test_models_endpoint_reports_installed(data_dir):
     with make_client(data_dir, Engines(asr=lambda: FakeAsr(Log()), aligner=None, read_audio=read_audio)) as c:
-        body = c.get("/api/models").json()
+        packages = {p["id"]: p for p in c.get("/api/models").json()["packages"]}
+        assert packages["asr"]["status"] == "installed" and packages["llm"]["status"] == "not_installed"
+        body = c.get("/api/models/legacy").json()
         by_id = {m["id"]: m for m in body["models"]}
         assert by_id["qwen3-asr-0.6b"]["installed"] is True
         llm = next(m for m in body["models"] if m["kind"] == "llm")

@@ -18,7 +18,7 @@ transformers==5.20.2
 tokenizers==0.23.3
 safetensors==0.8.0
 numpy==2.4.6
-# model download script only (scripts/download_models.py); never used at runtime
+# required by transformers (pinned). Since Phase 09 models are downloaded by app/models/fetch.py, not by huggingface_hub.
 huggingface_hub==2.2.0
 # Simplified -> Traditional Chinese (Taiwan phrasing) for transcripts
 OpenCC==1.4.2

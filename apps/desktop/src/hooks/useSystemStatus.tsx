@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, type ReactNode } from 'react';
+import type { ModelManagerState } from '@shared/types/api';
 import { useAppInfo, type AppInfoState } from '@/hooks/useAppInfo';
 import { useBackendHealth, type BackendHealthState } from '@/hooks/useBackendHealth';
 import { useFfmpegStatus, type FfmpegState } from '@/hooks/useFfmpegStatus';
@@ -15,6 +16,8 @@ interface SystemStatus {
   recheckFfmpeg: () => void;
   models: ModelsState;
   refreshModels: () => void;
+  /** 套用模型管理動作的回應（下載、取消、刪除後的最新狀態） */
+  applyModels: (data: ModelManagerState) => void;
 }
 
 const SystemStatusContext = createContext<SystemStatus | null>(null);
@@ -25,7 +28,7 @@ export function SystemStatusProvider({ children }: { children: ReactNode }) {
   const { state: backend, restart } = useBackendHealth();
   const onlineKey = backend.status === 'online' ? backend.backendUrl : null;
   const { state: ffmpeg, recheck } = useFfmpegStatus(onlineKey);
-  const { state: models, refresh: refreshModels } = useModels(onlineKey);
+  const { state: models, refresh: refreshModels, apply: applyModels } = useModels(onlineKey);
 
   // 後端一上線就建立本次 Session。後端會同時刪除上一個 Session 的暫存
   // （例如使用者按了重新整理），符合「重新整理後資料清空」（規格 §8.3）。
@@ -37,7 +40,7 @@ export function SystemStatusProvider({ children }: { children: ReactNode }) {
   }, [onlineKey]);
 
   return (
-    <SystemStatusContext.Provider value={{ app, backend, restartBackend: restart, ffmpeg, recheckFfmpeg: recheck, models, refreshModels }}>
+    <SystemStatusContext.Provider value={{ app, backend, restartBackend: restart, ffmpeg, recheckFfmpeg: recheck, models, refreshModels, applyModels }}>
       {children}
     </SystemStatusContext.Provider>
   );

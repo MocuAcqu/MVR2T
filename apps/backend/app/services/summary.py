@@ -30,7 +30,7 @@ from app.session.manager import Session, SessionManager
 # 回傳的物件：可用 with 開關（啟動／關閉模型）、chat()、可從其他執行緒 kill()（取消用）。測試可替換成假模型。
 LlmFactory = Callable[[Settings], Any]
 
-DOWNLOAD_HINT = "請在 apps\\backend 執行 .\\.venv\\Scripts\\python.exe -m scripts.download_models --llm 後再試。"
+DOWNLOAD_HINT = "請到「模型管理」下載「摘要與心智圖」。"
 
 
 def default_llm(cfg: Settings) -> LlamaServer:

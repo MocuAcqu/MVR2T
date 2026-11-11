@@ -232,3 +232,83 @@ export interface SummarizeResult {
   levels: number;
   elapsed_seconds: number;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 09：模型管理（GET /api/models）。以「套件」為單位：語音辨識（ASR＋對齊）、摘要與心智圖（LLM＋llama.cpp）
+// ---------------------------------------------------------------------------
+
+export type PackageId = 'asr' | 'llm';
+export type PackageStatus = 'installed' | 'not_installed' | 'partial' | 'outdated' | 'damaged' | 'queued' | 'downloading' | 'verifying';
+
+export interface PackageModel {
+  id: string;
+  kind: 'asr' | 'aligner' | 'llm';
+  display_name: string;
+  role: string;
+  repo: string;
+  revision: string;
+  license: string;
+  size_bytes: number;
+  installed: boolean;
+  /** 已安裝的版本（可能是舊版本）；null = 沒有安裝 */
+  installed_revision: string | null;
+}
+
+export interface PackageRuntime {
+  name: string;
+  version: string;
+  size_bytes: number;
+  installed: boolean;
+  /** 這個作業系統有沒有可下載的執行檔 */
+  supported: boolean;
+}
+
+export interface PackageJob {
+  action: 'download' | 'verify';
+  status: 'queued' | 'running';
+  stage: string;
+  current: string;
+  done_bytes: number;
+  total_bytes: number;
+  /** bytes/s */
+  speed: number;
+  cancelling: boolean;
+}
+
+export interface PackageLast {
+  action: 'download' | 'verify';
+  ok: boolean;
+  message: string;
+  at: number;
+  problems: string[];
+}
+
+export interface ModelPackage {
+  id: PackageId;
+  name: string;
+  role: string;
+  hardware: string;
+  status: PackageStatus;
+  size_bytes: number;
+  missing_bytes: number;
+  models: PackageModel[];
+  runtime: PackageRuntime | null;
+  job: PackageJob | null;
+  last: PackageLast | null;
+}
+
+export interface UnusedItem {
+  key: string;
+  label: string;
+  kind: string;
+  size_bytes: number;
+  partial: boolean;
+}
+
+export interface ModelManagerState {
+  models_dir: string;
+  free_bytes: number;
+  packages: ModelPackage[];
+  unused: UnusedItem[];
+  busy: boolean;
+}

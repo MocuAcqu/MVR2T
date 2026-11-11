@@ -183,11 +183,9 @@ def start_transcription(
     if any(t.kind == "transcribe" for t in busy):
         raise MediaError(409, "語音辨識已在進行中。")
     _load_manifest(rec)  # 尚未抽取音訊 → 409
-    if not is_installed(QWEN3_ASR_0_6B, cfg.models_root):
-        raise MediaError(
-            412,
-            "尚未下載語音辨識模型。請在 apps\\backend 執行 .\\.venv\\Scripts\\python.exe -m scripts.download_models 後再試。",
-        )
+    # 語音辨識套件 = 辨識模型＋時間戳記對齊模型（Phase 09 使用者決定：對齊模型是必要的）
+    if not (is_installed(QWEN3_ASR_0_6B, cfg.models_root) and is_installed(QWEN3_FORCED_ALIGNER_0_6B, cfg.models_root)):
+        raise MediaError(412, "尚未下載語音辨識模型。請到「模型管理」下載「語音辨識」。")
     if not MODEL_LOCK.acquire(blocking=False):
         raise MediaError(409, BUSY_MESSAGE)
     try:

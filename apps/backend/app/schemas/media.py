@@ -217,3 +217,78 @@ class ExportRequest(BaseModel):
     mindmap_png: str | None = Field(default=None, max_length=28_000_000)
     # 只匯出這些摘要類型（含 mindmap）；不給 = 全部
     summary_types: list[SummaryTypeName] | None = None
+
+
+# --- Phase 09：模型管理 -------------------------------------------------------------------------
+
+
+class PackageModel(BaseModel):
+    id: str
+    kind: Literal["asr", "aligner", "llm"]
+    display_name: str
+    role: str
+    repo: str
+    revision: str
+    license: str
+    size_bytes: int
+    installed: bool
+    #: 已安裝的版本（可能是舊版本）；None = 沒有安裝
+    installed_revision: str | None
+
+
+class PackageRuntime(BaseModel):
+    name: str
+    version: str
+    size_bytes: int
+    installed: bool
+    supported: bool
+
+
+class PackageJob(BaseModel):
+    action: Literal["download", "verify"]
+    status: Literal["queued", "running"]
+    stage: str
+    current: str
+    done_bytes: int
+    total_bytes: int
+    speed: int
+    cancelling: bool
+
+
+class PackageLast(BaseModel):
+    action: Literal["download", "verify"]
+    ok: bool
+    message: str
+    at: float
+    problems: list[str]
+
+
+class ModelPackage(BaseModel):
+    id: Literal["asr", "llm"]
+    name: str
+    role: str
+    hardware: str
+    #: installed / not_installed / partial（下載到一半）/ outdated（有新版本）/ damaged（驗證失敗）/ queued / downloading / verifying
+    status: Literal["installed", "not_installed", "partial", "outdated", "damaged", "queued", "downloading", "verifying"]
+    size_bytes: int
+    missing_bytes: int
+    models: list[PackageModel]
+    runtime: PackageRuntime | None
+    job: PackageJob | None
+    last: PackageLast | None
+
+
+class UnusedItem(BaseModel):
+    key: str
+    label: str
+    kind: str
+    size_bytes: int
+    partial: bool
+
+
+class ModelManagerState(BaseModel):
+    models_dir: str
+    free_bytes: int
+    packages: list[ModelPackage]
+    unused: list[UnusedItem]
+    busy: bool
