@@ -2,7 +2,42 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { fileNameFor, parseExportRequest, runExport, safeBaseName, uniquePath } from './exporter';
+import { fileNameFor, parseExportRequest, renameWithRetry, runExport, safeBaseName, uniquePath } from './exporter';
+
+describe('renameWithRetry', () => {
+  const fail = (code: string) => Object.assign(new Error(`${code}: operation not permitted, rename`), { code });
+
+  it('retries while the new file is briefly locked (e.g. antivirus scan on Windows), then succeeds', async () => {
+    const calls: string[] = [];
+    let n = 0;
+    const renameFn = async (a: string, b: string) => {
+      calls.push(`${a}->${b}`);
+      if (n++ < 2) throw fail(n === 1 ? 'EPERM' : 'EBUSY');
+    };
+    await renameWithRetry('x.partial', 'x', renameFn, [0, 0, 0]);
+    expect(calls).toHaveLength(3);
+  });
+
+  it('gives up after the last retry and throws the original error', async () => {
+    let n = 0;
+    const renameFn = async () => {
+      n++;
+      throw fail('EACCES');
+    };
+    await expect(renameWithRetry('x.partial', 'x', renameFn, [0, 0])).rejects.toMatchObject({ code: 'EACCES' });
+    expect(n).toBe(3);
+  });
+
+  it('does not retry other errors', async () => {
+    let n = 0;
+    const renameFn = async () => {
+      n++;
+      throw fail('ENOENT');
+    };
+    await expect(renameWithRetry('x.partial', 'x', renameFn, [0, 0])).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(n).toBe(1);
+  });
+});
 
 const PNG_B64 = Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(16)]).toString('base64');
 const base = { sessionId: 'abc123', mediaId: 'm_1', baseName: '會議.m4a', items: [{ content: 'transcript', format: 'srt' }] };

@@ -109,6 +109,33 @@ const exists = (p: string) =>
     () => false,
   );
 
+/** 改名暫時失敗、值得重試的錯誤碼。 */
+const RETRYABLE_RENAME = new Set(['EPERM', 'EBUSY', 'EACCES']);
+/** 每次重試前等待的毫秒數（合計約 3 秒）。 */
+export const RENAME_RETRY_DELAYS_MS = [50, 100, 200, 400, 800, 1500];
+
+/**
+ * Windows：剛寫完的檔案常被防毒軟體（Defender 掃描新的 Office 檔）短暫佔用，這時改名會失敗（EPERM／EBUSY）。
+ * 稍等後重試；其他錯誤或重試用完才丟出（2026-11-11 Windows 驗收：匯出摘要 Word 偶發 EPERM）。
+ */
+export async function renameWithRetry(
+  from: string,
+  to: string,
+  renameFn: (a: string, b: string) => Promise<void> = rename,
+  delays: readonly number[] = RENAME_RETRY_DELAYS_MS,
+): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await renameFn(from, to);
+      return;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (attempt >= delays.length || !code || !RETRYABLE_RENAME.has(code)) throw err;
+      await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
+    }
+  }
+}
+
 /** 同名檔案已存在時加上「 (2)」「 (3)」…，不覆蓋使用者的檔案。 */
 export async function uniquePath(folder: string, fileName: string, taken = new Set<string>()): Promise<string> {
   const ext = path.extname(fileName);
@@ -179,7 +206,7 @@ export async function runExport(req: ParsedExport, folder: string, deps: ExportD
         // 串流寫入：切段音檔 ZIP 可能數十 MB
         await pipeline(Readable.fromWeb(res.body as import('node:stream/web').ReadableStream), createWriteStream(partial));
       }
-      await rename(partial, target);
+      await renameWithRetry(partial, target);
       results.push({ ...item, ok: true, path: target, error: null });
     } catch (err) {
       if (partial) await rm(partial, { force: true }).catch(() => undefined);
