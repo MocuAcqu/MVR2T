@@ -181,7 +181,9 @@ def test_fetch_resumes_a_partial_file(tmp_path, server):
     got: list[int] = []
     fetch(server.url + "/f", dest, len(BIG), got.append)
     assert dest.read_bytes() == BIG and sum(got) == len(BIG) - 1000
-    assert server.hits[-1][1] == "bytes=1000-"
+    # The FIRST request resumes from the partial file. (Not the last one: with antivirus holding back the end of the
+    # stream, as on the Windows test machine with Avast, a later request may resume again from further on.)
+    assert server.hits[0][1] == "bytes=1000-"
 
 
 def test_fetch_restarts_when_the_server_ignores_range(tmp_path, server):
