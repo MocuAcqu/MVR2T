@@ -77,6 +77,8 @@ export interface ExportFilesRequest {
   summaryTypes?: string[];
   /** 已在設定指定固定資料夾時，這次仍跳出對話框選資料夾 */
   askFolder?: boolean;
+  /** 重新匯出失敗的項目：存到最近一次匯出的資料夾（由 Main 記住，renderer 不能指定路徑） */
+  useLastFolder?: boolean;
 }
 
 /** 匯出資料夾的偏好（只存路徑，不存任何媒體或逐字稿內容）。存在 Main 的 userData/preferences.json。 */

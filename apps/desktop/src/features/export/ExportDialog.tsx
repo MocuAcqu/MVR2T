@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { EXPORT_FORMATS } from '@shared/constants/app';
 import type { SummaryType } from '@shared/types/api';
-import type { ExportFormat, ExportItemResult, ExportPrefs } from '@shared/types/ipc';
+import type { ExportFormat, ExportItem, ExportItemResult, ExportPrefs } from '@shared/types/ipc';
 import { Mono } from '@/components/mono/Mono';
 import { Button } from '@/components/ui/button';
 import { captureMindmap } from '@/features/mindmap/capture';
@@ -93,10 +93,12 @@ export function ExportDialog() {
   const toggleSummaryType = (t: SummaryType) =>
     setSummaryTypes((cur) => (cur.includes(t) ? cur.filter((x) => x !== t) : [...availableSummaryTypes.filter((x) => x === t || cur.includes(x))]));
 
-  const run = async () => {
+  /** retry：只重新匯出上次失敗的項目，存到同一個資料夾（不再詢問），結果併回清單。 */
+  const run = async (retry?: { items: ExportItem[]; previous: ExportItemResult[] }) => {
     if (s.import.status !== 'ready' || !s.sessionId || !window.mvr2t) return;
+    const runItems = retry ? retry.items : items;
     try {
-      const need = needsMindmapImage(items, summaryTypes.includes('mindmap'));
+      const need = needsMindmapImage(runItems, summaryTypes.includes('mindmap'));
       let mindmapPng: string | undefined;
       let mindmapSvg: string | undefined;
       if (s.mindmap && (need.png || need.svg)) {
@@ -106,24 +108,28 @@ export function ExportDialog() {
         mindmapPng = png ? dataUrlPayload(png, 'png') : undefined;
         mindmapSvg = svg ? dataUrlPayload(svg, 'svg') : undefined;
       }
-      setPhase({ kind: 'running', step: useFixed ? '正在匯出…' : '請選擇要存放的資料夾…' });
+      setPhase({ kind: 'running', step: useFixed || retry ? '正在匯出…' : '請選擇要存放的資料夾…' });
       const pending = window.mvr2t.exportFiles({
         sessionId: s.sessionId,
         mediaId: s.import.info.media_id,
         baseName: s.import.info.filename,
-        items,
+        items: runItems,
         mindmap: s.mindmap ? toSummary(s.mindmap) : undefined,
         mindmapPng,
         mindmapSvg,
         summaryTypes: exportsSummary && !allSummaryTypes ? summaryTypes : undefined,
-        askFolder,
+        askFolder: retry ? false : askFolder,
+        useLastFolder: !!retry,
       });
       const res = await pending;
       if (!res.folder) {
         setPhase({ kind: 'choose' });
         return;
       }
-      setPhase({ kind: 'done', folder: res.folder, results: res.results });
+      const results = retry
+        ? retry.previous.map((p) => res.results.find((r) => r.content === p.content && r.format === p.format) ?? p)
+        : res.results;
+      setPhase({ kind: 'done', folder: res.folder, results });
     } catch (err) {
       setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) });
     }
@@ -281,6 +287,17 @@ export function ExportDialog() {
             <>
               {window.mvr2t?.openExportFolder ? (
                 <Button variant="ghost" className="mr-auto" onClick={() => void window.mvr2t?.openExportFolder()}>開啟資料夾</Button>
+              ) : null}
+              {phase.results.some((r) => !r.ok) ? (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    const previous = phase.results;
+                    void run({ items: previous.filter((r) => !r.ok).map(({ content, format }) => ({ content, format })), previous });
+                  }}
+                >
+                  重新匯出失敗的項目
+                </Button>
               ) : null}
               <Button variant="secondary" onClick={() => setPhase({ kind: 'choose' })}>再匯出其他</Button>
               <Button onClick={onClose}>完成</Button>

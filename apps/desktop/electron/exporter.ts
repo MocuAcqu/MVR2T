@@ -29,6 +29,8 @@ export interface ParsedExport {
   summaryTypes: string[] | null;
   /** 已設定固定資料夾時，這次仍要詢問 */
   askFolder: boolean;
+  /** 重新匯出失敗的項目：用這次程式中最近一次匯出的資料夾，不再詢問 */
+  useLastFolder: boolean;
 }
 
 /** 去掉路徑、Windows 不允許的字元與結尾的點／空白。 */
@@ -96,6 +98,7 @@ export function parseExportRequest(input: unknown): ParsedExport | null {
     mindmapSvg,
     summaryTypes,
     askFolder: r.askFolder === true,
+    useLastFolder: r.useLastFolder === true,
   };
 }
 
@@ -108,33 +111,6 @@ const exists = (p: string) =>
     () => true,
     () => false,
   );
-
-/** 改名暫時失敗、值得重試的錯誤碼。 */
-const RETRYABLE_RENAME = new Set(['EPERM', 'EBUSY', 'EACCES']);
-/** 每次重試前等待的毫秒數（合計約 3 秒）。 */
-export const RENAME_RETRY_DELAYS_MS = [50, 100, 200, 400, 800, 1500];
-
-/**
- * Windows：剛寫完的檔案常被防毒軟體（Defender 掃描新的 Office 檔）短暫佔用，這時改名會失敗（EPERM／EBUSY）。
- * 稍等後重試；其他錯誤或重試用完才丟出（2026-11-11 Windows 驗收：匯出摘要 Word 偶發 EPERM）。
- */
-export async function renameWithRetry(
-  from: string,
-  to: string,
-  renameFn: (a: string, b: string) => Promise<void> = rename,
-  delays: readonly number[] = RENAME_RETRY_DELAYS_MS,
-): Promise<void> {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      await renameFn(from, to);
-      return;
-    } catch (err) {
-      const code = (err as NodeJS.ErrnoException).code;
-      if (attempt >= delays.length || !code || !RETRYABLE_RENAME.has(code)) throw err;
-      await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
-    }
-  }
-}
 
 /** 同名檔案已存在時加上「 (2)」「 (3)」…，不覆蓋使用者的檔案。 */
 export async function uniquePath(folder: string, fileName: string, taken = new Set<string>()): Promise<string> {
@@ -150,12 +126,54 @@ export async function uniquePath(folder: string, fileName: string, taken = new S
   throw new Error('同名檔案太多');
 }
 
+// ---------------------------------------------------------------------------
+// Windows：防毒軟體（Defender 掃描新檔、Avast 勒索軟體防護…）可能短暫或持續阻擋改名
+// 2026-11-11 使用者電腦：Avast 保護「文件」中的 Office 檔案，.partial → .docx 改名回傳 EPERM，直到使用者在 Avast 按「允許」。
+// ---------------------------------------------------------------------------
+
+const RETRY_CODES = new Set(['EPERM', 'EBUSY', 'EACCES']);
+export const RENAME_RETRY_DELAYS = [50, 100, 200, 400, 800, 1500]; // 合計約 3 秒
+
+const errCode = (err: unknown) => (err && typeof err === 'object' && 'code' in err ? String((err as { code: unknown }).code) : '');
+
+/** 改名；遇到 EPERM／EBUSY／EACCES（檔案被暫時佔用或攔截）時等待後重試，其他錯誤直接丟出。 */
+export async function renameWithRetry(
+  from: string,
+  to: string,
+  delays: number[] = RENAME_RETRY_DELAYS,
+  renameFn: (a: string, b: string) => Promise<void> = rename,
+  sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
+): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await renameFn(from, to);
+      return;
+    } catch (err) {
+      if (!RETRY_CODES.has(errCode(err)) || attempt >= delays.length) throw err;
+      await sleep(delays[attempt]);
+    }
+  }
+}
+
+/** 給使用者看的錯誤訊息：權限錯誤多半是防毒軟體阻擋，說明怎麼處理。 */
+export function friendlyError(err: unknown): string {
+  const code = errCode(err);
+  if (code === 'EPERM' || code === 'EACCES') {
+    return '無法寫入檔案，可能被防毒軟體（例如勒索軟體防護）阻擋，或資料夾沒有寫入權限。請在防毒軟體中允許 MVR2T，再按「重新匯出失敗的項目」。';
+  }
+  if (code === 'EBUSY') return '檔案正被其他程式使用，請關閉後再按「重新匯出失敗的項目」。';
+  if (code === 'ENOSPC') return '磁碟空間不足。';
+  return err instanceof Error ? err.message : String(err);
+}
+
 export interface ExportDeps {
   backendUrl: string;
   token: string | null;
   /** 列印用 HTML → PDF（Electron 的隱藏視窗）；回傳 PDF bytes */
   printToPdf: (html: string) => Promise<Buffer>;
   fetchFn?: typeof fetch;
+  /** 測試用：改名重試的等待時間 */
+  renameRetryDelays?: number[];
 }
 
 async function backendError(res: Response): Promise<string> {
@@ -206,11 +224,11 @@ export async function runExport(req: ParsedExport, folder: string, deps: ExportD
         // 串流寫入：切段音檔 ZIP 可能數十 MB
         await pipeline(Readable.fromWeb(res.body as import('node:stream/web').ReadableStream), createWriteStream(partial));
       }
-      await renameWithRetry(partial, target);
+      await renameWithRetry(partial, target, deps.renameRetryDelays);
       results.push({ ...item, ok: true, path: target, error: null });
     } catch (err) {
       if (partial) await rm(partial, { force: true }).catch(() => undefined);
-      results.push({ ...item, ok: false, path: null, error: err instanceof Error ? err.message : String(err) });
+      results.push({ ...item, ok: false, path: null, error: friendlyError(err) });
     }
   }
   return results;

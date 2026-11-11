@@ -267,7 +267,9 @@ async function exportFiles(input: unknown): Promise<ExportFilesResult> {
   // 設定中指定了固定資料夾（且存在）就直接使用；否則詢問，對話框從上次的資料夾開始
   const prefs = await loadPrefs(prefsFile());
   let folder: string;
-  if (!req.askFolder && prefs.fixedExportFolder && (await isDirectory(prefs.fixedExportFolder))) {
+  if (req.useLastFolder && lastExportFolder && (await isDirectory(lastExportFolder))) {
+    folder = lastExportFolder;
+  } else if (!req.askFolder && prefs.fixedExportFolder && (await isDirectory(prefs.fixedExportFolder))) {
     folder = prefs.fixedExportFolder;
   } else {
     const picked = await pickFolder('選擇匯出資料夾', '匯出到這裡', prefs.lastExportFolder);

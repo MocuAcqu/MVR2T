@@ -2,42 +2,7 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { fileNameFor, parseExportRequest, renameWithRetry, runExport, safeBaseName, uniquePath } from './exporter';
-
-describe('renameWithRetry', () => {
-  const fail = (code: string) => Object.assign(new Error(`${code}: operation not permitted, rename`), { code });
-
-  it('retries while the new file is briefly locked (e.g. antivirus scan on Windows), then succeeds', async () => {
-    const calls: string[] = [];
-    let n = 0;
-    const renameFn = async (a: string, b: string) => {
-      calls.push(`${a}->${b}`);
-      if (n++ < 2) throw fail(n === 1 ? 'EPERM' : 'EBUSY');
-    };
-    await renameWithRetry('x.partial', 'x', renameFn, [0, 0, 0]);
-    expect(calls).toHaveLength(3);
-  });
-
-  it('gives up after the last retry and throws the original error', async () => {
-    let n = 0;
-    const renameFn = async () => {
-      n++;
-      throw fail('EACCES');
-    };
-    await expect(renameWithRetry('x.partial', 'x', renameFn, [0, 0])).rejects.toMatchObject({ code: 'EACCES' });
-    expect(n).toBe(3);
-  });
-
-  it('does not retry other errors', async () => {
-    let n = 0;
-    const renameFn = async () => {
-      n++;
-      throw fail('ENOENT');
-    };
-    await expect(renameWithRetry('x.partial', 'x', renameFn, [0, 0])).rejects.toMatchObject({ code: 'ENOENT' });
-    expect(n).toBe(1);
-  });
-});
+import { fileNameFor, friendlyError, parseExportRequest, renameWithRetry, runExport, safeBaseName, uniquePath } from './exporter';
 
 const PNG_B64 = Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(16)]).toString('base64');
 const base = { sessionId: 'abc123', mediaId: 'm_1', baseName: '會議.m4a', items: [{ content: 'transcript', format: 'srt' }] };
@@ -131,5 +96,36 @@ describe('runExport', () => {
     expect(summaryCalls.find((c) => c.format === 'md')?.mindmap_png).toBeUndefined();
     expect(calls.every((c) => c.auth === 'Bearer tok')).toBe(true);
     expect((await readdir(dir)).some((f) => f.endsWith('.partial'))).toBe(false); // failed items leave nothing behind
+  });
+});
+
+describe('renameWithRetry (Windows antivirus / file locks)', () => {
+  const fail = (code: string) => Object.assign(new Error(`${code}: operation not permitted, rename`), { code });
+
+  it('retries EPERM / EBUSY / EACCES and then succeeds', async () => {
+    const codes = ['EPERM', 'EBUSY', 'EACCES'];
+    const waits: number[] = [];
+    let calls = 0;
+    await renameWithRetry('a', 'b', [1, 2, 3, 4], async () => {
+      if (calls < codes.length) throw fail(codes[calls++]);
+      calls++;
+    }, async (ms) => void waits.push(ms));
+    expect(calls).toBe(4);
+    expect(waits).toEqual([1, 2, 3]);
+  });
+
+  it('gives up after the last delay with the original error, and never retries other errors', async () => {
+    let calls = 0;
+    await expect(renameWithRetry('a', 'b', [1, 1], async () => { calls++; throw fail('EPERM'); }, async () => undefined)).rejects.toMatchObject({ code: 'EPERM' });
+    expect(calls).toBe(3);
+    calls = 0;
+    await expect(renameWithRetry('a', 'b', [1, 1], async () => { calls++; throw fail('ENOENT'); }, async () => undefined)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(calls).toBe(1);
+  });
+
+  it('explains permission errors in plain words', () => {
+    expect(friendlyError(fail('EPERM'))).toContain('防毒軟體');
+    expect(friendlyError(fail('EACCES'))).toContain('允許 MVR2T');
+    expect(friendlyError(new Error('還沒有心智圖。'))).toBe('還沒有心智圖。');
   });
 });

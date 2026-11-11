@@ -17,7 +17,7 @@
 | — | 優化（完成通知、防睡眠、首頁精簡、引導） | ✅ 已在 Windows 驗收 |
 | 06 | LLM Integration（llama.cpp + Qwen3.5-4B 摘要） | ✅ 已在 Windows 驗收 |
 | 07 | Mind Map（React Flow 心智圖：編輯、拖曳、匯出 PNG／SVG） | ✅ 已在 Windows 驗收 |
-| 08 | Session and Export（匯出面板：TXT／CSV／Word／PDF／字幕／JSON／Markdown／ZIP） | ✅ 已在 Windows 驗收（fix1 待確認） |
+| 08 | Session and Export（匯出面板：TXT／CSV／Word／PDF／字幕／JSON／Markdown／ZIP） | ✅ 已在 Windows 驗收（fix2 待確認） |
 | 09 – 12 | Model Manager、硬體偵測、打包 | ⏳ |
 
 ## 環境需求
@@ -255,6 +255,10 @@ Phase 08 fix1：
 - [ ] 「設定 → 匯出資料夾」指定資料夾後，匯出不再詢問、直接存到那裡；面板中勾「這次改選其他資料夾」仍會詢問；
       資料夾不存在（例如拔掉隨身碟）時改為詢問；「改為每次詢問」可取消
 
+Phase 08 fix2（防毒軟體阻擋）：
+- [ ] 防毒軟體（例如 Avast 勒索軟體防護）阻擋寫入時，結果顯示「可能被防毒軟體阻擋…請允許 MVR2T」，而不是 EPERM
+- [ ] 在防毒軟體中允許後，按「重新匯出失敗的項目」：只重新匯出失敗的檔案、存到同一個資料夾、不再詢問；成功的項目保留在清單中
+
 ## 開發注意事項
 
 - `requirements/*.txt`、`pytest.ini` 等會被 pip / pytest 以「系統編碼」讀取的檔案，**必須只含 ASCII**（註解請用英文）。繁體中文 Windows 的系統編碼是 cp950，讀到 UTF-8 中文會安裝失敗。
@@ -274,4 +278,5 @@ shared/          前後端共用的常數與型別
 ## 已知待辦（刻意留到後續 Phase）
 
 - 逐字稿編輯、依時間戳記播放原始影音：後續 Phase（Transcript Editor）
+- Phase 11：在有第三方防毒軟體（例如 Avast）的電腦上驗收匯出 Word／PDF；考慮程式碼簽章，減少防毒軟體詢問
 - Phase 11：PyInstaller 打包後端（Electron 已預留 `resources/backend/mvr2t-backend(.exe)` 路徑）

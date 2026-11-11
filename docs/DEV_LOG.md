@@ -1,6 +1,6 @@
 # 開發紀錄（給接手的 Claude / Claude Code）
 
-最後更新：2026-11-11。Phase 08 已在 Windows 驗收（本機 d948bf2）；fix1（Word 標題字型＋三項優化）待套用。
+最後更新：2026-11-11。Phase 08 與 fix1 已在 Windows 驗收（本機 796660f）；fix2（防毒軟體阻擋時的訊息與重試）待套用。
 
 ## 目前進度
 
@@ -16,7 +16,7 @@
 | 優化（通知／防睡眠／首頁／引導） | ✅ Windows 驗收通過（2026-11-09） |
 | 06 LLM Integration | ✅ Windows 驗收通過（2026-11-10，llama.cpp b11312＋Qwen3.5-4B） |
 | 07 Mind Map | ✅ Windows 驗收通過（2026-11-11，含 fix1，本機 880149a） |
-| 08 Session and Export | ✅ Windows 驗收通過（2026-11-11，本機 d948bf2）；fix1 待確認 |
+| 08 Session and Export | ✅ Windows 驗收通過（2026-11-11，含 fix1，本機 796660f）；fix2 待確認 |
 
 ## 沙盒驗證結果（2026-11-06）
 
@@ -193,6 +193,26 @@
 - 驗證：pytest export 11 個（新增主題字型與摘要類型）；vitest 170（prefs 3、exportPlan 6）；
   Electron E2E：逐字稿卡片只預選逐字稿、摘要只匯出重點＋行動事項（Word 無心智圖圖片）、
   指定固定資料夾後匯出時對話框呼叫 0 次。
+
+### fix1 Windows 驗收與 fix2（2026-11-11，本機 ec99b2e ＋ 796660f）
+- fix1 全部通過：Word 標題為微軟正黑體；styles.xml 無主題字型屬性、`w:lang w:eastAsia="zh-TW"`；摘要類型、卡片匯出、
+  上次資料夾、固定資料夾正常；preferences.json 只有 lastExportFolder、fixedExportFolder。
+- **問題**：匯出摘要 Word 失敗 `EPERM: operation not permitted, rename '…-摘要.docx.partial' -> '…-摘要.docx'`。
+  使用者電腦裝有 Avast：勒索軟體防護保護「文件」中的 Office 檔；寫 .partial 不受保護，改名成 .docx 被攔截，
+  直到使用者在 Avast 按「允許」。
+- 本機修正 796660f（Claude Code）：`renameWithRetry()`，EPERM／EBUSY／EACCES 等待後重試（50～1500 ms，約 3 秒），
+  可處理 Defender 掃描新檔的短暫佔用。patch 沒有附上，這邊依回報的行為獨立實作同樣的函式與 3 個測試
+  （fix2 會覆蓋本機的 exporter.ts／exporter.test.ts）。
+- fix2：
+  - `friendlyError()`：重試用完仍是 EPERM／EACCES → 「可能被防毒軟體（例如勒索軟體防護）阻擋…請允許 MVR2T」；
+    EBUSY、ENOSPC 也有說明。
+  - 結果清單新增「重新匯出失敗的項目」：只匯出失敗的項目，`useLastFolder` 存到同一個資料夾（Main 記住的路徑，renderer 不能指定），
+    結果併回原清單。
+  - 評估「以最終副檔名寫暫存檔」：勒索軟體防護在建立受保護類型的檔案時就會攔截，寫入或改名都一樣會被擋，
+    只是失敗的時間點不同；保留 .partial（未完成的檔案不會被誤認為完整的文件）。
+  - Phase 11 待辦：在有第三方防毒軟體的電腦上驗收匯出 Word／PDF；打包後執行檔改變，防毒軟體可能再次詢問，考慮程式碼簽章。
+- 驗證：vitest 173；Electron E2E 模擬改名 EPERM（main 的 fs.rename 被替換）：顯示防毒軟體說明 →
+  解除後「重新匯出失敗的項目」→ 2 / 2，沒有殘留 .partial。
 
 ### 驗證（沙盒）
 - pytest：`tests/test_export.py` 9 個（每個組合都能產生、CSV BOM／CRLF／逗號引號、SRT／VTT 時間、DOCX 字型與圖片、
