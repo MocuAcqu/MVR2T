@@ -2,7 +2,7 @@
  * Electron Main Process（規格 §3.2）
  * 職責：視窗管理、應用程式生命週期、IPC、Python Backend 生命週期（Phase 03）。
  */
-import { writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
@@ -18,8 +18,9 @@ import {
   type IpcMainInvokeEvent,
 } from 'electron';
 import { APP_NAME, IPC_CHANNELS } from '@shared/constants/app';
-import type { AppInfo, BackendState, SaveFileResult } from '@shared/types/ipc';
+import type { AppInfo, BackendState, ExportFilesResult, SaveFileResult } from '@shared/types/ipc';
 import { BackendManager, resolveBackendCommand } from './backend';
+import { parseExportRequest, runExport } from './exporter';
 import { isAppUrl, isSafeExternalUrl, parseNotification, parseSaveRequest, rendererOrigins } from './security';
 
 // 開發模式：由 `npm run dev` 注入 Vite dev server 位址；正式版則載入打包後的 index.html。
@@ -35,8 +36,15 @@ const externalBackendUrl = process.env.MVR2T_BACKEND_URL;
 // Backend
 // ---------------------------------------------------------------------------
 
+/** 匯出 PDF 用的隱藏視窗（不算程式的視窗：不收後端狀態、不當成主視窗） */
+const printWindows = new Set<BrowserWindow>();
+
+function appWindows(): BrowserWindow[] {
+  return BrowserWindow.getAllWindows().filter((w) => !printWindows.has(w));
+}
+
 function broadcast(state: BackendState): void {
-  for (const win of BrowserWindow.getAllWindows()) {
+  for (const win of appWindows()) {
     if (!win.isDestroyed()) win.webContents.send(IPC_CHANNELS.backendStateChanged, state);
   }
 }
@@ -183,11 +191,74 @@ async function saveFile(input: unknown): Promise<SaveFileResult> {
 }
 
 // ---------------------------------------------------------------------------
+// 匯出面板（Phase 08）：選資料夾 → 向後端取得各檔案（PDF 由隱藏視窗列印）→ 寫入，不覆蓋同名檔案
+// ---------------------------------------------------------------------------
+
+/**
+ * 列印用 HTML（後端產生，靜態內容）→ PDF。隱藏視窗：不執行 JavaScript、獨立的記憶體 session、沒有 preload；
+ * Chromium 會把用到的中文字型（Windows：微軟正黑體）子集嵌入 PDF。
+ */
+async function printHtmlToPdf(html: string): Promise<Buffer> {
+  const dir = await mkdtemp(path.join(app.getPath('temp'), 'mvr2t-print-'));
+  const file = path.join(dir, 'print.html');
+  const win = new BrowserWindow({
+    show: false,
+    width: 900,
+    height: 1200,
+    webPreferences: { javascript: false, sandbox: true, contextIsolation: true, nodeIntegration: false, partition: 'mvr2t-print' },
+  });
+  printWindows.add(win);
+  win.webContents.on('will-navigate', (event) => event.preventDefault());
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  try {
+    await writeFile(file, html, 'utf8');
+    await win.loadFile(file);
+    return await win.webContents.printToPDF({ pageSize: 'A4', printBackground: true, preferCSSPageSize: true });
+  } finally {
+    printWindows.delete(win);
+    win.destroy();
+    await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+let lastExportFolder: string | null = null;
+
+/** 上次異常結束時留下的列印暫存資料夾（規格 §8.4）：啟動時清除。 */
+async function cleanupStalePrintDirs(): Promise<void> {
+  const tmp = app.getPath('temp');
+  const names = await readdir(tmp).catch(() => [] as string[]);
+  await Promise.all(
+    names.filter((n) => n.startsWith('mvr2t-print-')).map((n) => rm(path.join(tmp, n), { recursive: true, force: true }).catch(() => undefined)),
+  );
+}
+
+async function exportFiles(input: unknown): Promise<ExportFilesResult> {
+  const req = parseExportRequest(input);
+  if (!req) throw new Error('Invalid export request');
+  const state = currentBackendState();
+  if (state.phase !== 'running' || !state.url) throw new Error('後端尚未就緒，請稍後再試。');
+  const win = mainWindow();
+  const options = {
+    title: '選擇匯出資料夾',
+    defaultPath: app.getPath('documents'),
+    properties: ['openDirectory', 'createDirectory'] as Array<'openDirectory' | 'createDirectory'>,
+    buttonLabel: '匯出到這裡',
+  };
+  const { canceled, filePaths } = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+  if (canceled || !filePaths[0]) return { folder: null, results: [] };
+  const folder = filePaths[0];
+  lastExportFolder = folder;
+  const results = await runExport(req, folder, { backendUrl: state.url, token: state.token, printToPdf: printHtmlToPdf });
+  console.log(`[export] ${results.filter((r) => r.ok).length}/${results.length} file(s) -> ${folder}`);
+  return { folder, results };
+}
+
+// ---------------------------------------------------------------------------
 // 通知與防止睡眠
 // ---------------------------------------------------------------------------
 
 function mainWindow(): BrowserWindow | undefined {
-  return BrowserWindow.getAllWindows().find((w) => !w.isDestroyed());
+  return appWindows().find((w) => !w.isDestroyed());
 }
 
 /** 程式不在前景時才通知（在前景時畫面上已經看得到結果）。點通知會把視窗帶回前景。 */
@@ -243,6 +314,10 @@ function registerIpc(): void {
   handle(IPC_CHANNELS.notify, showNotification);
   handle(IPC_CHANNELS.setKeepAwake, setKeepAwake);
   handle(IPC_CHANNELS.saveFile, saveFile);
+  handle(IPC_CHANNELS.exportFiles, exportFiles);
+  handle(IPC_CHANNELS.openExportFolder, async () => {
+    if (lastExportFolder) await shell.openPath(lastExportFolder);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -254,7 +329,7 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    const [win] = BrowserWindow.getAllWindows();
+    const [win] = appWindows();
     if (win) {
       if (win.isMinimized()) win.restore();
       win.focus();
@@ -272,12 +347,13 @@ if (!app.requestSingleInstanceLock()) {
     powerMonitor.on('resume', () => console.log('[power] system resume'));
     app.on('render-process-gone', (_e, _wc, details) => console.log(`[renderer] gone: ${details.reason} (exit ${details.exitCode})`));
     installDevCsp();
+    void cleanupStalePrintDirs();
     // 視窗與後端同時啟動；畫面會顯示「後端啟動中」直到健康檢查通過。
     if (!externalBackendUrl) void backend.start();
     createMainWindow();
     // macOS：點擊 Dock 圖示且沒有視窗時重新建立
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
+      if (appWindows().length === 0) createMainWindow();
     });
   });
 

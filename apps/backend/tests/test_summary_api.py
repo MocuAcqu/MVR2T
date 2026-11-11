@@ -152,3 +152,35 @@ def test_regenerating_the_mindmap_keeps_the_other_summary_results(data_dir, two_
         assert s2["types"] == ["overview", "mindmap"]
         assert s2["results"]["overview"] == s["results"]["overview"]  # kept
         assert events == ["load", "unload", "load", "unload"]
+
+
+def test_export_api_returns_files_for_the_current_session(data_dir, two_segment_wav):  # noqa: F811
+    """Phase 08: POST /api/export (CSV with BOM, DOCX, print HTML, segment ZIP); clear errors before data exists."""
+    import io
+    import zipfile
+
+    events: list[str] = []
+    with client(data_dir, events) as c:
+        sid, mid, _ = prepare(c, two_segment_wav)
+
+        def export(content: str, fmt: str, **extra):  # noqa: ANN003, ANN202
+            return c.post("/api/export", json={"session_id": sid, "media_id": mid, "content": content, "format": fmt, **extra})
+
+        r = export("transcript", "txt")
+        assert r.status_code == 404 and "語音辨識" in r.json()["detail"]
+        r = export("segments", "csv")
+        assert r.status_code == 200 and r.content.startswith(b"\xef\xbb\xbf") and r.headers["content-type"].startswith("text/csv")
+        z = zipfile.ZipFile(io.BytesIO(export("segments_audio", "zip").content))
+        assert z.namelist()[-1] == "segments.csv" and all(n.startswith("seg_") for n in z.namelist()[:-1])
+        assert export("segments", "srt").status_code == 422
+        assert transcribe(c, sid, mid)["status"] == "completed"
+        assert export("transcript", "srt").text.startswith("1\r\n00:00:")
+        assert export("transcript", "docx").content[:2] == b"PK"
+        r = generate(c, sid, mid, ["overview", "mindmap"])
+        assert wait_task(c, sid, r.json()["task_id"], timeout=30)["status"] == "completed"
+        edited = {"id": "n", "text": "我改過的中心", "kind": "central", "refs": [], "time": None, "children": []}
+        md = export("summary", "md", mindmap=edited).text
+        assert "## 全文摘要" in md and "我改過的中心" in md
+        assert "<!DOCTYPE html>" in export("summary", "html").text
+        assert export("summary", "md", mindmap_png="!!").status_code == 422
+        assert c.post("/api/export", json={"session_id": sid, "media_id": "other", "content": "summary", "format": "md"}).status_code == 404

@@ -41,6 +41,11 @@ export function fromSummary(node: MindMapNode): MindNode {
   return balanceSides(convert(node));
 }
 
+/** 可編輯的樹 → 後端的心智圖格式（匯出摘要時使用；去掉收合、位移等畫面狀態）。 */
+export function toSummary(node: MindNode): MindMapNode {
+  return { id: node.id, text: node.text, kind: node.kind, refs: node.refs, time: node.time, children: node.children.map(toSummary) };
+}
+
 // ---------------------------------------------------------------------------
 // 查詢
 // ---------------------------------------------------------------------------

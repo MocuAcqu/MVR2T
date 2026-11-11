@@ -52,6 +52,43 @@ export interface SaveFileRequest {
   data: string;
 }
 
+export type ExportContent = 'segments' | 'segments_audio' | 'transcript' | 'summary' | 'mindmap';
+export type ExportFormat = 'txt' | 'csv' | 'docx' | 'pdf' | 'srt' | 'vtt' | 'json' | 'md' | 'zip' | 'png' | 'svg';
+
+export interface ExportItem {
+  content: ExportContent;
+  format: ExportFormat;
+}
+
+/** 匯出面板 → Main。檔案存到使用者在對話框中選的資料夾。 */
+export interface ExportFilesRequest {
+  sessionId: string;
+  mediaId: string;
+  /** 媒體檔名（不含副檔名也可以）；檔名為 <baseName>-<內容>.<格式> */
+  baseName: string;
+  items: ExportItem[];
+  /** 編輯後的心智圖（樹）；摘要匯出時使用 */
+  mindmap?: unknown;
+  /** 心智圖 PNG（base64）：心智圖 PNG 與摘要 DOCX／PDF 使用 */
+  mindmapPng?: string;
+  /** 心智圖 SVG（UTF-8 文字） */
+  mindmapSvg?: string;
+}
+
+export interface ExportItemResult extends ExportItem {
+  ok: boolean;
+  /** 成功時寫入的完整路徑 */
+  path: string | null;
+  /** 失敗時給使用者看的說明 */
+  error: string | null;
+}
+
+export interface ExportFilesResult {
+  /** 使用者選的資料夾；取消則 null */
+  folder: string | null;
+  results: ExportItemResult[];
+}
+
 export interface SaveFileResult {
   saved: boolean;
   /** 使用者選擇的路徑（取消時為 null） */
@@ -74,4 +111,8 @@ export interface Mvr2tBridge {
   setKeepAwake(on: boolean): Promise<void>;
   /** 跳出「另存新檔」對話框並寫入檔案；使用者取消時 saved = false。 */
   saveFile(request: SaveFileRequest): Promise<SaveFileResult>;
+  /** 匯出面板：選資料夾並寫入多個檔案（Phase 08） */
+  exportFiles(request: ExportFilesRequest): Promise<ExportFilesResult>;
+  /** 開啟最近一次匯出的資料夾 */
+  openExportFolder(): Promise<void>;
 }

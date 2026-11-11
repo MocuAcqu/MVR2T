@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Mono } from '@/components/mono/Mono';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { ExportDialog } from '@/features/export/ExportDialog';
 import { removeMedia } from '@/features/media/mediaController';
 import { ExtractionCard } from '@/features/workspace/ExtractionCard';
 import { MindMapCard } from '@/features/mindmap/MindMapCard';
@@ -15,6 +17,7 @@ import { useUiStore } from '@/stores/uiStore';
 export function WorkspacePage() {
   const imp = useSessionStore((s) => s.import);
   const setPage = useUiStore((s) => s.setPage);
+  const [exporting, setExporting] = useState(false);
 
   if (imp.status !== 'ready') {
     const inProgress = imp.status === 'uploading' || imp.status === 'probing';
@@ -46,15 +49,18 @@ export function WorkspacePage() {
           <h1 className="text-h1">工作區</h1>
           <p className="mt-1 truncate text-body-gray" title={imp.info.filename}>{imp.info.filename}</p>
         </div>
-        <Button
-          variant="secondary"
-          onClick={() => {
-            void removeMedia();
-            setPage('dashboard');
-          }}
-        >
-          換一個檔案
-        </Button>
+        <div className="flex flex-wrap gap-3">
+          <Button onClick={() => setExporting(true)}>匯出</Button>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              void removeMedia();
+              setPage('dashboard');
+            }}
+          >
+            換一個檔案
+          </Button>
+        </div>
       </div>
       {/* items-stretch（預設）：兩張卡片在同一列時等高 */}
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
@@ -70,6 +76,7 @@ export function WorkspacePage() {
       <div className="mt-6">
         <MindMapCard />
       </div>
+      <ExportDialog open={exporting} onClose={() => setExporting(false)} />
     </PageContainer>
   );
 }

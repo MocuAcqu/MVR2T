@@ -1,6 +1,6 @@
 # 開發紀錄（給接手的 Claude / Claude Code）
 
-最後更新：2026-11-11。Phase 07 已在 Windows 驗收（fix1 待套用）；下一步 Phase 08 Session and Export（含使用者新增的 CSV／DOCX／PDF 需求，待確認設計）。
+最後更新：2026-11-11。Phase 08 匯出已在沙盒完成，待 Windows 驗收（基準：本機 880149a）。
 
 ## 目前進度
 
@@ -15,7 +15,8 @@
 | 介面更新（Mono／標題／引導） | ✅ Windows 驗收通過（2026-11-09） |
 | 優化（通知／防睡眠／首頁／引導） | ✅ Windows 驗收通過（2026-11-09） |
 | 06 LLM Integration | ✅ Windows 驗收通過（2026-11-10，llama.cpp b11312＋Qwen3.5-4B） |
-| 07 Mind Map | ✅ Windows 驗收通過（2026-11-11）；fix1 待確認 |
+| 07 Mind Map | ✅ Windows 驗收通過（2026-11-11，含 fix1，本機 880149a） |
+| 08 Session and Export | 🧪 沙盒完成（2026-11-11），待 Windows 驗收 |
 
 ## 沙盒驗證結果（2026-11-06）
 
@@ -112,6 +113,67 @@
 - 沙盒的 init 不會立即回收殭屍行程，`kill -0` 對殭屍也成功；判斷行程是否存活請看 `/proc/<pid>/stat` 狀態不是 `Z`。
 - 在沙盒跑 Electron：`xvfb-run -a`，並加 `--no-sandbox`（root）。
 
+## Phase 08 Session and Export（2026-11-11）
+
+### 規劃（使用者已確認）
+
+使用者新增需求：除了規格 §G 的 TXT／SRT／VTT／JSON／Markdown（與已完成的 PNG／SVG），另外支援 CSV、DOCX、PDF，
+而且「音訊抽取與切段、逐字稿、摘要」三類都要能輸出成 TXT、CSV、PDF、DOCX。
+
+使用者的決定：
+- PDF：Electron 列印成 PDF（隱藏視窗載入排版頁 → `webContents.printToPDF`，A4）。Chromium 自動嵌入用到的
+  Noto Sans TC 字（程式已內附 @fontsource），不需新增 Python 套件或字型檔。
+- 介面：工作區上方一個統一的「匯出」面板，勾選內容與格式，一次存到使用者選的資料夾。
+- 音訊：匯出各切段音檔（ZIP：seg_0000.wav… ＋ 切段清單 CSV）。完整 WAV、MP3 不做。
+- 摘要的 DOCX／PDF 放心智圖圖片（目前編輯後的心智圖，縮放到頁寬）。
+
+匯出內容 × 格式：
+
+| 內容 | 格式 |
+|---|---|
+| 切段清單（序號、開始、結束、長度、切點種類） | TXT、CSV、DOCX、PDF |
+| 切段音檔 | ZIP（各段 WAV ＋ segments.csv） |
+| 逐字稿 | TXT、SRT、VTT、JSON、CSV、DOCX、PDF |
+| 摘要（使用者勾選產生的種類） | Markdown、TXT、CSV、JSON、DOCX、PDF（DOCX／PDF 含心智圖圖片） |
+| 心智圖 | PNG、SVG（已完成，也放進面板） |
+
+實作方向：
+- 文字類（TXT／SRT／VTT／JSON／CSV／Markdown）與 DOCX、ZIP 在後端產生（規格的 `POST /api/export`）；
+  DOCX 用 python-docx（純 Python），中文字型設為 eastAsia「Microsoft JhengHei」（macOS 用 PingFang TC）。
+- CSV 一律 UTF-8 **含 BOM**、CRLF，讓 Excel 直接開啟不亂碼；時間欄位同時給「秒數」與「hh:mm:ss.mmm」。
+- 存檔：面板選資料夾（`dialog.showOpenDialog` directory）→ Electron 主程序直接從後端串流下載到檔案
+  （ZIP 可能數十 MB，不經 renderer、不受 IPC 50 MB 限制）；同名檔案自動加「 (2)」，不覆蓋。
+- PDF：renderer 提供列印用排版頁（不顯示在導覽中），主程序開隱藏視窗 printToPDF 後寫檔。
+- 心智圖圖片：renderer 用現有的 `renderMindMap()` 產生 PNG，隨匯出請求送給後端（DOCX）或列印頁（PDF）。
+- Session 部分（暫存目錄、清除、重新整理清除、異常關閉後清理）：Phase 03～04 已做了一部分，開工前先盤點，只補缺的。
+- 驗收新增：Excel 開 CSV 中文正常；Word 開 DOCX 中文與心智圖正常；PDF 在其他電腦開啟字型正常；
+  匯出後清除 Session，已匯出的檔案仍在。
+
+### 實作
+- 後端 `app/services/export.py` + `POST /api/export`（`ExportRequest`：content、format、可選 mindmap（編輯後的樹）、mindmap_png）。
+  全部在記憶體產生 bytes，不寫檔；`format = html` 是給 Electron 轉 PDF 的列印版（A4、`@page`、
+  字型列表 Microsoft JhengHei → PingFang TC → Noto Sans CJK TC）。
+- 新依賴：`python-docx==1.2.0`、`lxml==6.1.3`（requirements/base.txt；兩者都有 Windows／macOS 的 cp311 wheel）。
+- Electron `electron/exporter.ts`（不 import electron，可單元測試）：驗證請求（已知組合、id 格式、PNG 簽章、SVG 開頭、大小）、
+  檔名 `<媒體檔名>-<內容>.<格式>`、同名加「 (2)」、先寫 `.partial` 再改名、後端回應以串流寫入（ZIP 不經 renderer）。
+  單一項目失敗不影響其他項目。
+- `main.ts`：IPC `file:export`（showOpenDialog 選資料夾）、`file:open-export-folder`（只開最近一次匯出的資料夾，renderer 不能指定路徑）。
+  PDF：隱藏 BrowserWindow（`javascript: false`、sandbox、獨立 partition `mvr2t-print`、禁止導覽與開新視窗）載入暫存 HTML →
+  `printToPDF({ pageSize: 'A4', preferCSSPageSize: true })`。列印視窗不算程式視窗（`appWindows()` 排除，不收後端狀態廣播）。
+  啟動時清除上次留下的 `mvr2t-print-*` 暫存資料夾。
+- 前端：`features/export/ExportDialog.tsx`（原生 `<dialog>`）、`exportPlan.ts`（可用性、勾選 → 項目）。
+  心智圖圖片由編輯器登記的 `captureMindmap()`（`features/mindmap/capture.ts`）產生，只在需要時（心智圖 PNG、摘要 Word／PDF）。
+  勾選只記在記憶體（這次開啟的程式中）。
+- Session 部分盤點：Session 管理、暫存目錄、Session 清除（換檔／重新整理會建立新 Session 並刪除舊的）、
+  後端啟動時清除殘留暫存（Phase 04 已完成）。本 Phase 只補了列印暫存的清除；匯出檔案在使用者資料夾，不受 Session 清除影響。
+
+### 驗證（沙盒）
+- pytest：`tests/test_export.py` 9 個（每個組合都能產生、CSV BOM／CRLF／逗號引號、SRT／VTT 時間、DOCX 字型與圖片、
+  ZIP 內容、編輯後心智圖優先、壞圖片改用條列）＋ API 測試 1 個。vitest：exporter 5 個、exportPlan 4 個。
+- Electron E2E（Xvfb、Vite 開發模式、假 ASR／LLM 的後端、替換 showOpenDialog）：20 種檔案全部成功；
+  第二次匯出全部變成「(2)」；PDF 以 pdffonts 確認中文字型已嵌入（沙盒是 Noto Sans CJK；Windows 會是微軟正黑體）；
+  DOCX 以 LibreOffice 轉圖確認心智圖圖片與表格。
+
 ## Phase 07 Mind Map（2026-11-11）
 
 使用者決定：心智圖併入「產生摘要」的勾選（另有「重新產生心智圖」）；中心向左右展開；時間顯示在節點上（可點、會匯出）。
@@ -154,6 +216,8 @@
   → fix1：`mindmap_coverage()`（引用到的最後一句的位置）< 0.5 且 ≥20 句時，加上「必須涵蓋開頭到結尾」的提示、
   溫度 0.1 重做一次，保留涵蓋較完整的結果（最多 2 次）。
 - 小問題 → fix1：改字輸入框跟著內容長高（原本最多 4 行出現捲軸）；工具列「編輯」改名「改文字」，未選取時顯示「先點選一個節點」。
+- fix1 在 Windows 套用（880149a）：前端 156、後端 130 passed／8 skipped；輸入框與工具列確認正常。
+  **涵蓋範圍重做尚未在真實模型上觸發過**（使用者這次不跑 30 分鐘的 8 種測試）；之後實測若看到進度「內容只涵蓋前段，重新整理一次」請記錄。
 
 ### 驗證（沙盒）
 - vitest：model 11 tests；pytest：19 passed（含 merge 與 mindmap 預算測試）；electron security tests 含 saveFile 驗證。

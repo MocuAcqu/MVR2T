@@ -32,6 +32,28 @@ export const IPC_CHANNELS = {
   setKeepAwake: 'power:keep-awake',
   /** Renderer → Main：以「另存新檔」對話框儲存匯出的檔案（心智圖 PNG／SVG；Phase 08 起更多格式）。 */
   saveFile: 'file:save',
+  /** Renderer → Main：匯出面板（Phase 08）。選資料夾後，由 Main 向後端取得檔案（PDF 由 Main 列印）並寫入。 */
+  exportFiles: 'file:export',
+  /** Renderer → Main：在檔案總管中開啟「最近一次匯出」的資料夾（renderer 不能指定路徑）。 */
+  openExportFolder: 'file:open-export-folder',
   /** Main → Renderer 推送後端狀態變化。 */
   backendStateChanged: 'backend:state-changed',
+} as const;
+
+/** 匯出（Phase 08）：內容 → 支援的格式。後端 apps/backend/app/services/export.py 的 FORMATS 需一致（pdf 由後端 html 轉成）。 */
+export const EXPORT_FORMATS = {
+  segments: ['txt', 'csv', 'docx', 'pdf'],
+  segments_audio: ['zip'],
+  transcript: ['txt', 'srt', 'vtt', 'json', 'csv', 'docx', 'pdf'],
+  summary: ['md', 'txt', 'csv', 'json', 'docx', 'pdf'],
+  mindmap: ['png', 'svg'],
+} as const;
+
+/** 匯出檔名中的內容名稱：<媒體檔名>-<名稱>.<副檔名> */
+export const EXPORT_LABELS = {
+  segments: '切段清單',
+  segments_audio: '切段音檔',
+  transcript: '逐字稿',
+  summary: '摘要',
+  mindmap: '心智圖',
 } as const;

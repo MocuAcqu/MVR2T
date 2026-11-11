@@ -19,6 +19,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { startMindmap } from '@/features/media/mediaController';
 import { cn } from '@/lib/utils';
 import { useSessionStore } from '@/stores/sessionStore';
+import { registerMindmapCapture } from './capture';
 import { exportFileName, renderMindMap, saveImage } from './exportImage';
 import { MindActionsContext, MindNodeView, type MindActions, type MindFlowNode } from './MindMapNode';
 import {
@@ -290,24 +291,36 @@ function MindMapEditor({ root, mediaName }: { root: MindNode; mediaName: string 
     }
   };
 
+  // 產生心智圖圖片（工具列的匯出與工作區的「匯出」面板共用）
+  const selectedRef = useRef(selectedId);
+  selectedRef.current = selectedId;
+  const capture = useCallback(
+    async (kind: SaveFileKind): Promise<string> => {
+      const viewport = wrapRef.current?.querySelector<HTMLElement>('.react-flow__viewport');
+      if (!viewport) throw new Error('找不到心智圖畫面');
+      const keepSelected = selectedRef.current;
+      setSelectedId(null); // 選取框不要出現在圖片中
+      setEditingId(null);
+      try {
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        return await renderMindMap(viewport, getNodesBounds(rf.getNodes()), kind);
+      } finally {
+        setSelectedId(keepSelected);
+      }
+    },
+    [rf],
+  );
+  useEffect(() => registerMindmapCapture(capture), [capture]);
+
   const doExport = async (kind: SaveFileKind) => {
-    const viewport = wrapRef.current?.querySelector<HTMLElement>('.react-flow__viewport');
-    if (!viewport) return;
     setExporting(true);
     setNotice(null);
-    const keepSelected = selectedId;
-    setSelectedId(null); // 選取框不要出現在圖片中
-    setEditingId(null);
     try {
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      const bounds = getNodesBounds(rf.getNodes());
-      const dataUrl = await renderMindMap(viewport, bounds, kind);
-      const path = await saveImage(dataUrl, kind, exportFileName(mediaName));
+      const path = await saveImage(await capture(kind), kind, exportFileName(mediaName));
       if (path) setNotice(`已儲存：${path}`);
     } catch (err) {
       setNotice(`匯出失敗：${err instanceof Error ? err.message : String(err)}`);
     } finally {
-      setSelectedId(keepSelected);
       setExporting(false);
     }
   };

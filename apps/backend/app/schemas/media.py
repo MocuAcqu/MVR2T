@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class SessionResponse(BaseModel):
@@ -203,3 +203,15 @@ class Summary(BaseModel):
     chunks: int
     levels: int
     elapsed_seconds: float
+
+
+class ExportRequest(BaseModel):
+    """POST /api/export（Phase 08）。format = html 是給 Electron 轉成 PDF 的列印版。"""
+
+    session_id: str
+    media_id: str
+    content: Literal["segments", "segments_audio", "transcript", "summary"]
+    format: Literal["txt", "csv", "docx", "html", "srt", "vtt", "json", "md", "zip"]
+    # 摘要：前端編輯後的心智圖（樹）與它的 PNG（base64）；沒有就用 AI 產生的原始心智圖
+    mindmap: MindMapNode | None = None
+    mindmap_png: str | None = Field(default=None, max_length=28_000_000)
