@@ -222,6 +222,9 @@ export interface Summary {
   /** 階層式整合的層數（0 = 直接摘要） */
   levels: number;
   elapsed_seconds: number;
+  /** Phase 10：實際使用的運算裝置與說明（例如 GPU 失敗改用 CPU） */
+  device?: ComputeDevice | null;
+  device_note?: string | null;
 }
 
 /** 摘要工作完成時的結果（完整摘要另以 GET /api/summary 取得）。 */
@@ -237,7 +240,7 @@ export interface SummarizeResult {
 // Phase 09：模型管理（GET /api/models）。以「套件」為單位：語音辨識（ASR＋對齊）、摘要與心智圖（LLM＋llama.cpp）
 // ---------------------------------------------------------------------------
 
-export type PackageId = 'asr' | 'llm';
+export type PackageId = 'asr' | 'llm' | 'llm_gpu';
 export type PackageStatus = 'installed' | 'not_installed' | 'partial' | 'outdated' | 'damaged' | 'queued' | 'downloading' | 'verifying';
 
 export interface PackageModel {
@@ -291,6 +294,8 @@ export interface ModelPackage {
   status: PackageStatus;
   size_bytes: number;
   missing_bytes: number;
+  /** 選用（GPU 加速）：不在「全部下載」裡，只在硬體支援時出現 */
+  optional: boolean;
   models: PackageModel[];
   runtime: PackageRuntime | null;
   job: PackageJob | null;
@@ -311,4 +316,39 @@ export interface ModelManagerState {
   packages: ModelPackage[];
   unused: UnusedItem[];
   busy: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 10：硬體偵測與運算裝置（GET /api/system/info）
+// ---------------------------------------------------------------------------
+
+export type ComputeDevice = 'cpu' | 'cuda' | 'metal';
+
+export interface GpuInfo {
+  vendor: string;
+  name: string;
+  vram_total: number | null;
+  vram_free: number | null;
+  driver: string | null;
+}
+
+export interface HardwareInfo {
+  platform: string;
+  os_name: string;
+  arch: string;
+  cpu_name: string;
+  cpu_threads: number;
+  ram_total: number;
+  ram_available: number;
+  gpus: GpuInfo[];
+  cuda_available: boolean;
+  cuda_reason: string;
+  metal_available: boolean;
+  metal_reason: string;
+}
+
+export interface SystemInfo {
+  hardware: HardwareInfo;
+  llm: { device: ComputeDevice; n_gpu_layers: number; ctx: number; reason: string; warnings: string[] };
+  asr: { device: ComputeDevice; reason: string; warnings: string[] };
 }

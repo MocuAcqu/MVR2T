@@ -27,11 +27,13 @@ from app.models.runtime import (
     LLAMA_CPP,
     LlamaRuntimeError,
     asset_for,
-    current_platform,
+    CPU,
+    CUDA,
     download_runtime,
     find_llama_server,
     install_dir,
     runtime_size,
+    variant_platform,
 )
 from app.models.store import (
     MARKER,
@@ -46,7 +48,7 @@ from app.models.store import (
 )
 from app.services.model_lock import MODEL_LOCK
 
-PackageId = Literal["asr", "llm"]
+PackageId = Literal["asr", "llm", "llm_gpu"]
 JobAction = Literal["download", "verify"]
 
 
@@ -58,6 +60,10 @@ class Package:
     hardware: str
     models: tuple[ModelSpec, ...]
     runtime: bool = False
+    #: llama.cpp 的版本：cpu（預設；macOS 內建 Metal）或 cuda（Phase 10 的 GPU 加速）
+    runtime_variant: str = CPU
+    #: 選用（不在「全部下載」裡，只在硬體支援時顯示）
+    optional: bool = False
 
 
 PACKAGES: tuple[Package, ...] = (
@@ -78,6 +84,32 @@ PACKAGES: tuple[Package, ...] = (
     ),
 )
 BY_PACKAGE = {p.id: p for p in PACKAGES}
+
+#: Phase 10：NVIDIA GPU 加速摘要（CUDA 版 llama.cpp）。只在偵測到可用的 NVIDIA GPU、而且 CUDA 版已固定版本時顯示。
+LLM_GPU = Package(
+    "llm_gpu",
+    "摘要 GPU 加速（NVIDIA）",
+    "用 NVIDIA 顯示卡執行摘要與心智圖，通常比 CPU 快很多。需要先安裝「摘要與心智圖」；GPU 無法使用時會自動改用 CPU。",
+    "需要 NVIDIA 顯示卡（建議顯示記憶體 4 GB 以上）與較新的驅動程式。",
+    (),
+    runtime=True,
+    runtime_variant=CUDA,
+    optional=True,
+)
+
+
+def optional_packages() -> list[Package]:
+    """依硬體決定要顯示的選用套件（測試可替換）。"""
+    try:
+        from app.core.hardware import detect
+        from app.core.runtime_select import cuda_build_ok
+
+        plat = variant_platform(CUDA)
+        if plat and cuda_build_ok(detect(), plat)[0]:
+            return [LLM_GPU]
+    except Exception:  # noqa: BLE001 - 偵測失敗時不顯示選用套件
+        pass
+    return []
 
 
 class ManagerError(Exception):
@@ -136,14 +168,23 @@ class ModelManager:
 
     # ------------------------------------------------------------------ 狀態
 
-    def _runtime_installed(self) -> bool:
-        return find_llama_server(self.runtime_root) is not None
+    def _plat(self, p: Package | None = None) -> str | None:
+        return variant_platform(p.runtime_variant if p else CPU)
 
-    def _runtime_supported(self) -> bool:
-        return bool(LLAMA_CPP.tag) and asset_for(LLAMA_CPP, current_platform()) is not None
+    def _runtime_installed(self, p: Package | None = None) -> bool:
+        return find_llama_server(self.runtime_root, plat=self._plat(p)) is not None
+
+    def _runtime_supported(self, p: Package | None = None) -> bool:
+        return bool(LLAMA_CPP.tag) and asset_for(LLAMA_CPP, self._plat(p)) is not None
+
+    def packages(self) -> list[Package]:
+        return [*PACKAGES, *optional_packages()]
+
+    def _by_id(self, pid: str) -> Package | None:
+        return next((p for p in self.packages() if p.id == pid), None)
 
     def package_installed(self, p: Package) -> bool:
-        return all(is_installed(m, self.models_root) for m in p.models) and (not p.runtime or self._runtime_installed())
+        return all(is_installed(m, self.models_root) for m in p.models) and (not p.runtime or self._runtime_installed(p))
 
     def _missing_bytes(self, p: Package) -> int:
         total = 0
@@ -153,8 +194,8 @@ class ModelManager:
             staged = staging_dir(m, self.models_root)
             have = sum(min((staged / f.name).stat().st_size, f.size) for f in m.files if (staged / f.name).is_file())
             total += m.size_bytes - have
-        if p.runtime and not self._runtime_installed():
-            total += runtime_size()
+        if p.runtime and not self._runtime_installed(p):
+            total += runtime_size(plat=self._plat(p))
         return total
 
     def _status(self, p: Package) -> str:
@@ -186,16 +227,16 @@ class ModelManager:
                     items.append({"key": f"models/{kind_dir.name}/{d.name}", "label": d.name.lstrip(".").removesuffix(".partial"), "kind": kind_dir.name, "size_bytes": dir_size(d), "partial": d.name.endswith(".partial")})
         llama = self.runtime_root / "llama"
         if llama.is_dir():
-            current = install_dir(self.runtime_root).resolve()
+            current_dirs = {install_dir(self.runtime_root, plat=self._plat(p)).resolve() for p in [*PACKAGES, LLM_GPU] if p.runtime}
             for d in sorted(llama.iterdir()):
-                if d.is_dir() and d.resolve() != current and d.name != f".{current.name}.partial":
+                if d.is_dir() and d.resolve() not in current_dirs and not any(d.name == f".{c.name}.partial" for c in current_dirs):
                     items.append({"key": f"runtime/llama/{d.name}", "label": f"llama.cpp {d.name.lstrip('.')}", "kind": "runtime", "size_bytes": dir_size(d), "partial": d.name.endswith(".partial")})
         return items
 
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
             packages = []
-            for p in PACKAGES:
+            for p in self.packages():
                 job = self._job_for(p.id)
                 last = self._last.get(p.id)
                 models = [
@@ -215,11 +256,11 @@ class ModelManager:
                 ]
                 runtime = (
                     {
-                        "name": "llama.cpp",
+                        "name": "llama.cpp" if p.runtime_variant == CPU else "llama.cpp（CUDA 版）",
                         "version": LLAMA_CPP.tag,
-                        "size_bytes": runtime_size(),
-                        "installed": self._runtime_installed(),
-                        "supported": self._runtime_supported(),
+                        "size_bytes": runtime_size(plat=self._plat(p)),
+                        "installed": self._runtime_installed(p),
+                        "supported": self._runtime_supported(p),
                     }
                     if p.runtime
                     else None
@@ -231,7 +272,8 @@ class ModelManager:
                         "role": p.role,
                         "hardware": p.hardware,
                         "status": self._status(p),
-                        "size_bytes": sum(m.size_bytes for m in p.models) + (runtime_size() if p.runtime else 0),
+                        "size_bytes": sum(m.size_bytes for m in p.models) + (runtime_size(plat=self._plat(p)) if p.runtime else 0),
+                        "optional": p.optional,
                         "missing_bytes": self._missing_bytes(p),
                         "models": models,
                         "runtime": runtime,
@@ -264,14 +306,14 @@ class ModelManager:
     # ------------------------------------------------------------------ 動作
 
     def request(self, pid: str, action: JobAction) -> None:
-        p = BY_PACKAGE.get(pid)  # type: ignore[arg-type]
+        p = self._by_id(pid)
         if p is None:
             raise ManagerError(404, "沒有這個模型。")
         with self._lock:
             if self._job_for(p.id) is not None:
                 raise ManagerError(409, f"{p.name}已在處理中。")
             if action == "download":
-                if p.runtime and not self._runtime_installed() and not self._runtime_supported():
+                if p.runtime and not self._runtime_installed(p) and not self._runtime_supported(p):
                     raise ManagerError(422, "這個作業系統目前沒有可用的 llama.cpp 執行檔（macOS 版本在 Phase 11 提供）。")
                 repair = self._status(p) == "damaged"
                 if self.package_installed(p) and not repair:
@@ -287,7 +329,7 @@ class ModelManager:
 
     def download_all(self) -> list[str]:
         queued = []
-        for p in PACKAGES:
+        for p in PACKAGES:  # 選用套件（GPU 加速）不包含在「全部下載」
             if not self.package_installed(p) and self._job_for(p.id) is None:
                 try:
                     self.request(p.id, "download")
@@ -308,7 +350,7 @@ class ModelManager:
                 job.cancel.set()
 
     def delete(self, pid: str) -> None:
-        p = BY_PACKAGE.get(pid)  # type: ignore[arg-type]
+        p = self._by_id(pid)
         if p is None:
             raise ManagerError(404, "沒有這個模型。")
         with self._lock:
@@ -321,7 +363,7 @@ class ModelManager:
                     self._rm(m.local_dir(self.models_root))
                     self._rm(staging_dir(m, self.models_root))
                 if p.runtime:
-                    d = install_dir(self.runtime_root)
+                    d = install_dir(self.runtime_root, plat=self._plat(p))
                     self._rm(d)
                     self._rm(d.parent / f".{d.name}.partial")
                     for f in d.parent.glob(".*.partial") if d.parent.exists() else []:
@@ -382,7 +424,7 @@ class ModelManager:
                 self._wake.wait(timeout=1.0)
                 self._wake.clear()
                 continue
-            p = BY_PACKAGE[job.package]
+            p = self._by_id(job.package) or BY_PACKAGE[job.package]  # type: ignore[index]
             KEEP_AWAKE.acquire()  # 下載數 GB 需要一段時間：期間不讓電腦因閒置而睡眠
             try:
                 if job.action == "download":
@@ -432,8 +474,8 @@ class ModelManager:
                         if src.is_file() and not dst.exists():
                             src.replace(dst)
                     shutil.rmtree(final, ignore_errors=True)
-        need_runtime = p.runtime and not self._runtime_installed()
-        job.total = sum(m.size_bytes for m in todo) + (runtime_size() if need_runtime else 0)
+        need_runtime = p.runtime and not self._runtime_installed(p)
+        job.total = sum(m.size_bytes for m in todo) + (runtime_size(plat=self._plat(p)) if need_runtime else 0)
         # 先前下載到一半的部分
         for m in todo:
             staged = staging_dir(m, self.models_root)
@@ -449,7 +491,9 @@ class ModelManager:
             install(m, self.models_root, job.add, job.cancel.is_set, stage, lambda: self._model_lock(job))
         if need_runtime:
             job.stage, job.current = "下載中", f"llama.cpp {LLAMA_CPP.tag}"
-            download_runtime(self.runtime_root, on_progress=lambda s: None, on_bytes=job.add, is_cancelled=job.cancel.is_set)
+            download_runtime(
+                self.runtime_root, on_progress=lambda s: None, on_bytes=job.add, is_cancelled=job.cancel.is_set, plat=self._plat(p)
+            )
         job.stage = "完成"
 
     def _verify(self, p: Package, job: Job) -> list[str]:
@@ -468,6 +512,6 @@ class ModelManager:
             marker = m.local_dir(self.models_root) / MARKER
             if not marker.is_file():
                 problems.append(f"{m.display_name}：缺少安裝紀錄")
-        if p.runtime and not self._runtime_installed():
+        if p.runtime and not self._runtime_installed(p):
             problems.append("llama.cpp 執行檔遺失")
         return problems

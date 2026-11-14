@@ -4,7 +4,9 @@
     python -m scripts.resolve_llama_release --commit 0c1e57098bba43ac29e6e3b677cdceebdd22334f
     python -m scripts.resolve_llama_release --tag b7000     # 已知 tag 時
 
-會列出 Windows CPU（win-cpu-x64）與 macOS（macos-arm64）壓縮檔的大小與 SHA-256。
+會列出 Windows CPU（win-cpu-x64）、Windows NVIDIA GPU（win-cuda-<版本>-x64 與它需要的 cudart 執行庫，Phase 10）
+與 macOS（macos-arm64，內建 Metal）壓縮檔的大小與 SHA-256。
+release 裡有多個 CUDA 版本時（例如 12.4 與 13.x），只輸出 12.x（需要的驅動版本較舊、支援的顯示卡較多），其他版本列在註解。
 GitHub 有提供 digest 時直接使用；沒有時會下載檔案自行計算。
 """
 from __future__ import annotations
@@ -69,7 +71,20 @@ def main(argv: list[str] | None = None) -> int:
     assert isinstance(tag_info, dict)
     commit = str(tag_info["sha"])
     lines = []
-    for plat, pattern in PLATFORMS.items():
+    # Phase 10：NVIDIA GPU 版（CUDA 12.x 優先）＋ cudart 執行庫
+    cuda = sorted(
+        {m.group(1) for a in rel["assets"] if (m := re.search(r"-bin-win-cuda-([\d.]+)-x64\.zip$", a["name"]))},
+        key=lambda v: [int(x) for x in v.split(".")],
+    )
+    chosen = next((v for v in reversed(cuda) if v.startswith("12.")), cuda[-1] if cuda else None)
+    if cuda:
+        print(f"# release 中的 CUDA 版本：{', '.join(cuda)}；使用 {chosen}", file=sys.stderr)
+    platforms = dict(PLATFORMS)
+    if chosen:
+        v = re.escape(chosen)
+        platforms[f"win-cuda-{chosen}-x64"] = rf"-bin-win-cuda-{v}-x64\.zip$"
+        platforms[f"win-cuda-{chosen}-x64:cudart"] = rf"^cudart-llama-bin-win-cuda-{v}-x64\.zip$"
+    for plat, pattern in platforms.items():
         asset = next((a for a in rel["assets"] if re.search(pattern, a["name"])), None)
         if asset is None:
             print(f"# {plat}: 這個 release 沒有對應的壓縮檔", file=sys.stderr)

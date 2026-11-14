@@ -1,6 +1,6 @@
 # 開發紀錄（給接手的 Claude / Claude Code）
 
-最後更新：2026-11-11。Phase 09 已在 Windows 驗收（本機 ae0c691，真實下載 6.2 GB 約 6～8 分鐘、離線可用）；fix1（測試穩定性、首頁提示位置、防睡眠原因文字）待套用。
+最後更新：2026-11-14。Phase 10 硬體偵測已在沙盒完成，待 Windows 驗收（基準：本機 2ed32fb）。CUDA 版 llama.cpp 的版本與雜湊需在使用者電腦上以 resolve_llama_release 補上。
 
 ## 目前進度
 
@@ -17,7 +17,8 @@
 | 06 LLM Integration | ✅ Windows 驗收通過（2026-11-10，llama.cpp b11312＋Qwen3.5-4B） |
 | 07 Mind Map | ✅ Windows 驗收通過（2026-11-11，含 fix1，本機 880149a） |
 | 08 Session and Export | ✅ Windows 驗收通過（2026-11-11，含 fix1、fix2，本機 b8ff860） |
-| 09 Model Manager | ✅ Windows 驗收通過（2026-11-11，本機 ae0c691）；fix1 待確認 |
+| 09 Model Manager | ✅ Windows 驗收通過（2026-11-13，含 fix1，本機 2ed32fb） |
+| 10 Hardware Detection | 🧪 沙盒完成（2026-11-14），待 Windows 驗收；CUDA／Metal 路線尚無實機可驗證 |
 
 ## 沙盒驗證結果（2026-11-06）
 
@@ -114,6 +115,48 @@
 - 沙盒的 init 不會立即回收殭屍行程，`kill -0` 對殭屍也成功；判斷行程是否存活請看 `/proc/<pid>/stat` 狀態不是 `Z`。
 - 在沙盒跑 Electron：`xvfb-run -a`，並加 `--no-sandbox`（root）。
 
+## Phase 10 Hardware Detection（2026-11-14）
+
+使用者電腦：**只有內顯（Intel／AMD），沒有 NVIDIA**。使用者決定：摘要（llama.cpp）可用 GPU；語音辨識（PyTorch）先維持 CPU
+（PyTorch CUDA 約 2.5 GB，打包時再評估）。
+
+### 偵測（app/core/hardware.py，不連網、不需額外套件）
+- Windows：記憶體 GlobalMemoryStatusEx；CPU 名稱讀登錄檔；顯示卡讀登錄檔顯示卡類別（DriverDesc、HardwareInformation.qwMemorySize：
+  64 位元，不用 WMI 的 AdapterRAM〔32 位元，超過 4 GB 會錯〕）；NVIDIA 另以 nvidia-smi 取得驅動版本與可用 VRAM。
+- macOS：sysctl、vm_stat、system_profiler；Apple Silicon → Metal 可用（統一記憶體）；Intel Mac → CPU（§6.3）。
+- Linux（沙盒）：/proc、nvidia-smi。GPU 資訊快取，可用記憶體每次重讀；`GET /api/system/info?refresh=true` 重新偵測。
+- CUDA 可用 = 偵測到 NVIDIA、nvidia-smi 可執行、驅動 ≥ 527.41（CUDA 12 的 minor version compatibility）。
+
+### Runtime Selector（app/core/runtime_select.py）
+- 摘要：NVIDIA＋驅動符合＋**CUDA 版 llama.cpp 已安裝** → GPU。可用 VRAM 放得下模型＋KV → 全部層（-ngl 999）；
+  放不下 → 依 VRAM 放部分層（層數讀 GGUF 的 `<arch>.block_count`）；能放的層 < 25% → CPU。Apple Silicon → Metal（macOS 版內建）。
+  Intel／AMD 內顯 → CPU（§6.2 第一版不承諾）。
+- KV cache 大小由 GGUF 中繼資料估計（app/engines/llm/gguf.py；Qwen3.5-4B 每 4 層一層完整注意力 → 32 KB/token，8192 = 256 MB）。
+- 記憶體不足降級：可用記憶體 < 模型＋KV(8192)＋600 MB → context 4096（摘要分段變多）；仍不足 → 提醒「可能較慢」
+  （模型以 mmap 載入，作業系統可換頁）；可用 < 2 GB → 不嘗試載入，回報清楚錯誤（HTTP 507）。
+- GPU 啟動失敗（例如 VRAM 被佔用）→ `FallbackLlm` 自動改用 CPU 版再試一次；摘要結果記錄實際裝置（`device`、`device_note`）。
+- 語音辨識：CPU；可用記憶體 < 3 GB 時提醒。
+- `GET /api/system/info`：硬體、摘要計畫（裝置、GPU 層數、context、原因、警告）、語音辨識計畫（§10「Backend 可以回報目前運算裝置」）。
+
+### llama.cpp GPU 版
+- runtime.py 支援版本變體：`win-cpu-x64`（預設）、`win-cuda-<版本>-x64` ＋ 附帶的 `<同名>:cudart`（CUDA 執行庫，解壓到 llama-server.exe 旁）。
+  `find_llama_server(plat=…)`、`download_runtime(plat=…)`；測試用環境變數 `MVR2T_LLAMA_SERVER_CUDA`。
+- **沙盒連不到 GitHub**：CUDA 版的檔名、大小、SHA-256 未固定。`scripts/resolve_llama_release.py` 已改為一併輸出 CUDA 12.x 與 cudart，
+  需在使用者電腦執行後把結果貼回 `LLAMA_CPP`（使用者沒有 NVIDIA，所以「摘要 GPU 加速」不會在他的電腦出現；這一步只是先固定版本）。
+- 模型管理：選用套件「摘要 GPU 加速（NVIDIA）」（`llm_gpu`），只在 CUDA 可用、驅動符合、且 CUDA 版已固定時出現；不包含在「全部下載」。
+
+### 驗收狀態
+- 規格的四個驗收項目：「不支援 GPU 時可以使用 CPU」「Backend 可以回報目前運算裝置」可在使用者電腦驗收；
+  「Windows NVIDIA 經驗證的 CUDA 路線」「Apple Silicon 經驗證的 Metal 路線」**需要實機**（NVIDIA 電腦、Apple Silicon Mac），
+  目前只有單元測試與模擬畫面驗證 → 列為待辦（Phase 11 打包 macOS 版時一併驗證 Metal）。
+
+### 驗證（沙盒）
+- pytest 173 passed：tests/test_hardware.py 12 個（GGUF 讀取、nvidia-smi／meminfo／vm_stat 解析、CUDA／Metal 判斷、
+  CPU／記憶體降級／錯誤、CUDA 全部／部分層／VRAM 不足改 CPU、驅動太舊、缺 GPU 版、Metal、ASR、GPU 失敗改 CPU、
+  CUDA 主程式＋cudart 下載到同一資料夾）、模型管理選用套件 1 個、resolve 腳本 1 個。
+- 測試不建立數 GB 的稀疏檔（NTFS 會真的佔用空間），以 `model_bytes` 參數給模型大小。
+- Playwright：模擬 NVIDIA 電腦（RTX 3060 Laptop＋Iris Xe）的「這台電腦」卡片與「摘要 GPU 加速」套件。
+
 ## Phase 09 Model Manager（2026-11-11）
 
 使用者決定：摘要模型只提供 Qwen3.5-4B（不提供切換）；首頁提示卡片＋一鍵「全部下載」；
@@ -176,6 +219,14 @@
   連線被拒／逾時的訊息改用模擬的例外測試；新增「檔案結尾連續被扣住 3 次仍完成」的測試（模擬 Avast）。
 - 防睡眠原因文字改為「MVR2T：正在處理（AI 工作或模型下載）」。
 - 首頁的模型提示（與後端／FFmpeg 警示）移到最上方（使用者建議）。
+
+### fix1 Windows 驗收（2026-11-13，本機 869afc7 ＋ 2ed32fb）
+- 前端 173、後端 159 passed／8 skipped；test_model_manager.py 連續 5 次：4 次全過、1 次 1 個失敗，沒有卡住。
+  失敗的是 test_fetch_resumes_a_partial_file 的 `server.hits[-1]`：從 1000 續傳後，結尾又被 Avast 扣住、再續傳一次
+  （檔案仍正確完成）。本機修正 2ed32fb 改為檢查第一個請求 `server.hits[0]`（patch 沒有附上，這邊依回報做相同的一行修改）；
+  修正後連跑 10 次都通過。
+- 首頁模型提示在最上方，使用者認為清楚；powercfg 原因文字「MVR2T：正在處理（AI 工作或模型下載）」。
+- 註：程式啟動時會建立空的 %APPDATA%\MVR2T\models 資料夾。
 
 ### 驗證（沙盒）
 - pytest 159 passed（tests/test_model_manager.py 17 個：續傳、伺服器不支援 Range、5xx 重試、404／無法連線訊息、取消、

@@ -22,6 +22,7 @@ const STATUS: Record<PackageStatus, { label: string; variant: 'solid' | 'outline
 const DELETE_WARNING: Record<ModelPackage['id'], string> = {
   asr: '刪除後無法進行語音辨識，需要重新下載（約 3.4 GB）。',
   llm: '刪除後無法產生摘要與心智圖，需要重新下載（約 2.6 GB）。',
+  llm_gpu: '刪除後摘要改用 CPU（較慢），之後可以再下載。',
 };
 
 /** 一個功能的模型（語音辨識／摘要與心智圖）：狀態、下載進度、驗證、刪除（Phase 09）。 */

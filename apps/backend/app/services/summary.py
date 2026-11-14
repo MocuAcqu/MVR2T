@@ -13,13 +13,15 @@ from __future__ import annotations
 import json
 import time
 from collections.abc import Callable, Sequence
+from pathlib import Path
 from typing import Any
 
 from app.core.config import Settings
+from app.core.hardware import detect
+from app.core.runtime_select import InsufficientMemory, LlmPlan, plan_llm
 from app.engines.llm.server import LlamaServer, LlmCancelled, LlmError, ServerOptions
 from app.engines.llm.summarize import ALL_TYPES, Budget, Line, SummaryType, summarize
 from app.models.registry import LLM_MODEL, gguf_path
-from app.models.runtime import find_llama_server
 from app.models.store import is_installed
 from app.services.media import MediaError
 from app.services.model_lock import BUSY_MESSAGE, MODEL_LOCK
@@ -33,11 +35,62 @@ LlmFactory = Callable[[Settings], Any]
 DOWNLOAD_HINT = "請到「模型管理」下載「摘要與心智圖」。"
 
 
-def default_llm(cfg: Settings) -> LlamaServer:
-    exe = find_llama_server(cfg.runtime_root)
-    if exe is None:
+class FallbackLlm:
+    """依 Runtime Selector 的計畫啟動 llama-server（Phase 10）。GPU 啟動失敗（例如 VRAM 被其他程式佔用、驅動問題）時，
+    自動改用 CPU 版再試一次（§5.4：GPU 記憶體不足時改用 CPU）。對外介面與 LlamaServer 相同：with、chat()、kill()。"""
+
+    def __init__(self, plan: LlmPlan, model: Path, threads: int, make: Callable[[ServerOptions], Any] = LlamaServer) -> None:
+        self.plan = plan
+        self.model = model
+        self.threads = threads
+        self.make = make
+        self.device = plan.device
+        self.note = "；".join(plan.warnings)
+        self.ctx_size = plan.ctx
+        self._srv: Any = None
+        self._killed = False
+
+    def _options(self, exe: str, layers: int) -> ServerOptions:
+        return ServerOptions(Path(exe), self.model, ctx_size=self.plan.ctx, threads=self.threads, extra_args=("--n-gpu-layers", str(layers)))
+
+    def __enter__(self) -> FallbackLlm:
+        assert self.plan.executable is not None
+        self._srv = self.make(self._options(self.plan.executable, self.plan.n_gpu_layers))
+        try:
+            self._srv.__enter__()
+        except LlmError as e:
+            if self._killed or self.plan.device == "cpu" or not self.plan.cpu_executable:
+                raise
+            print(f"[llm] GPU ({self.plan.device}) failed to start, falling back to CPU: {e}", flush=True)
+            self._srv = self.make(self._options(self.plan.cpu_executable, 0))
+            self._srv.__enter__()
+            self.device = "cpu"
+            self.note = "；".join([*self.plan.warnings, "GPU 無法載入模型（可能是顯示記憶體不足），已改用 CPU。"])
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        if self._srv is not None:
+            self._srv.__exit__(*exc)
+
+    def chat(self, *args: Any, **kwargs: Any) -> Any:
+        return self._srv.chat(*args, **kwargs)
+
+    def kill(self) -> None:
+        self._killed = True
+        if self._srv is not None:
+            self._srv.kill()
+
+
+def default_llm(cfg: Settings) -> FallbackLlm:
+    model = gguf_path(LLM_MODEL, cfg.models_root)
+    try:
+        plan = plan_llm(detect(), cfg.runtime_root, model, ctx=cfg.llm_ctx)
+    except InsufficientMemory as e:
+        raise MediaError(507, str(e)) from None
+    if plan.executable is None:
         raise MediaError(412, "尚未安裝 llama.cpp（摘要用的執行程式）。" + DOWNLOAD_HINT)
-    return LlamaServer(ServerOptions(exe, gguf_path(LLM_MODEL, cfg.models_root), ctx_size=cfg.llm_ctx, threads=cfg.llm_threads))
+    print(f"[llm] device={plan.device} n_gpu_layers={plan.n_gpu_layers} ctx={plan.ctx} ({plan.reason})", flush=True)
+    return FallbackLlm(plan, model, cfg.llm_threads)
 
 
 def lines_from_transcript(transcript: dict[str, Any]) -> list[Line]:
@@ -94,7 +147,8 @@ def start_summary(
         raise
     previous = rec.summary if merge else None
     rec.summary = previous  # merge 時舊內容在產生期間仍可讀；否則清除
-    budget = Budget.for_ctx(cfg.llm_ctx)
+    # 記憶體不足時 Runtime Selector 會縮短 context（Phase 10）；摘要的分段大小跟著調整
+    budget = Budget.for_ctx(getattr(llm, "ctx_size", cfg.llm_ctx))
 
     def job(task: Task) -> dict[str, Any]:
         started = time.monotonic()
@@ -133,6 +187,9 @@ def start_summary(
                 "chunks": out["chunks"],
                 "levels": out["levels"],
                 "elapsed_seconds": round(elapsed, 1),
+                # Phase 10：實際使用的運算裝置（GPU 失敗改用 CPU 時也會反映在這裡）
+                "device": getattr(llm, "device", None),
+                "device_note": getattr(llm, "note", None) or None,
             }
             (rec.dir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False), encoding="utf-8")
             rec.summary = summary

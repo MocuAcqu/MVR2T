@@ -266,7 +266,9 @@ export function SummaryCard() {
             <SummaryBody summary={summary} type={activeTab} />
             <p className="text-xs text-body-gray">
               由本機模型產生，可能有錯誤或遺漏，重要內容請對照逐字稿確認。
-              {summary.chunks > 1 ? `逐字稿分成 ${summary.chunks} 段閱讀後整合。` : ''}處理 {formatDuration(summary.elapsed_seconds)}。
+              {summary.chunks > 1 ? `逐字稿分成 ${summary.chunks} 段閱讀後整合。` : ''}處理 {formatDuration(summary.elapsed_seconds)}
+              {summary.device ? `（${summary.device === 'cpu' ? 'CPU' : summary.device === 'cuda' ? 'NVIDIA GPU' : 'Apple GPU'}）` : ''}。
+              {summary.device_note ? <span className="mt-1 block">{summary.device_note}</span> : null}
             </p>
           </div>
         ) : null}

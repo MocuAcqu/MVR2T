@@ -449,3 +449,14 @@ def test_a_stalled_connection_during_a_model_download_recovers_by_itself(env, se
     p = wait_idle(m)
     assert p["status"] == "installed" and p["last"]["ok"]
     assert sum(1 for path, rng in server.hits if path.endswith("model.bin") and rng) >= 1  # resumed
+
+
+def test_gpu_acceleration_is_an_optional_package_only_when_the_hardware_supports_it(env, monkeypatch):
+    m, _ = env
+    assert [p["id"] for p in m.snapshot()["packages"]] == ["asr"]  # this machine: no usable NVIDIA GPU
+    monkeypatch.setattr(mgr, "optional_packages", lambda: [mgr.LLM_GPU])
+    pkgs = {p["id"]: p for p in m.snapshot()["packages"]}
+    assert pkgs["llm_gpu"]["optional"] is True and pkgs["llm_gpu"]["runtime"]["name"].startswith("llama.cpp")
+    m.download_all()
+    assert all(j.package != "llm_gpu" for j in [m._current, *m._queue] if j)  # not part of "download all"
+    wait_idle(m)

@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import shutil
 import sys
 import zipfile
@@ -55,13 +56,18 @@ LLAMA_CPP = LlamaCppRelease(
     commit="0c1e57098bba43ac29e6e3b677cdceebdd22334f",
     assets=(
         RuntimeAsset("win-cpu-x64", "llama-b11312-bin-win-cpu-x64.zip", 19265352, "d2d966c23e4d097d70633f9d92e4931245b575be7a5409201d8f352493f0e702"),
-        # macOS（.tar.gz）在 Phase 11 打包時以 scripts/resolve_llama_release 補上
+        # Phase 10：NVIDIA GPU 版（win-cuda-<版本>-x64）與它需要的 CUDA 執行庫（<同名>:cudart）。
+        # 沙盒連不到 GitHub，由使用者電腦上的 Claude Code 以 scripts/resolve_llama_release 查出後補上。
+        # macOS（.tar.gz，內建 Metal）在 Phase 11 打包時補上
     ),
 )
 
 
+CPU, CUDA = "cpu", "cuda"
+
+
 def current_platform() -> str | None:
-    """這台電腦對應的壓縮檔平台名稱；不支援的平台回傳 None。Phase 10 會加入 GPU 版本。"""
+    """這台電腦的 CPU 版壓縮檔平台名稱（macOS arm64 的版本內建 Metal）；不支援的平台回傳 None。"""
     machine = platform.machine().lower()
     if sys.platform == "win32" and machine in ("amd64", "x86_64"):
         return "win-cpu-x64"
@@ -83,18 +89,47 @@ def asset_for(release: LlamaCppRelease, plat: str | None) -> RuntimeAsset | None
     return next((a for a in release.assets if a.platform == plat), None)
 
 
+def variant_platform(variant: str = CPU, release: LlamaCppRelease = LLAMA_CPP) -> str | None:
+    """CPU 版：這台電腦的平台名稱；CUDA 版：已固定的 win-cuda-<版本>-x64（沒有固定或不是 Windows x64 則 None）。"""
+    base = current_platform()
+    if variant == CPU:
+        return base
+    if variant == CUDA and base == "win-cpu-x64":
+        return next((a.platform for a in release.assets if a.platform.startswith("win-cuda-") and ":" not in a.platform), None)
+    return None
+
+
+def cuda_version(plat: str | None) -> tuple[int, int] | None:
+    """win-cuda-12.4-x64 → (12, 4)"""
+    m = re.search(r"cuda-(\d+)\.(\d+)", plat or "")
+    return (int(m.group(1)), int(m.group(2))) if m else None
+
+
+def assets_for(release: LlamaCppRelease, plat: str | None) -> list[RuntimeAsset]:
+    """這個平台需要的所有壓縮檔：主程式＋附帶的執行庫（例如 CUDA 版的 cudart）。"""
+    main = asset_for(release, plat)
+    if main is None:
+        return []
+    return [main, *(a for a in release.assets if a.platform.startswith(f"{plat}:"))]
+
+
 def runtime_size(release: LlamaCppRelease = LLAMA_CPP, plat: str | None = None) -> int:
-    asset = asset_for(release, plat or current_platform())
-    return asset.size if asset else 0
+    return sum(a.size for a in assets_for(release, plat or current_platform()))
 
 
-def find_llama_server(runtime_root: Path, release: LlamaCppRelease = LLAMA_CPP) -> Path | None:
-    """回傳 llama-server 執行檔路徑；沒有安裝則 None。"""
-    override = os.environ.get("MVR2T_LLAMA_SERVER", "").strip()
+def _override(plat: str | None) -> str:
+    """測試／開發：MVR2T_LLAMA_SERVER（CPU 版）、MVR2T_LLAMA_SERVER_CUDA（CUDA 版）直接指定執行檔。"""
+    name = "MVR2T_LLAMA_SERVER_CUDA" if plat and "cuda" in plat else "MVR2T_LLAMA_SERVER"
+    return os.environ.get(name, "").strip()
+
+
+def find_llama_server(runtime_root: Path, release: LlamaCppRelease = LLAMA_CPP, plat: str | None = None) -> Path | None:
+    """回傳 llama-server 執行檔路徑（預設 CPU 版；plat 指定其他版本）；沒有安裝則 None。"""
+    override = _override(plat)
     if override:
         p = Path(override)
         return p if p.is_file() else None
-    d = install_dir(runtime_root, release)
+    d = install_dir(runtime_root, release, plat)
     try:
         marker = json.loads((d / MARKER).read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -152,46 +187,58 @@ def download_runtime(
     on_progress: Callable[[str], None] = print,
     on_bytes: Callable[[int], None] = lambda n: None,
     is_cancelled: Callable[[], bool] = lambda: False,
+    plat: str | None = None,
 ) -> Path:
-    """下載、驗證並解壓縮 llama-server；成功回傳執行檔路徑。"""
-    override = os.environ.get("MVR2T_LLAMA_SERVER", "").strip()
+    """下載、驗證並解壓縮 llama-server（預設 CPU 版；plat 指定 GPU 版）；成功回傳執行檔路徑。"""
+    plat = plat or current_platform()
+    override = _override(plat)
     if override:
-        exe = find_llama_server(runtime_root, release)
+        exe = find_llama_server(runtime_root, release, plat)
         if exe is None:
-            raise LlamaRuntimeError(f"MVR2T_LLAMA_SERVER 指定的檔案不存在：{override}")
-        on_progress(f"使用 MVR2T_LLAMA_SERVER 指定的 llama-server：{exe}（不下載）")
+            raise LlamaRuntimeError(f"環境變數指定的 llama-server 不存在：{override}")
+        on_progress(f"使用環境變數指定的 llama-server：{exe}（不下載）")
         return exe
-    plat = current_platform()
-    asset = asset_for(release, plat)
+    archives = assets_for(release, plat)
+    asset = archives[0] if archives else None
     if not release.tag or asset is None:
         raise LlamaRuntimeError(
             f"這個平台（{plat or sys.platform}）尚未設定 llama.cpp 執行檔版本。"
             "請先執行 python -m scripts.resolve_llama_release 並把結果填入 app/models/runtime.py。"
         )
-    existing = find_llama_server(runtime_root, release)
+    existing = find_llama_server(runtime_root, release, plat)
     if existing is not None:
-        on_progress(f"llama.cpp {release.tag}：已安裝，略過（{existing}）")
+        on_progress(f"llama.cpp {release.tag}（{plat}）：已安裝，略過（{existing}）")
         return existing
 
     final = install_dir(runtime_root, release, plat)
     final.parent.mkdir(parents=True, exist_ok=True)
-    archive = final.parent / f".{asset.filename}.partial"
-    if not (archive.is_file() and archive.stat().st_size == asset.size and _sha256(archive) == asset.sha256):
-        on_progress(f"  下載 {asset.filename}（{asset.size / 1024**2:,.1f} MB）…")
-        try:
-            fetch(release.url(asset), archive, asset.size, on_bytes, is_cancelled)
-        except FetchError as e:
-            raise LlamaRuntimeError(f"llama.cpp：{e}") from None
-    else:
-        on_bytes(asset.size)
-    if archive.stat().st_size != asset.size or _sha256(archive) != asset.sha256:
-        archive.unlink(missing_ok=True)
-        raise LlamaRuntimeError(f"{asset.filename} 驗證失敗（大小或 SHA-256 不符），請重新執行下載。")
+    downloaded: list[tuple[RuntimeAsset, Path]] = []
+    for a in archives:
+        archive = final.parent / f".{a.filename}.partial"
+        if not (archive.is_file() and archive.stat().st_size == a.size and _sha256(archive) == a.sha256):
+            on_progress(f"  下載 {a.filename}（{a.size / 1024**2:,.1f} MB）…")
+            try:
+                fetch(release.url(a), archive, a.size, on_bytes, is_cancelled)
+            except FetchError as e:
+                raise LlamaRuntimeError(f"llama.cpp：{e}") from None
+        else:
+            on_bytes(a.size)
+        if archive.stat().st_size != a.size or _sha256(archive) != a.sha256:
+            archive.unlink(missing_ok=True)
+            raise LlamaRuntimeError(f"{a.filename} 驗證失敗（大小或 SHA-256 不符），請重新執行下載。")
+        downloaded.append((a, archive))
 
     staging = final.parent / f".{final.name}.partial"
     shutil.rmtree(staging, ignore_errors=True)
     staging.mkdir()
-    extract_archive(archive, asset.filename, staging)
+    exe_dir: Path | None = None
+    for a, archive in downloaded:
+        if exe_dir is None:
+            extract_archive(archive, a.filename, staging)
+            found = next(iter(sorted(staging.rglob(exe_name()))), None)
+            exe_dir = found.parent if found else staging
+        else:
+            extract_archive(archive, a.filename, exe_dir)  # cudart 的 DLL 要和 llama-server.exe 放在同一個資料夾
     exe = next(iter(sorted(staging.rglob(exe_name()))), None)
     if exe is None:
         shutil.rmtree(staging, ignore_errors=True)
@@ -205,8 +252,9 @@ def download_runtime(
     if final.exists():
         shutil.rmtree(final)
     staging.rename(final)
-    archive.unlink(missing_ok=True)
-    installed = find_llama_server(runtime_root, release)
+    for _, archive in downloaded:
+        archive.unlink(missing_ok=True)
+    installed = find_llama_server(runtime_root, release, plat)
     if installed is None:  # pragma: no cover - 剛寫入的標記一定讀得到
         raise LlamaRuntimeError("llama.cpp 安裝後找不到執行檔。")
     on_progress(f"llama.cpp {release.tag}：已安裝到 {final}")

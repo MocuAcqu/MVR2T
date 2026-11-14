@@ -13,7 +13,7 @@ export function ModelsPage() {
   const { models, applyModels } = useSystemStatus();
   const [error, setError] = useState<string | null>(null);
   const data = models.status === 'done' ? models.data : null;
-  const missing = data ? data.packages.filter((p) => p.status !== 'installed' && !p.job) : [];
+  const missing = data ? data.packages.filter((p) => !p.optional && p.status !== 'installed' && !p.job) : [];
   const missingBytes = missing.reduce((s, p) => s + p.missing_bytes, 0);
 
   return (

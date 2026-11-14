@@ -14,6 +14,7 @@ import type {
   MediaInfo,
   ModelManagerState,
   PackageId,
+  SystemInfo,
   SessionResponse,
   TaskState,
   Transcript,
@@ -174,6 +175,10 @@ export function uploadMedia(
 // ---------------------------------------------------------------------------
 // Phase 05：模型與語音辨識
 // ---------------------------------------------------------------------------
+
+// Phase 10：硬體與運算裝置
+export const getSystemInfo = (conn: BackendConnection, refresh = false, signal?: AbortSignal) =>
+  apiJson<SystemInfo>(conn, `/api/system/info${refresh ? '?refresh=true' : ''}`, { signal });
 
 // Phase 09：模型管理
 export const getModels = (conn: BackendConnection, signal?: AbortSignal) =>

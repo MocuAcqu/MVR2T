@@ -203,6 +203,9 @@ class Summary(BaseModel):
     chunks: int
     levels: int
     elapsed_seconds: float
+    #: Phase 10：實際使用的運算裝置（cpu / cuda / metal）與說明（例如「GPU 無法載入，已改用 CPU」）
+    device: str | None = None
+    device_note: str | None = None
 
 
 class ExportRequest(BaseModel):
@@ -264,7 +267,7 @@ class PackageLast(BaseModel):
 
 
 class ModelPackage(BaseModel):
-    id: Literal["asr", "llm"]
+    id: Literal["asr", "llm", "llm_gpu"]
     name: str
     role: str
     hardware: str
@@ -272,6 +275,8 @@ class ModelPackage(BaseModel):
     status: Literal["installed", "not_installed", "partial", "outdated", "damaged", "queued", "downloading", "verifying"]
     size_bytes: int
     missing_bytes: int
+    #: 選用（GPU 加速）：不在「全部下載」裡，只在硬體支援時出現
+    optional: bool = False
     models: list[PackageModel]
     runtime: PackageRuntime | None
     job: PackageJob | None
@@ -292,3 +297,53 @@ class ModelManagerState(BaseModel):
     packages: list[ModelPackage]
     unused: list[UnusedItem]
     busy: bool
+
+
+# --- Phase 10：硬體偵測與運算裝置 ---------------------------------------------------------------
+
+
+class GpuInfo(BaseModel):
+    vendor: str
+    name: str
+    vram_total: int | None
+    vram_free: int | None
+    driver: str | None
+
+
+class HardwareInfo(BaseModel):
+    platform: str
+    os_name: str
+    arch: str
+    cpu_name: str
+    cpu_threads: int
+    ram_total: int
+    ram_available: int
+    gpus: list[GpuInfo]
+    cuda_available: bool
+    cuda_reason: str
+    metal_available: bool
+    metal_reason: str
+
+
+class LlmPlanInfo(BaseModel):
+    device: Literal["cpu", "cuda", "metal"]
+    executable: str | None
+    n_gpu_layers: int
+    ctx: int
+    reason: str
+    warnings: list[str]
+    cpu_executable: str | None
+
+
+class AsrPlanInfo(BaseModel):
+    device: Literal["cpu", "cuda", "metal"]
+    reason: str
+    warnings: list[str]
+
+
+class SystemInfo(BaseModel):
+    hardware: HardwareInfo
+    #: 摘要（llama.cpp）目前會使用的裝置與原因；記憶體不足時的降級也在 warnings
+    llm: LlmPlanInfo
+    #: 語音辨識（PyTorch）目前會使用的裝置
+    asr: AsrPlanInfo

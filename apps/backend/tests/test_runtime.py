@@ -63,3 +63,23 @@ def test_tar_gz_rejects_traversal_and_escaping_links(tmp_path, entries):
     _tar(bad, entries)
     with pytest.raises(LlamaRuntimeError):
         extract_archive(bad, "bad.tar.gz", tmp_path / "out")
+
+
+def test_resolve_script_prints_cpu_cuda_and_cudart_assets(monkeypatch, capsys):
+    """Phase 10: the pinning script also lists the NVIDIA build (CUDA 12.x preferred) and its cudart libraries."""
+    from scripts import resolve_llama_release as r
+
+    names = ["llama-b9-bin-win-cpu-x64.zip", "llama-b9-bin-win-cuda-12.4-x64.zip", "llama-b9-bin-win-cuda-13.1-x64.zip",
+             "cudart-llama-bin-win-cuda-12.4-x64.zip", "cudart-llama-bin-win-cuda-13.1-x64.zip", "llama-b9-bin-macos-arm64.tar.gz"]
+    rel = {"assets": [{"name": n, "size": i + 1, "digest": f"sha256:{i:064d}", "browser_download_url": ""} for i, n in enumerate(names)]}
+
+    def fake_get(url):  # noqa: ANN001, ANN202
+        return rel if "/releases/" in url else {"sha": "abc123"}
+
+    monkeypatch.setattr(r, "_get", fake_get)
+    assert r.main(["--tag", "b9"]) == 0
+    out = capsys.readouterr().out
+    assert 'RuntimeAsset("win-cpu-x64", "llama-b9-bin-win-cpu-x64.zip"' in out
+    assert 'RuntimeAsset("win-cuda-12.4-x64", "llama-b9-bin-win-cuda-12.4-x64.zip"' in out
+    assert 'RuntimeAsset("win-cuda-12.4-x64:cudart", "cudart-llama-bin-win-cuda-12.4-x64.zip"' in out
+    assert "13.1-x64.zip" not in out and 'RuntimeAsset("macos-arm64"' in out

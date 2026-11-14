@@ -18,8 +18,9 @@
 | 06 | LLM Integration（llama.cpp + Qwen3.5-4B 摘要） | ✅ 已在 Windows 驗收 |
 | 07 | Mind Map（React Flow 心智圖：編輯、拖曳、匯出 PNG／SVG） | ✅ 已在 Windows 驗收 |
 | 08 | Session and Export（匯出面板：TXT／CSV／Word／PDF／字幕／JSON／Markdown／ZIP） | ✅ 已在 Windows 驗收 |
-| 09 | Model Manager（程式內下載、進度、取消與續傳、驗證、修復、刪除、版本更新） | ✅ 已在 Windows 驗收（fix1 待確認） |
-| 10 – 12 | 硬體偵測、打包 | ⏳ |
+| 09 | Model Manager（程式內下載、進度、取消與續傳、驗證、修復、刪除、版本更新） | ✅ 已在 Windows 驗收 |
+| 10 | Hardware Detection（CPU／記憶體／GPU／CUDA／Metal、運算裝置選擇、記憶體不足降級） | 🧪 待 Windows 驗收 |
+| 11 – 12 | 打包、發布 | ⏳ |
 
 ## 環境需求
 
@@ -285,6 +286,20 @@ Phase 09 fix1：
 - [ ] 首頁的「還需要下載 AI 模型」提示在最上方（標題之上）
 - [ ] 下載或語音辨識時，`powercfg /requests` 的原因文字是「MVR2T：正在處理（AI 工作或模型下載）」
 - [ ] `tests/test_model_manager.py` 在這台電腦（Avast）上連續執行都通過
+
+## Phase 10 驗收清單（硬體偵測）
+
+- [ ] 「模型管理 → 這台電腦」顯示處理器名稱與執行緒數、記憶體（總量與目前可用）、顯示卡名稱（與 VRAM）、CUDA 是否可用與原因
+- [ ] 沒有 NVIDIA 顯示卡的電腦：CUDA「不可用（沒有偵測到 NVIDIA 顯示卡）」；運算裝置「語音辨識：CPU、摘要：CPU」，
+      並說明 Intel／AMD 顯示卡第一版不使用加速；模型管理**不會**出現「摘要 GPU 加速」
+- [ ] 「重新偵測」可以重新讀取（例如剛更新驅動程式）
+- [ ] 產生摘要後，摘要下方顯示「處理 … （CPU）」
+- [ ] 記憶體不足的降級：開很多程式讓可用記憶體低於約 3.6 GB 時，「這台電腦」顯示改用較短 context 或「可用記憶體偏少」的提醒；
+      摘要仍能完成（比較慢）
+- [ ] `GET /api/system/info` 回報硬體與目前的運算裝置（規格 §10）
+- [ ] （有 NVIDIA 顯示卡的電腦）CUDA「可用」；模型管理出現「摘要 GPU 加速（NVIDIA）」，下載後摘要顯示「NVIDIA GPU」，速度明顯變快；
+      其他程式佔用大量 VRAM 時改放部分層或自動改用 CPU
+- [ ] （Apple Silicon Mac，Phase 11）運算裝置「摘要：Apple GPU（Metal）」
 
 ## 開發注意事項
 
