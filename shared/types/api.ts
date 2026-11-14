@@ -70,7 +70,7 @@ export interface TaskState<TResult = unknown> {
 export interface FfmpegStatus {
   available: boolean;
   version: string | null;
-  source: 'settings' | 'app-runtime' | 'path' | 'winget' | null;
+  source: 'settings' | 'bundled' | 'app-runtime' | 'path' | 'winget' | null;
   ffmpeg_path: string | null;
 }
 

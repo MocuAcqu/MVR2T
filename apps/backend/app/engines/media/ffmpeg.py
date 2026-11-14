@@ -27,7 +27,7 @@ EXE_SUFFIX = ".exe" if sys.platform == "win32" else ""
 # Windows：不要為 FFmpeg 跳出主控台視窗。
 CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 
-FfmpegSource = Literal["settings", "app-runtime", "path", "winget"]
+FfmpegSource = Literal["settings", "bundled", "app-runtime", "path", "winget"]
 
 
 # ---------------------------------------------------------------------------
@@ -63,12 +63,17 @@ def _winget_candidates() -> list[Path]:
     return [Path(p) for p in sorted(glob.glob(pattern), reverse=True)]
 
 
-def locate_ffmpeg(settings_dir: str, runtime_dir: Path) -> FfmpegLocation | None:
-    """依優先順序尋找 FFmpeg；ffmpeg 與 ffprobe 必須來自同一處，避免版本混用。"""
+def locate_ffmpeg(settings_dir: str, runtime_dir: Path, bundled_dir: str = "") -> FfmpegLocation | None:
+    """依優先順序尋找 FFmpeg；ffmpeg 與 ffprobe 必須來自同一處，避免版本混用。
+    順序：設定指定 → 安裝程式內附（Phase 11）→ 程式資料夾 runtime → PATH → winget。"""
     if settings_dir:
         pair = _pair_in_dir(Path(settings_dir))
         if pair:
             return FfmpegLocation(*pair, source="settings")
+    if bundled_dir:
+        pair = _pair_in_dir(Path(bundled_dir))
+        if pair:
+            return FfmpegLocation(*pair, source="bundled")
     pair = _pair_in_dir(runtime_dir)
     if pair:
         return FfmpegLocation(*pair, source="app-runtime")

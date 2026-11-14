@@ -1,0 +1,53 @@
+# electron-builder 設定（Phase 11：Windows 安裝程式；PROJECT_SPEC §13）。
+# 打包步驟見 README「Phase 11：打包 Windows 安裝程式」：先打包後端與準備 FFmpeg，再執行 npm run dist:win。
+appId: com.mvr2t.desktop  # 與 main.ts 的 setAppUserModelId 一致（Windows 通知）
+productName: MVR2T  # 也決定 userData 資料夾名稱（%APPDATA%\MVR2T），不可更改，否則找不到已下載的模型
+copyright: MVR2T
+directories:
+  output: release
+  buildResources: build
+# 使用本機已安裝的 Electron（node_modules/electron/dist），打包時不必再從 GitHub 下載
+electronDist: ../../node_modules/electron/dist
+# renderer 由 Vite、main／preload 由 esbuild 打包成單一檔案，執行時不需要 node_modules
+files:
+  - dist/**
+  - dist-electron/**
+  - package.json
+  - "!**/*.map"
+  - "!node_modules/**"
+npmRebuild: false
+asar: true
+extraResources:
+  # PyInstaller onedir（apps/backend/dist/mvr2t-backend）→ resources/backend/mvr2t-backend.exe（electron/backend.ts）
+  - from: ../backend/dist/mvr2t-backend
+    to: backend
+  # LGPL 版 FFmpeg（apps/backend 的 scripts.ffmpeg_bundle 下載並驗證）→ resources/ffmpeg/
+  - from: build-resources/ffmpeg
+    to: ffmpeg
+  - from: build-resources/THIRD_PARTY_NOTICES.md
+    to: THIRD_PARTY_NOTICES.md
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.ico
+  # 第一版不簽章（使用者決定，2026-11-14）：第一次執行時 SmartScreen 會提示「仍要執行」
+  signAndEditExecutable: true
+nsis:
+  # 只為目前使用者安裝（使用者決定）：%LOCALAPPDATA%\Programs\MVR2T，不需要系統管理員權限
+  oneClick: true
+  perMachine: false
+  allowElevation: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: MVR2T
+  installerLanguages: [zh_TW]
+  language: "1028"
+  # 解除安裝時保留 %APPDATA%\MVR2T（已下載約 6 GB 的模型、偏好設定）；要完全移除請手動刪除該資料夾
+  deleteAppDataOnUninstall: false
+  artifactName: MVR2T-Setup-${version}-x64.${ext}
+linux:
+  # 只用於沙盒驗證打包設定（目標平台是 Windows；macOS 在 Phase 12）
+  target: [dir]
+  executableName: mvr2t
+  category: AudioVideo

@@ -1,6 +1,6 @@
 # 開發紀錄（給接手的 Claude / Claude Code）
 
-最後更新：2026-11-14。Phase 10 已在 Windows 驗收（本機 962299d＋bbde9ae，無 NVIDIA）；fix1（CUDA 版固定、腳本修正、作業系統名稱、虛擬顯示器、版面）待套用。CUDA／Metal 路線待實機驗證。
+最後更新：2026-11-14。Phase 10（含 fix1，本機 dbece16）已在 Windows 驗收；CUDA／Metal 路線待實機驗證。Phase 11（Windows 打包）已交付，待 Windows 驗收。
 
 ## 目前進度
 
@@ -18,7 +18,7 @@
 | 07 Mind Map | ✅ Windows 驗收通過（2026-11-11，含 fix1，本機 880149a） |
 | 08 Session and Export | ✅ Windows 驗收通過（2026-11-11，含 fix1、fix2，本機 b8ff860） |
 | 09 Model Manager | ✅ Windows 驗收通過（2026-11-13，含 fix1，本機 2ed32fb） |
-| 10 Hardware Detection | ✅ Windows 驗收通過（2026-11-14，本機 962299d＋bbde9ae，無 NVIDIA）；fix1 待確認；CUDA／Metal 待實機 |
+| 10 Hardware Detection | ✅ Windows 驗收通過（2026-11-14，含 fix1，本機 dbece16，無 NVIDIA）；CUDA／Metal 待實機 |
 
 ## 沙盒驗證結果（2026-11-06）
 
@@ -115,6 +115,43 @@
 - 沙盒的 init 不會立即回收殭屍行程，`kill -0` 對殭屍也成功；判斷行程是否存活請看 `/proc/<pid>/stat` 狀態不是 `Z`。
 - 在沙盒跑 Electron：`xvfb-run -a`，並加 `--no-sandbox`（root）。
 
+## Phase 11 Windows Packaging（2026-11-14）
+
+使用者決定：FFmpeg 內附在安裝程式中；只為目前使用者安裝；第一版不簽章。macOS 打包移到 Phase 12。
+
+### 後端：PyInstaller（onedir）
+- 入口 `packaging/mvr2t_backend.py`：先 `multiprocessing.freeze_support()`（ASR worker 用 spawn，凍結後子行程會再執行一次 exe），
+  再處理 `--self-test`、`--version`，否則 `app.main.run()`。
+- `packaging/mvr2t-backend.spec`：transformers 依模型類型動態匯入 → `collect_submodules` 指定 qwen3_asr／qwen2／qwen3／whisper；
+  OpenCC 字典與 C 擴充 `collect_all`；python-docx 範本；transformers 匯入時檢查相依版本 → `copy_metadata`；uvicorn 動態模組。
+  排除 tkinter、測試工具、torchvision／torchaudio、triton（Linux CUDA 版才有，約 900 MB）。UPX 關閉（常被防毒誤判）。
+- `scripts/build_backend.py`：PyInstaller ＋ `--self-test`。`app/selftest.py` 檢查 API、OpenCC s2twp、docx、torch、transformers、
+  ASR 處理器（模型已下載時真正載入）、硬體偵測、FFmpeg，輸出 JSON，全部通過才回傳 0。
+- `requirements/build.txt`：pyinstaller 6.22.3、pyinstaller-hooks-contrib 2026.9（只有打包時需要）。
+- Windows 的 PyPI torch 是 CPU 版（約 200 MB）；沙盒只能用 Linux CUDA 版組建（5.97 GB），Windows 實際大小待驗收回報。
+
+### FFmpeg 內附
+- `scripts/ffmpeg_bundle.py`：`--resolve` 從 BtbN/FFmpeg-Builds 挑最新 autobuild 中的 `ffmpeg-n7.1…-win64-lgpl-7.1.zip`（LGPL、靜態），
+  寫入 `packaging/ffmpeg.json`（檔名、大小、SHA-256）；預設模式依 pin 下載（共用 fetch：續傳／重試）、驗證、解壓出
+  ffmpeg.exe、ffprobe.exe、LICENSE.txt，另寫 SOURCE.txt（LGPL 要求的原始碼位置）。沙盒無法連 GitHub → pin 由 Windows 端產生並 commit。
+- 後端：`Settings.bundled_ffmpeg_dir`（凍結時預設 `exe/../../ffmpeg` = `resources/ffmpeg`；可用 `MVR2T_BUNDLED_FFMPEG_DIR` 覆寫）；
+  `locate_ffmpeg` 順序：設定 → **內附（bundled）** → 下載 → PATH → winget。
+
+### electron-builder 26.18.1（`apps/desktop/electron-builder.yml`）
+- NSIS 一鍵安裝、`perMachine: false`（`%LOCALAPPDATA%\Programs\MVR2T`，不需系統管理員）、繁體中文介面、桌面與開始功能表捷徑。
+- `productName: MVR2T` 決定 userData（`%APPDATA%\MVR2T`）**不可更改**；`deleteAppDataOnUninstall: false` 保留約 6 GB 的模型。
+- `electronDist` 使用 node_modules 內的 Electron（不再下載）；asar 只放 dist／dist-electron／package.json（約 5 MB，不含 node_modules）。
+- extraResources：`backend/`、`ffmpeg/`、`THIRD_PARTY_NOTICES.md`（`build-resources/`，含 FFmpeg LGPL 與模型、llama.cpp 授權說明）。
+- 26.x 的設定驗證不接受 `includeSubNodeModules`（已移除）。
+
+### 沙盒驗證
+- 凍結後端 `--self-test` 全部 ok（含真正載入 ASR 處理器）。
+- 凍結後端 E2E：建立 Session → 上傳 → 抽音訊 → 語音辨識（凍結的 multiprocessing worker，含時間戳記對齊，141 s）→ 匯出 Word → 摘要
+  （llama-server，103 s）→ 關閉 stdin 後正常結束（exit 0）。
+- `electron-builder --dir`（Linux）：resources 內有 backend／ffmpeg／notices；在 Xvfb 啟動正式版 → 啟動 `resources/backend/mvr2t-backend`、
+  health／session／models／ffmpeg 正常；ffmpeg 來源 bundled；關閉視窗後後端行程消失。
+- Windows NSIS 安裝檔只能在 Windows 產生與測試（安裝、SmartScreen、離線、解除安裝）→ 交由 Claude Code＋使用者驗收。
+
 ## Phase 10 Hardware Detection（2026-11-14）
 
 使用者電腦：**只有內顯（Intel／AMD），沒有 NVIDIA**。使用者決定：摘要（llama.cpp）可用 GPU；語音辨識（PyTorch）先維持 CPU
@@ -165,6 +202,13 @@
   3. 「DeskIn Virtual Display Adapter」被列為顯示卡 → 過濾虛擬顯示器（virtual、remote、basic display、parsec、spacedesk、deskin…）。
   4. 版面：兩個獨立的欄（左：語音辨識＋這台電腦；右：摘要與心智圖〔＋GPU 加速〕＋不再使用的檔案），不再留下空白。
   5. 文字：「目前版本尚不支援 Intel／AMD 顯示卡加速」；CUDA 不可用改為空心圓（虛線圈像是讀取中）。
+
+### fix1 Windows 驗收（2026-11-14，本機 dbece16，無本機修正）
+- runtime.py 與本機 bbde9ae 只差註解（CUDA 兩行數值相同）。前端 173；後端 174 passed、9 skipped。
+- resolve_llama_release --tag b11312：CUDA 主程式正確為 llama-b11312-bin-win-cuda-12.4-x64.zip，與 runtime.py 一致。
+  同時輸出 **macos-arm64：`llama-b11312-bin-macos-arm64.tar.gz` 11820971 `3ceea603e48367ab694822f7304e6880817337f942f9672321411932c76c46f2`**
+  → Phase 11 打包 macOS 版時加入 LLAMA_CPP（尚未加入，等有 Mac 可驗證）。
+- 畫面：Windows 11（組建 26200）x64、只剩 Intel Iris Xe、CUDA 空心圓「不可用」、新說明文字、兩欄版面（使用者滿意）。
 
 ### 驗證（沙盒）
 - pytest 173 passed：tests/test_hardware.py 12 個（GGUF 讀取、nvidia-smi／meminfo／vm_stat 解析、CUDA／Metal 判斷、

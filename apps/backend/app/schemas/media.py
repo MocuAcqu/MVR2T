@@ -51,7 +51,7 @@ class TaskState(BaseModel):
 class FfmpegStatus(BaseModel):
     available: bool
     version: str | None
-    source: Literal["settings", "app-runtime", "path", "winget"] | None
+    source: Literal["settings", "bundled", "app-runtime", "path", "winget"] | None
     ffmpeg_path: str | None
 
 

@@ -16,7 +16,7 @@ router = APIRouter(prefix="/system", tags=["system"])
 @router.get("/ffmpeg", response_model=FfmpegStatus)
 def ffmpeg_status(request: Request) -> FfmpegStatus:
     cfg = app_settings(request)
-    loc = ff.locate_ffmpeg(cfg.ffmpeg_dir, cfg.runtime_ffmpeg_dir)
+    loc = ff.locate_ffmpeg(cfg.ffmpeg_dir, cfg.runtime_ffmpeg_dir, cfg.bundled_ffmpeg_dir)
     if loc is None:
         return FfmpegStatus(available=False, version=None, source=None, ffmpeg_path=None)
     version = ff.ffmpeg_version(loc)

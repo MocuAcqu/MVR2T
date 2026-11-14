@@ -57,7 +57,7 @@ def media_kind(filename: str) -> tuple[str, str] | None:
 
 
 def require_ffmpeg(cfg: Settings) -> ff.FfmpegLocation:
-    loc = ff.locate_ffmpeg(cfg.ffmpeg_dir, cfg.runtime_ffmpeg_dir)
+    loc = ff.locate_ffmpeg(cfg.ffmpeg_dir, cfg.runtime_ffmpeg_dir, cfg.bundled_ffmpeg_dir)
     if loc is None:
         raise MediaError(503, "找不到 FFmpeg。請先安裝 FFmpeg（Windows：winget install Gyan.FFmpeg），然後重新啟動程式。")
     return loc

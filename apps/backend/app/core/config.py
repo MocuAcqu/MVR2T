@@ -32,6 +32,13 @@ def _split_csv(value: str) -> list[str]:
 APP_DIR_NAME = "MVR2T"  # 需與 apps/desktop/package.json 的 productName 一致（Electron userData 資料夾名稱）
 
 
+def _bundled_ffmpeg_default() -> str:
+    """打包後（PyInstaller，sys.frozen）：resources/backend/mvr2t-backend.exe → resources/ffmpeg/。開發時沒有。"""
+    if getattr(sys, "frozen", False):
+        return str(Path(sys.executable).resolve().parent.parent / "ffmpeg")
+    return ""
+
+
 def default_user_data_dir() -> Path:
     """與 Electron app.getPath('userData') 相同的位置，讓手動啟動的後端與下載腳本使用同一份模型。
 
@@ -80,6 +87,8 @@ class Settings:
 
     # 使用者在設定中指定的 FFmpeg 資料夾（含 ffmpeg 與 ffprobe）。空字串 = 自動尋找。
     ffmpeg_dir: str = field(default_factory=lambda: os.environ.get("MVR2T_FFMPEG_DIR", ""))
+    # 安裝程式內附的 FFmpeg（Phase 11）：打包後在 resources/ffmpeg/（後端 exe 在 resources/backend/）。
+    bundled_ffmpeg_dir: str = field(default_factory=lambda: os.environ.get("MVR2T_BUNDLED_FFMPEG_DIR", "") or _bundled_ffmpeg_default())
 
     # 匯入檔案大小上限（規格 §11-9）。需與 shared/constants/media.ts 的 MAX_MEDIA_BYTES 一致。
     max_upload_bytes: int = field(

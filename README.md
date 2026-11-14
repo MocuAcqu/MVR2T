@@ -19,8 +19,9 @@
 | 07 | Mind Map（React Flow 心智圖：編輯、拖曳、匯出 PNG／SVG） | ✅ 已在 Windows 驗收 |
 | 08 | Session and Export（匯出面板：TXT／CSV／Word／PDF／字幕／JSON／Markdown／ZIP） | ✅ 已在 Windows 驗收 |
 | 09 | Model Manager（程式內下載、進度、取消與續傳、驗證、修復、刪除、版本更新） | ✅ 已在 Windows 驗收 |
-| 10 | Hardware Detection（CPU／記憶體／GPU／CUDA／Metal、運算裝置選擇、記憶體不足降級） | ✅ 已在 Windows 驗收（無 NVIDIA；CUDA／Metal 待實機） |
-| 11 – 12 | 打包、發布 | ⏳ |
+| 10 | Hardware Detection（CPU／記憶體／GPU／CUDA／Metal、運算裝置選擇、記憶體不足降級） | ✅ 已在 Windows 驗收（含 fix1；無 NVIDIA，CUDA／Metal 待實機） |
+| 11 | Windows Packaging（PyInstaller 後端、內附 LGPL FFmpeg、electron-builder 安裝程式） | 🔄 待 Windows 驗收 |
+| 12 | macOS 打包、發布 | ⏳ |
 
 ## 環境需求
 
@@ -299,13 +300,50 @@ Phase 09 fix1：
 - [ ] `GET /api/system/info` 回報硬體與目前的運算裝置（規格 §10）
 - [ ] （有 NVIDIA 顯示卡的電腦）CUDA「可用」；模型管理出現「摘要 GPU 加速（NVIDIA）」，下載後摘要顯示「NVIDIA GPU」，速度明顯變快；
       其他程式佔用大量 VRAM 時改放部分層或自動改用 CPU
-- [ ] （Apple Silicon Mac，Phase 11）運算裝置「摘要：Apple GPU（Metal）」
+- [ ] （Apple Silicon Mac，Phase 12）運算裝置「摘要：Apple GPU（Metal）」
 
 Phase 10 fix1：
 - [ ] 作業系統顯示「Windows 11（組建 26200）x64」
 - [ ] 顯示卡不再列出遠端桌面的虛擬顯示器（例如 DeskIn Virtual Display Adapter）
 - [ ] 「模型管理」兩欄各自往下排：左欄語音辨識＋這台電腦，右欄摘要與心智圖＋不再使用的檔案，沒有空白
 - [ ] CUDA「不可用」前是空心圓（不是虛線圈）；說明文字「目前版本尚不支援 Intel／AMD 顯示卡加速」
+
+## Phase 11：打包 Windows 安裝程式
+
+使用者決定（2026-11-14）：FFmpeg 內附在安裝程式中（LGPL 版）、只為目前使用者安裝（不需系統管理員）、第一版不簽章。
+
+在專案根目錄依序執行（需要網路；第 2、3 步只有更新版本時才需要）：
+
+```powershell
+cd apps/backend
+.\.venv\Scripts\python.exe -m pip install -r requirements/build.txt   # PyInstaller（只有打包時需要）
+.\.venv\Scripts\python.exe -m scripts.ffmpeg_bundle --resolve         # 固定 FFmpeg 版本 → packaging/ffmpeg.json（要 commit）
+.\.venv\Scripts\python.exe -m scripts.ffmpeg_bundle                   # 下載、驗證 SHA-256 → apps/desktop/build-resources/ffmpeg/
+.\.venv\Scripts\python.exe -m scripts.build_backend                   # PyInstaller → apps/backend/dist/mvr2t-backend/，並執行 --self-test
+cd ../..
+npm run dist:win -w @mvr2t/desktop                                     # → apps/desktop/release/MVR2T-Setup-<版本>-x64.exe
+```
+
+- 後端打包成 `mvr2t-backend.exe`（onedir），放在 `resources/backend/`；不依賴開發者電腦上的 Python。
+  `mvr2t-backend.exe --self-test` 會檢查：API、簡轉繁、Word 匯出、PyTorch、Transformers、ASR 處理器（模型已下載時）、硬體偵測、FFmpeg。
+- FFmpeg（BtbN 的 win64 **LGPL** 靜態版，n7.1 系列）放在 `resources/ffmpeg/`，後端的尋找順序：設定 → 內附 → 下載 → PATH → winget。
+- 第三方授權：`resources/THIRD_PARTY_NOTICES.md`（FFmpeg 另附 LICENSE.txt 與原始碼位置 SOURCE.txt）。
+- 安裝位置：`%LOCALAPPDATA%\Programs\MVR2T`；模型與設定：`%APPDATA%\MVR2T`（解除安裝時**保留**，要完全移除請手動刪除）。
+- 安裝檔較大（PyTorch CPU 版約占一半）；AI 模型不包含在安裝檔內，第一次使用時在「模型管理」下載。
+- 沒有簽章：第一次執行安裝檔時 Windows SmartScreen 會顯示「Windows 已保護您的電腦」，按「其他資訊 → 仍要執行」。
+
+## Phase 11 驗收清單（打包）
+
+- [ ] `scripts.build_backend` 完成，`--self-test` 全部 ok（含 ffmpeg：bundled）
+- [ ] `npm run dist:win` 產生 `MVR2T-Setup-0.1.0-x64.exe`
+- [ ] 安裝不需要系統管理員權限；開始功能表與桌面有「MVR2T」捷徑；SmartScreen 提示可以「仍要執行」
+- [ ] 正式版啟動後首頁正常、「模型管理」看得到已下載的模型（同一個 `%APPDATA%\MVR2T`）
+- [ ] 安裝後的 `resources\backend\mvr2t-backend.exe --self-test` 中 ffmpeg 為 `bundled`；匯入影片 → 語音辨識 → 摘要 → 心智圖 → 匯出 Word／PDF 都正常
+- [ ] **不依賴開發環境**：暫時把專案資料夾的 `.venv` 改名、關閉 `npm run dev`，正式版仍可完整使用
+- [ ] **離線**：中斷網路後重新開啟，語音辨識與摘要仍可完成
+- [ ] 關閉視窗後工作管理員沒有殘留的 `mvr2t-backend.exe`、`llama-server.exe`
+- [ ] 解除安裝（設定 → 應用程式）後程式資料夾移除，`%APPDATA%\MVR2T\models` 仍保留；重新安裝不必重新下載模型
+- [ ] （另一台電腦，選做）沒有安裝 Python／Node 的電腦也能安裝與執行
 
 ## 開發注意事項
 
@@ -326,5 +364,6 @@ shared/          前後端共用的常數與型別
 ## 已知待辦（刻意留到後續 Phase）
 
 - 逐字稿編輯、依時間戳記播放原始影音：後續 Phase（Transcript Editor）
-- Phase 11：在有 Avast 的使用者電腦上用正式版匯出 Word／PDF，驗證防毒軟體阻擋時的說明與「重新匯出失敗的項目」（Phase 08 fix2 尚未實際操作）；考慮程式碼簽章，減少防毒軟體詢問
-- Phase 11：PyInstaller 打包後端（Electron 已預留 `resources/backend/mvr2t-backend(.exe)` 路徑）
+- 在有 Avast 的使用者電腦上用正式版匯出 Word／PDF，驗證防毒軟體阻擋時的說明與「重新匯出失敗的項目」（Phase 08 fix2 尚未實際操作）；考慮程式碼簽章，減少防毒軟體詢問
+- Phase 12：macOS 打包（Apple Silicon、Metal 實機驗證）
+- 程式碼簽章（減少 SmartScreen 與防毒軟體的提示）
