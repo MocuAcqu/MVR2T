@@ -10,8 +10,8 @@ __pycache__/
 dist/
 dist-electron/
 release/
-build/pyinstaller/
-build/ffmpeg/
+# 中間有斜線的規則只從專案根目錄比對，所以要寫完整路徑
+/apps/backend/build/
 
 # Models & runtime (規格第 18 條：不得將模型權重提交至 Git)
 # 模型實際放在使用者資料夾（%APPDATA%\MVR2T\models），不在專案內；以下為防止誤放的保險。
