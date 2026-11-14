@@ -73,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
     lines = []
     # Phase 10：NVIDIA GPU 版（CUDA 12.x 優先）＋ cudart 執行庫
     cuda = sorted(
-        {m.group(1) for a in rel["assets"] if (m := re.search(r"-bin-win-cuda-([\d.]+)-x64\.zip$", a["name"]))},
+        {m.group(1) for a in rel["assets"] if (m := re.search(r"^llama-.*-bin-win-cuda-([\d.]+)-x64\.zip$", a["name"]))},
         key=lambda v: [int(x) for x in v.split(".")],
     )
     chosen = next((v for v in reversed(cuda) if v.startswith("12.")), cuda[-1] if cuda else None)
@@ -82,7 +82,8 @@ def main(argv: list[str] | None = None) -> int:
     platforms = dict(PLATFORMS)
     if chosen:
         v = re.escape(chosen)
-        platforms[f"win-cuda-{chosen}-x64"] = rf"-bin-win-cuda-{v}-x64\.zip$"
+        # 主程式要以 llama- 開頭：cudart-llama-bin-win-cuda-….zip 也含有「-bin-win-cuda-…-x64.zip」（2026-11-14 使用者電腦發現）
+        platforms[f"win-cuda-{chosen}-x64"] = rf"^llama-.*-bin-win-cuda-{v}-x64\.zip$"
         platforms[f"win-cuda-{chosen}-x64:cudart"] = rf"^cudart-llama-bin-win-cuda-{v}-x64\.zip$"
     for plat, pattern in platforms.items():
         asset = next((a for a in rel["assets"] if re.search(pattern, a["name"])), None)

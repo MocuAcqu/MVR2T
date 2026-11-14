@@ -130,7 +130,7 @@ def plan_llm(
     if why_not and profile.cuda_available:
         reason = f"CPU（{why_not}）"
     elif any(g.vendor in ("Intel", "AMD") for g in profile.gpus) and not profile.metal_available:
-        reason = "CPU（Intel／AMD 顯示卡第一版不使用加速）"
+        reason = "CPU（目前版本尚不支援 Intel／AMD 顯示卡加速）"
     return LlmPlan("cpu", str(cpu_exe) if cpu_exe else None, 0, c, reason, warnings, str(cpu_exe) if cpu_exe else None)
 
 

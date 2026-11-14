@@ -19,7 +19,7 @@
 | 07 | Mind Map（React Flow 心智圖：編輯、拖曳、匯出 PNG／SVG） | ✅ 已在 Windows 驗收 |
 | 08 | Session and Export（匯出面板：TXT／CSV／Word／PDF／字幕／JSON／Markdown／ZIP） | ✅ 已在 Windows 驗收 |
 | 09 | Model Manager（程式內下載、進度、取消與續傳、驗證、修復、刪除、版本更新） | ✅ 已在 Windows 驗收 |
-| 10 | Hardware Detection（CPU／記憶體／GPU／CUDA／Metal、運算裝置選擇、記憶體不足降級） | 🧪 待 Windows 驗收 |
+| 10 | Hardware Detection（CPU／記憶體／GPU／CUDA／Metal、運算裝置選擇、記憶體不足降級） | ✅ 已在 Windows 驗收（無 NVIDIA；CUDA／Metal 待實機） |
 | 11 – 12 | 打包、發布 | ⏳ |
 
 ## 環境需求
@@ -300,6 +300,12 @@ Phase 09 fix1：
 - [ ] （有 NVIDIA 顯示卡的電腦）CUDA「可用」；模型管理出現「摘要 GPU 加速（NVIDIA）」，下載後摘要顯示「NVIDIA GPU」，速度明顯變快；
       其他程式佔用大量 VRAM 時改放部分層或自動改用 CPU
 - [ ] （Apple Silicon Mac，Phase 11）運算裝置「摘要：Apple GPU（Metal）」
+
+Phase 10 fix1：
+- [ ] 作業系統顯示「Windows 11（組建 26200）x64」
+- [ ] 顯示卡不再列出遠端桌面的虛擬顯示器（例如 DeskIn Virtual Display Adapter）
+- [ ] 「模型管理」兩欄各自往下排：左欄語音辨識＋這台電腦，右欄摘要與心智圖＋不再使用的檔案，沒有空白
+- [ ] CUDA「不可用」前是空心圓（不是虛線圈）；說明文字「目前版本尚不支援 Intel／AMD 顯示卡加速」
 
 ## 開發注意事項
 

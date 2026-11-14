@@ -81,6 +81,17 @@ def test_parsers():
     assert hw._vendor("Intel(R) UHD Graphics 620") == "Intel" and hw._vendor("AMD Radeon(TM) Graphics") == "AMD"
 
 
+def test_windows_11_name_and_virtual_display_adapters():
+    assert hw.windows_name("10", "10.0.26200") == "Windows 11"
+    assert hw.windows_name("10", "10.0.19045") == "Windows 10"
+    assert hw.windows_name("10", "?") == "Windows 10"
+    for name in ("DeskIn Virtual Display Adapter", "Microsoft Basic Display Adapter", "Parsec Virtual Display Adapter",
+                 "Microsoft Remote Display Adapter", "spacedesk Graphics Adapter"):
+        assert hw.is_virtual_adapter(name), name
+    for name in ("Intel(R) Iris(R) Xe Graphics", "NVIDIA GeForce RTX 3060 Laptop GPU", "AMD Radeon(TM) Graphics"):
+        assert not hw.is_virtual_adapter(name), name
+
+
 def test_cuda_and_metal_assessment():
     nv = hw.parse_nvidia_smi(NVIDIA_SMI)
     assert hw.assess_cuda("win32", "x64", nv)[0]

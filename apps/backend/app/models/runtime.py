@@ -56,10 +56,11 @@ LLAMA_CPP = LlamaCppRelease(
     commit="0c1e57098bba43ac29e6e3b677cdceebdd22334f",
     assets=(
         RuntimeAsset("win-cpu-x64", "llama-b11312-bin-win-cpu-x64.zip", 19265352, "d2d966c23e4d097d70633f9d92e4931245b575be7a5409201d8f352493f0e702"),
+        # Phase 10：NVIDIA GPU 版與它需要的 CUDA 執行庫（cudart，解壓到 llama-server.exe 旁）。
+        # b11312 有 CUDA 12.4 與 13.4，選 12.4（需要的驅動較舊、支援的顯示卡較多）。
+        # 由使用者電腦上的 Claude Code 從 GitHub API 的 digest 取得（2026-11-14，本機 bbde9ae）。
         RuntimeAsset("win-cuda-12.4-x64", "llama-b11312-bin-win-cuda-12.4-x64.zip", 263389010, "c7e67ed12791e31e21aba6a15856bade791586e4a1cefa313ea207f441089133"),
         RuntimeAsset("win-cuda-12.4-x64:cudart", "cudart-llama-bin-win-cuda-12.4-x64.zip", 391443627, "8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6"),
-        # Phase 10：NVIDIA GPU 版（win-cuda-<版本>-x64）與它需要的 CUDA 執行庫（<同名>:cudart）。
-        # 沙盒連不到 GitHub，由使用者電腦上的 Claude Code 以 scripts/resolve_llama_release 查出後補上。
         # macOS（.tar.gz，內建 Metal）在 Phase 11 打包時補上
     ),
 )

@@ -1,6 +1,6 @@
 # 開發紀錄（給接手的 Claude / Claude Code）
 
-最後更新：2026-11-14。Phase 10 硬體偵測已在沙盒完成，待 Windows 驗收（基準：本機 2ed32fb）。CUDA 版 llama.cpp 的版本與雜湊需在使用者電腦上以 resolve_llama_release 補上。
+最後更新：2026-11-14。Phase 10 已在 Windows 驗收（本機 962299d＋bbde9ae，無 NVIDIA）；fix1（CUDA 版固定、腳本修正、作業系統名稱、虛擬顯示器、版面）待套用。CUDA／Metal 路線待實機驗證。
 
 ## 目前進度
 
@@ -18,7 +18,7 @@
 | 07 Mind Map | ✅ Windows 驗收通過（2026-11-11，含 fix1，本機 880149a） |
 | 08 Session and Export | ✅ Windows 驗收通過（2026-11-11，含 fix1、fix2，本機 b8ff860） |
 | 09 Model Manager | ✅ Windows 驗收通過（2026-11-13，含 fix1，本機 2ed32fb） |
-| 10 Hardware Detection | 🧪 沙盒完成（2026-11-14），待 Windows 驗收；CUDA／Metal 路線尚無實機可驗證 |
+| 10 Hardware Detection | ✅ Windows 驗收通過（2026-11-14，本機 962299d＋bbde9ae，無 NVIDIA）；fix1 待確認；CUDA／Metal 待實機 |
 
 ## 沙盒驗證結果（2026-11-06）
 
@@ -149,6 +149,22 @@
 - 規格的四個驗收項目：「不支援 GPU 時可以使用 CPU」「Backend 可以回報目前運算裝置」可在使用者電腦驗收；
   「Windows NVIDIA 經驗證的 CUDA 路線」「Apple Silicon 經驗證的 Metal 路線」**需要實機**（NVIDIA 電腦、Apple Silicon Mac），
   目前只有單元測試與模擬畫面驗證 → 列為待辦（Phase 11 打包 macOS 版時一併驗證 Metal）。
+
+### Windows 驗收（2026-11-14，Windows 11 Home 26200、i5-1235U、Intel Iris Xe、無 NVIDIA）
+- 前端 173；後端 172 passed、9 skipped（多 1 個 Linux 專用跳過）。
+- /api/system/info 與工作管理員一致：CPU、記憶體 19.7 GB、Iris Xe 2 GB、CUDA 不可用、ASR／LLM 都是 CPU。
+- 摘要完成顯示「處理 4:04（CPU）」，log `[llm] device=cpu n_gpu_layers=0 ctx=8192`。
+- 可用 1.8 GB 時卡片同時顯示摘要（約需 3.3 GB）與語音辨識（約需 3 GB）的提醒；另一次可用 3.3 GB 時 ctx 自動降為 4096。
+- 問題與修正（fix1）：
+  1. `resolve_llama_release.py` 的 CUDA 主程式 pattern `-bin-win-cuda-<v>-x64.zip$` 也匹配 `cudart-llama-bin-win-cuda-…zip`
+     → 主程式被解析成 cudart。改為 `^llama-.*-bin-win-cuda-<v>-x64\.zip$`；測試把 cudart 放在前面（真實 release 的順序）。
+     b11312 有 CUDA 12.4 與 13.4，選 12.4；使用者電腦以 GitHub API digest 取得並固定（本機 bbde9ae，patch 沒有附上，依回報的數值同步）：
+     `llama-b11312-bin-win-cuda-12.4-x64.zip` 263389010 c7e67ed1…、`cudart-llama-bin-win-cuda-12.4-x64.zip` 391443627 8c79a9b2…。
+  2. os_name 回傳「Windows 10」：`platform.release()` 在 Windows 11 仍是 "10" → 組建 ≥ 22000 顯示 Windows 11（並附組建號）；
+     「這台電腦」的作業系統改用後端的名稱。
+  3. 「DeskIn Virtual Display Adapter」被列為顯示卡 → 過濾虛擬顯示器（virtual、remote、basic display、parsec、spacedesk、deskin…）。
+  4. 版面：兩個獨立的欄（左：語音辨識＋這台電腦；右：摘要與心智圖〔＋GPU 加速〕＋不再使用的檔案），不再留下空白。
+  5. 文字：「目前版本尚不支援 Intel／AMD 顯示卡加速」；CUDA 不可用改為空心圓（虛線圈像是讀取中）。
 
 ### 驗證（沙盒）
 - pytest 173 passed：tests/test_hardware.py 12 個（GGUF 讀取、nvidia-smi／meminfo／vm_stat 解析、CUDA／Metal 判斷、

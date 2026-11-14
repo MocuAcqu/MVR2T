@@ -214,12 +214,31 @@ def windows_display_adapters() -> list[Gpu]:
                             driver = None
                 except OSError:
                     continue
-                if "basic display" in name.lower() or "remote" in name.lower():
-                    continue  # 「Microsoft 基本顯示介面卡」、遠端桌面
+                if is_virtual_adapter(name):
+                    continue  # 「Microsoft 基本顯示介面卡」、遠端桌面軟體的虛擬顯示器
                 gpus.append(Gpu(_vendor(name), name, vram or None, None, driver))
     except OSError:
         pass
     return gpus
+
+
+#: 虛擬顯示器（遠端桌面、螢幕延伸軟體）：不是實體顯示卡，不列出。2026-11-14：DeskIn Virtual Display Adapter
+_VIRTUAL = ("basic display", "basic render", "remote", "virtual", "indirect", "mirror", "parsec", "spacedesk", "deskin",
+            "citrix", "vmware svga", "hyper-v", "idd")
+
+
+def is_virtual_adapter(name: str) -> bool:
+    low = name.lower()
+    return any(k in low for k in _VIRTUAL)
+
+
+def windows_name(release: str, version: str) -> str:
+    """platform.release() 在 Windows 11 仍回傳 "10"；組建 22000 以上才是 Windows 11。"""
+    try:
+        build = int(version.split(".")[2])
+    except (IndexError, ValueError):
+        return f"Windows {release}"
+    return "Windows 11" if release == "10" and build >= 22000 else f"Windows {release}"
 
 
 def mac_gpus(runner: Runner = run) -> list[Gpu]:
@@ -286,10 +305,14 @@ def detect(refresh: bool = False, runner: Runner = run) -> HardwareProfile:
                 gpus = nvidia_gpus(runner)
             cuda = assess_cuda(plat, arch, gpus)
             metal = assess_metal(plat, arch)
-            os_name = {"win32": "Windows", "darwin": "macOS", "linux": "Linux"}.get(plat, plat)
-            release = platform.release() if plat != "darwin" else platform.mac_ver()[0]
+            if plat == "win32":
+                full_name = f"{windows_name(platform.release(), platform.version())}（組建 {platform.version().split('.')[-1]}）"
+            elif plat == "darwin":
+                full_name = f"macOS {platform.mac_ver()[0]}"
+            else:
+                full_name = f"Linux {platform.release()}"
             _cache["static"] = {
-                "os_name": f"{os_name} {release}".strip(),
+                "os_name": full_name.strip(),
                 "cpu_name": cpu_name(runner),
                 "gpus": gpus,
                 "cuda": cuda,

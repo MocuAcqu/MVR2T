@@ -16,6 +16,16 @@ def test_pinned_release_has_a_windows_cpu_build():
     assert LLAMA_CPP.tag and a is not None and len(a.sha256) == 64 and a.filename.endswith(".zip")
 
 
+def test_pinned_cuda_build_comes_with_its_cuda_runtime():
+    from app.models.runtime import assets_for
+
+    cuda = [a for a in LLAMA_CPP.assets if a.platform.startswith("win-cuda-") and ":" not in a.platform]
+    assert len(cuda) == 1 and cuda[0].filename.startswith("llama-")
+    pair = assets_for(LLAMA_CPP, cuda[0].platform)
+    assert [a.filename.startswith("cudart-") for a in pair] == [False, True]
+    assert all(len(a.sha256) == 64 and a.size > 100_000_000 for a in pair)
+
+
 def test_zip_extracts_and_rejects_paths_outside(tmp_path):
     ok = tmp_path / "ok.zip"
     with zipfile.ZipFile(ok, "w") as z:
@@ -69,8 +79,9 @@ def test_resolve_script_prints_cpu_cuda_and_cudart_assets(monkeypatch, capsys):
     """Phase 10: the pinning script also lists the NVIDIA build (CUDA 12.x preferred) and its cudart libraries."""
     from scripts import resolve_llama_release as r
 
-    names = ["llama-b9-bin-win-cpu-x64.zip", "llama-b9-bin-win-cuda-12.4-x64.zip", "llama-b9-bin-win-cuda-13.1-x64.zip",
-             "cudart-llama-bin-win-cuda-12.4-x64.zip", "cudart-llama-bin-win-cuda-13.1-x64.zip", "llama-b9-bin-macos-arm64.tar.gz"]
+    # cudart files listed first (as in the real b11312 release): their names also end in "-bin-win-cuda-12.4-x64.zip"
+    names = ["cudart-llama-bin-win-cuda-12.4-x64.zip", "cudart-llama-bin-win-cuda-13.4-x64.zip", "llama-b9-bin-win-cpu-x64.zip",
+             "llama-b9-bin-win-cuda-12.4-x64.zip", "llama-b9-bin-win-cuda-13.4-x64.zip", "llama-b9-bin-macos-arm64.tar.gz"]
     rel = {"assets": [{"name": n, "size": i + 1, "digest": f"sha256:{i:064d}", "browser_download_url": ""} for i, n in enumerate(names)]}
 
     def fake_get(url):  # noqa: ANN001, ANN202
@@ -82,4 +93,5 @@ def test_resolve_script_prints_cpu_cuda_and_cudart_assets(monkeypatch, capsys):
     assert 'RuntimeAsset("win-cpu-x64", "llama-b9-bin-win-cpu-x64.zip"' in out
     assert 'RuntimeAsset("win-cuda-12.4-x64", "llama-b9-bin-win-cuda-12.4-x64.zip"' in out
     assert 'RuntimeAsset("win-cuda-12.4-x64:cudart", "cudart-llama-bin-win-cuda-12.4-x64.zip"' in out
-    assert "13.1-x64.zip" not in out and 'RuntimeAsset("macos-arm64"' in out
+    assert "13.4-x64.zip" not in out and 'RuntimeAsset("macos-arm64"' in out
+    assert out.count("cudart-llama-bin-win-cuda-12.4-x64.zip") == 1  # only on the :cudart line

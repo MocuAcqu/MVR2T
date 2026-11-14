@@ -45,16 +45,18 @@ export function ModelsPage() {
 
       {!data ? (
         <p className="mt-6 text-sm text-body-gray">{models.status === 'loading' ? '讀取中…' : '等待本機後端連線。'}</p>
-      ) : (
-        <div className="mt-6 grid items-start gap-6 md:grid-cols-2">
-          {data.packages.map((p) => (
-            <ModelPackageCard key={p.id} pkg={p} onState={applyModels} />
-          ))}
-        </div>
-      )}
+      ) : null}
+      {/* 兩個獨立的欄，各自往下排，不會因為另一欄的卡片比較高而留下空白（2026-11-14 使用者建議）：
+          左欄：語音辨識＋這台電腦；右欄：摘要與心智圖（＋GPU 加速）＋不再使用的檔案 */}
       <div className="mt-6 grid items-start gap-6 md:grid-cols-2">
-        {data ? <UnusedModelsCard items={data.unused} onState={applyModels} /> : null}
-        <HardwareStatusCard />
+        <div className="flex min-w-0 flex-col gap-6">
+          {data?.packages.filter((p) => p.id === 'asr').map((p) => <ModelPackageCard key={p.id} pkg={p} onState={applyModels} />)}
+          <HardwareStatusCard />
+        </div>
+        <div className="flex min-w-0 flex-col gap-6">
+          {data?.packages.filter((p) => p.id !== 'asr').map((p) => <ModelPackageCard key={p.id} pkg={p} onState={applyModels} />)}
+          {data ? <UnusedModelsCard items={data.unused} onState={applyModels} /> : null}
+        </div>
       </div>
     </PageContainer>
   );

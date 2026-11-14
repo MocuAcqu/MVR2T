@@ -71,7 +71,7 @@ export function HardwareStatusCard() {
       </CardHeader>
       <CardContent>
         <dl>
-          <Row label="作業系統">{system}</Row>
+          <Row label="作業系統">{hw ? `${hw.os_name} ${hw.arch}` : system}</Row>
           <Row label="本機後端">
             <span className="inline-flex items-center gap-2">
               <StatusDot state={status.state} />
@@ -116,7 +116,7 @@ export function HardwareStatusCard() {
               </Row>
               <Row label={hw.platform === 'darwin' ? 'Metal' : 'CUDA'}>
                 <span className="inline-flex items-center gap-2">
-                  <StatusDot state={(hw.platform === 'darwin' ? hw.metal_available : hw.cuda_available) ? 'ok' : 'pending'} />
+                  <StatusDot state={(hw.platform === 'darwin' ? hw.metal_available : hw.cuda_available) ? 'ok' : 'fail'} />
                   {(hw.platform === 'darwin' ? hw.metal_available : hw.cuda_available) ? '可用' : '不可用'}
                 </span>
                 <span className="block text-xs font-normal text-body-gray">{hw.platform === 'darwin' ? hw.metal_reason : hw.cuda_reason}</span>
@@ -124,7 +124,7 @@ export function HardwareStatusCard() {
               <Row label="運算裝置">
                 <span className="block">語音辨識：{DEVICE[info.asr.device]}</span>
                 <span className="block">摘要：{DEVICE[info.llm.device]}</span>
-                <span className="block text-xs font-normal text-body-gray">{info.llm.reason}</span>
+                {info.llm.reason !== 'CPU' ? <span className="block text-xs font-normal text-body-gray">{info.llm.reason}</span> : null}
               </Row>
             </>
           ) : (
