@@ -1,6 +1,6 @@
 # 開發紀錄（給接手的 Claude / Claude Code）
 
-最後更新：2026-11-14。Phase 10（含 fix1，本機 dbece16）已在 Windows 驗收；CUDA／Metal 路線待實機驗證。Phase 11（Windows 打包）已交付，待 Windows 驗收。
+最後更新：2026-11-14。Phase 10（含 fix1，本機 dbece16）已在 Windows 驗收；CUDA／Metal 路線待實機驗證。Phase 11（Windows 打包）已在 Windows 驗收（本機 515ba85、4833b7f、91d099e）；fix1 已交付。下一個功能：YouTube 連結（待使用者決定方案）。
 
 ## 目前進度
 
@@ -151,6 +151,30 @@
 - `electron-builder --dir`（Linux）：resources 內有 backend／ffmpeg／notices；在 Xvfb 啟動正式版 → 啟動 `resources/backend/mvr2t-backend`、
   health／session／models／ffmpeg 正常；ffmpeg 來源 bundled；關閉視窗後後端行程消失。
 - Windows NSIS 安裝檔只能在 Windows 產生與測試（安裝、SmartScreen、離線、解除安裝）→ 交由 Claude Code＋使用者驗收。
+
+### Windows 驗收（2026-11-15，i5-1235U、無 NVIDIA、Avast）
+- 後端 557 MB（5,265 個檔案，torch 2.14.1+cpu），PyInstaller 343 秒，spec 不需修改；self-test 全部 ok。
+- 安裝檔 348 MB（解壓後 1.19 GB）。不需系統管理員；匯入 → 辨識 → 摘要 → 心智圖 → 匯出 Word／PDF 正常；離線正常；
+  解除安裝保留 %APPDATA%\MVR2T（模型 6.16 GB）；重新安裝不必重新下載。Avast 第一次安裝時詢問一次。
+- 啟動約 18 秒（點捷徑到首頁）。
+- 「不依賴開發環境」（.venv 改名）使用者決定延到 YouTube 功能完成後。
+- 本機修正（已同步）：4833b7f ffmpeg.json（--resolve 產生）；91d099e .gitignore（中間有斜線的規則只從根目錄比對 → `/apps/backend/build/`）。
+
+### fix1
+- FFmpeg 授權更正為 **LGPL-3.0-or-later**（組建有 --enable-version3，LICENSE.txt 是 LGPL v3）：ffmpeg.json、ffmpeg_bundle、THIRD_PARTY_NOTICES。
+  ffmpeg_bundle 解壓後檢查 LICENSE.txt 必須是 LGPL（下載到 GPL 版會停止）。GitHub API 回傳的網址已在 FFmpeg-Builds/FFmpeg-Builds（轉址正常），維持現狀。
+- self-test：輸出改 UTF-8；`--expect-ffmpeg bundled`。build_backend 在 build-resources/ffmpeg 存在時設定 MVR2T_BUNDLED_FFMPEG_DIR 並要求 bundled。
+- electron-builder：
+  - 安裝資料夾 `@mvr2tdesktop` → `extraMetadata.name: MVR2T`（per-user one-click 用套件名稱，不用 productName）。
+    打包後 package.json 仍有 productName MVR2T → userData 不變。**舊版要先解除安裝**（同一個 appId，安裝程式會沿用登錄的舊資料夾）。
+  - 解除安裝登錄項目沒有 InstallLocation：electron-builder 只寫在自己的登錄機碼 → `build/installer.nsh` 的 customInstall 補寫。
+  - `%LOCALAPPDATA%\<name>-updater\installer.exe`：electron-builder 為差異更新保留的安裝檔副本；本程式不自動更新 → 安裝後立即刪除，
+    解除安裝時也刪除（含舊的 @mvr2tdesktop-updater）。
+  - 自訂 electronDist 會帶入 default_app.asar → afterPack（scripts/after-pack.cjs）刪除。
+  - `npm ci` 後 node_modules/electron/dist 不存在（Electron 44 沒有 postinstall）→ `dist:*` 先執行 `npm run electron:install`。
+- 啟動時間：沙盒冷啟動 import app.main 只要 0.4 秒（不載入 torch），無法重現 18 秒 →
+  主行程記錄各階段時間到 `%APPDATA%\MVR2T\logs\startup.log`（app-ready、backend-spawned、backend-ready-line、backend-running、window-shown），
+  先在 Windows 量測（推測：PyInstaller onedir 第一次載入大量 DLL，加上 Avast 掃描）。沙盒正式版：視窗 1.4 秒、後端就緒 1.4 秒。
 
 ## Phase 10 Hardware Detection（2026-11-14）
 

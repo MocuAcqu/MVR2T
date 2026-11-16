@@ -16,8 +16,9 @@
     "start": "npm run build && electron .",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.electron.json",
     "test": "vitest run",
-    "dist:win": "npm run build && electron-builder --win --x64 --publish never",
-    "dist:dir": "npm run build && electron-builder --dir --publish never"
+    "electron:install": "install-electron",
+    "dist:win": "npm run electron:install && npm run build && electron-builder --win --x64 --publish never",
+    "dist:dir": "npm run electron:install && npm run build && electron-builder --dir --publish never"
   },
   "dependencies": {
     "@fontsource-variable/inter": "5.1.0",

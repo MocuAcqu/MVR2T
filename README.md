@@ -324,9 +324,11 @@ cd ../..
 npm run dist:win -w @mvr2t/desktop                                     # → apps/desktop/release/MVR2T-Setup-<版本>-x64.exe
 ```
 
+- `npm ci` 不會下載 Electron 執行檔（Electron 44 沒有 postinstall）；`dist:win` 會先執行 `npm run electron:install`（已有快取時不必下載）。
+
 - 後端打包成 `mvr2t-backend.exe`（onedir），放在 `resources/backend/`；不依賴開發者電腦上的 Python。
   `mvr2t-backend.exe --self-test` 會檢查：API、簡轉繁、Word 匯出、PyTorch、Transformers、ASR 處理器（模型已下載時）、硬體偵測、FFmpeg。
-- FFmpeg（BtbN 的 win64 **LGPL** 靜態版，n7.1 系列）放在 `resources/ffmpeg/`，後端的尋找順序：設定 → 內附 → 下載 → PATH → winget。
+- FFmpeg（BtbN 的 win64 **LGPL** 靜態版，n7.1 系列，LGPL-3.0-or-later）放在 `resources/ffmpeg/`，後端的尋找順序：設定 → 內附 → 下載 → PATH → winget。
 - 第三方授權：`resources/THIRD_PARTY_NOTICES.md`（FFmpeg 另附 LICENSE.txt 與原始碼位置 SOURCE.txt）。
 - 安裝位置：`%LOCALAPPDATA%\Programs\MVR2T`；模型與設定：`%APPDATA%\MVR2T`（解除安裝時**保留**，要完全移除請手動刪除）。
 - 安裝檔較大（PyTorch CPU 版約占一半）；AI 模型不包含在安裝檔內，第一次使用時在「模型管理」下載。
@@ -344,6 +346,12 @@ npm run dist:win -w @mvr2t/desktop                                     # → app
 - [ ] 關閉視窗後工作管理員沒有殘留的 `mvr2t-backend.exe`、`llama-server.exe`
 - [ ] 解除安裝（設定 → 應用程式）後程式資料夾移除，`%APPDATA%\MVR2T\models` 仍保留；重新安裝不必重新下載模型
 - [ ] （另一台電腦，選做）沒有安裝 Python／Node 的電腦也能安裝與執行
+
+Phase 11 fix1：
+- [ ] 安裝資料夾是 `%LOCALAPPDATA%\Programs\MVR2T`（不是 `@mvr2tdesktop`）；`resources\` 沒有 `default_app.asar`
+- [ ] 解除安裝登錄項目有 InstallLocation；安裝後與解除安裝後都沒有 `%LOCALAPPDATA%\mvr2t-updater`（約 350 MB 的安裝檔副本）
+- [ ] `scripts.build_backend` 的 self-test 直接驗證內附 FFmpeg（bundled）；中文在終端機不是亂碼
+- [ ] `%APPDATA%\MVR2T\logs\startup.log` 記錄每次啟動各階段的時間
 
 ## 開發注意事項
 

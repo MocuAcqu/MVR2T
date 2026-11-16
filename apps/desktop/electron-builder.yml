@@ -3,6 +3,12 @@
 appId: com.mvr2t.desktop  # 與 main.ts 的 setAppUserModelId 一致（Windows 通知）
 productName: MVR2T  # 也決定 userData 資料夾名稱（%APPDATA%\MVR2T），不可更改，否則找不到已下載的模型
 copyright: MVR2T
+# 套件名稱 @mvr2t/desktop 會變成安裝資料夾名稱（%LOCALAPPDATA%\Programs\@mvr2tdesktop）與更新快取名稱。
+# 只改打包後的 package.json 名稱（開發環境的 workspace 名稱不變）→ %LOCALAPPDATA%\Programs\MVR2T。
+extraMetadata:
+  name: MVR2T
+# 移除自訂 electronDist 帶進來的 default_app.asar
+afterPack: ./scripts/after-pack.cjs
 directories:
   output: release
   buildResources: build
@@ -45,6 +51,8 @@ nsis:
   language: "1028"
   # 解除安裝時保留 %APPDATA%\MVR2T（已下載約 6 GB 的模型、偏好設定）；要完全移除請手動刪除該資料夾
   deleteAppDataOnUninstall: false
+  # 解除安裝登錄項目補上 InstallLocation；刪除 electron-builder 為自動更新保留的安裝檔副本（約 350 MB）
+  include: build/installer.nsh
   artifactName: MVR2T-Setup-${version}-x64.${ext}
 linux:
   # 只用於沙盒驗證打包設定（目標平台是 Windows；macOS 在 Phase 12）

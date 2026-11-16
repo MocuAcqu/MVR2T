@@ -25,9 +25,17 @@ def _check(results: dict[str, Any], name: str, fn: Callable[[], Any]) -> None:
 
 
 def run_self_test(argv: list[str]) -> int:
+    """--models <dir>：指定模型資料夾；--expect-ffmpeg <source>：FFmpeg 必須來自這個來源（例如 bundled）。"""
+    # Windows 主控台預設 cp950：改用 UTF-8，JSON 中的中文在 UTF-8 終端機才不會變亂碼
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+        except (AttributeError, ValueError):
+            pass
     from app.core.config import APP_VERSION, Settings
 
     cfg = Settings()
+    expect_ffmpeg = argv[argv.index("--expect-ffmpeg") + 1] if "--expect-ffmpeg" in argv else None
     models = Path(argv[argv.index("--models") + 1]) if "--models" in argv else cfg.models_root
     results: dict[str, Any] = {"version": APP_VERSION, "frozen": bool(getattr(sys, "frozen", False)), "python": sys.version.split()[0]}
 
@@ -97,6 +105,8 @@ def run_self_test(argv: list[str]) -> int:
         loc = ff.locate_ffmpeg(cfg.ffmpeg_dir, cfg.runtime_ffmpeg_dir, cfg.bundled_ffmpeg_dir)
         if loc is None:
             raise RuntimeError("FFmpeg not found")
+        if expect_ffmpeg and loc.source != expect_ffmpeg:
+            raise RuntimeError(f"expected FFmpeg source {expect_ffmpeg}, got {loc.source} ({loc.ffmpeg_path})")
         return f"{loc.source}: {ff.ffmpeg_version(loc)}"
 
     for name, fn in (

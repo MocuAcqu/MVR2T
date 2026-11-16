@@ -22,10 +22,13 @@ import type { AppInfo, BackendState, ExportFilesResult, ExportPrefs, SaveFileRes
 import { BackendManager, resolveBackendCommand } from './backend';
 import { parseExportRequest, runExport } from './exporter';
 import { isDirectory, loadPrefs, savePrefs } from './prefs';
+import { StartupTimer } from './startup-timing';
 import { isAppUrl, isSafeExternalUrl, parseNotification, parseSaveRequest, rendererOrigins } from './security';
 
 // 開發模式：由 `npm run dev` 注入 Vite dev server 位址；正式版則載入打包後的 index.html。
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
+// 各階段啟動時間 → userData/logs/startup.log（Phase 11 fix1：量測正式版啟動慢的原因）
+const startup = new StartupTimer(() => path.join(app.getPath('userData'), 'logs', 'startup.log'), app.isPackaged);
 const indexFile = path.join(__dirname, '../dist/index.html'); // dist-electron/main.js → ../dist/index.html
 const indexFileUrl = pathToFileURL(indexFile).href;
 const appUrlOptions = { devServerUrl, indexFileUrl };
@@ -65,9 +68,14 @@ const backend = new BackendManager({
   dataDir: app.getPath('userData'),
   onState: (state) => {
     console.log(`[backend] ${state.phase}${state.pid ? ` pid=${state.pid}` : ''}${state.url ? ` ${state.url}` : ''}${state.message ? ` - ${state.message}` : ''}`);
+    if (state.phase === 'starting') startup.mark('backend-spawned');
+    if (state.phase === 'running') startup.mark('backend-running');
     broadcast(state);
   },
-  onLog: (line) => console.log(`[backend] ${line}`),
+  onLog: (line) => {
+    if (line.startsWith('MVR2T_BACKEND_READY')) startup.mark('backend-ready-line');
+    console.log(`[backend] ${line}`);
+  },
 });
 
 function currentBackendState(): BackendState {
@@ -133,7 +141,10 @@ function createMainWindow(): BrowserWindow {
     },
   });
 
-  win.once('ready-to-show', () => win.show());
+  win.once('ready-to-show', () => {
+    win.show();
+    startup.mark('window-shown');
+  });
   win.on('focus', () => win.flashFrame(false)); // 停止通知造成的工作列閃爍
 
   // 阻擋視窗內任意導航 / 開新視窗
@@ -378,6 +389,7 @@ if (!app.requestSingleInstanceLock()) {
   if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? 'com.mvr2t.desktop' : process.execPath);
 
   void app.whenReady().then(() => {
+    startup.mark('app-ready');
     // 除錯用：睡眠／喚醒與畫面行程異常都記在終端機，方便追查「螢幕關閉後內容消失」這類問題。
     powerMonitor.on('suspend', () => console.log('[power] system suspend'));
     powerMonitor.on('resume', () => console.log('[power] system resume'));

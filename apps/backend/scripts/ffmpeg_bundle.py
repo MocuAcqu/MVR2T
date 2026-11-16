@@ -1,6 +1,8 @@
 """準備安裝程式內附的 FFmpeg（Phase 11，使用者決定：內附在安裝程式中）。
 
 使用 BtbN/FFmpeg-Builds 的 **LGPL** 版（win64-lgpl，不含 GPL 元件；本程式只需要解碼、重新取樣與 silencedetect）。
+這個組建以 --enable-version3 編譯（附 LGPL 第 3 版全文），授權是 **LGPL-3.0-or-later**（Phase 11 Windows 驗收時以 ffmpeg -L 確認）。
+GitHub API 目前把下載網址轉到 FFmpeg-Builds/FFmpeg-Builds（舊網址會自動轉址）；pin 記錄的是 API 回傳的網址。
 版本固定在 packaging/ffmpeg.json（檔名、大小、SHA-256）：不使用每天變動的 latest。
 
 用法（在 apps/backend，需要網路）：
@@ -31,6 +33,7 @@ API = "https://api.github.com/repos/BtbN/FFmpeg-Builds"
 SERIES = "7.1"
 ASSET_RE = re.compile(rf"^ffmpeg-n{re.escape(SERIES)}[.\d]*-\d+-g[0-9a-f]+-win64-lgpl-{re.escape(SERIES)}\.zip$")
 WANTED = ("ffmpeg.exe", "ffprobe.exe")
+LICENSE_ID = "LGPL-3.0-or-later"
 
 
 def _get(url: str) -> object:
@@ -47,6 +50,14 @@ def pick_asset(releases: list[dict]) -> tuple[dict, dict] | None:
         for a in rel.get("assets", []):
             if ASSET_RE.match(a["name"]):
                 return rel, a
+    return None
+
+
+def check_license(text: str) -> str | None:
+    """內附的必須是 LGPL 版：LICENSE.txt 要是 LGPL 全文（GPL 版的 LICENSE 是 GPL，會被擋下）。"""
+    head = text[:2000].upper()
+    if "LESSER GENERAL PUBLIC LICENSE" not in head:
+        return "LICENSE.txt 不是 LGPL（可能下載到 GPL 版）。安裝程式只能內附 LGPL 版，已停止。"
     return None
 
 
@@ -75,7 +86,7 @@ def resolve() -> int:
         "sha256": sha,
         "url": a["browser_download_url"],
         "version": version.group(1) if version else "",
-        "license": "LGPL-2.1-or-later",
+        "license": LICENSE_ID,
         "source": "https://github.com/FFmpeg/FFmpeg（版本見 version；組建腳本 https://github.com/BtbN/FFmpeg-Builds）",
     }
     PIN.write_text(json.dumps(pin, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -117,6 +128,11 @@ def prepare() -> int:
     missing = [n for n in (*WANTED, "LICENSE.txt") if not (OUT / n).is_file()]
     if missing:
         print(f"壓縮檔中缺少：{', '.join(missing)}", file=sys.stderr)
+        return 1
+    problem = check_license((OUT / "LICENSE.txt").read_text(encoding="utf-8", errors="replace"))
+    if problem:
+        shutil.rmtree(OUT, ignore_errors=True)
+        print(problem, file=sys.stderr)
         return 1
     (OUT / "SOURCE.txt").write_text(
         f"FFmpeg {pin['version']}（{pin['license']}）\n"

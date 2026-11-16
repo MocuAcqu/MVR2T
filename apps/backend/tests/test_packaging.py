@@ -35,7 +35,7 @@ def test_prepare_downloads_verifies_and_extracts(tmp_path, monkeypatch):
         z.writestr("ffmpeg-n7.1.2-win64-lgpl-7.1/bin/ffmpeg.exe", b"ff")
         z.writestr("ffmpeg-n7.1.2-win64-lgpl-7.1/bin/ffprobe.exe", b"fp")
         z.writestr("ffmpeg-n7.1.2-win64-lgpl-7.1/bin/ffplay.exe", b"not needed")
-        z.writestr("ffmpeg-n7.1.2-win64-lgpl-7.1/LICENSE.txt", b"LGPL")
+        z.writestr("ffmpeg-n7.1.2-win64-lgpl-7.1/LICENSE.txt", b"GNU LESSER GENERAL PUBLIC LICENSE\nVersion 3, 29 June 2007\n")
     data = buf.getvalue()
     server = Server()
     try:
@@ -43,7 +43,7 @@ def test_prepare_downloads_verifies_and_extracts(tmp_path, monkeypatch):
         pin = tmp_path / "ffmpeg.json"
         pin.write_text(json.dumps({
             "release": "autobuild-x", "filename": "f.zip", "size": len(data), "sha256": hashlib.sha256(data).hexdigest(),
-            "url": server.url + "/f.zip", "version": "n7.1.2", "license": "LGPL-2.1-or-later", "source": "https://github.com/FFmpeg/FFmpeg",
+            "url": server.url + "/f.zip", "version": "n7.1.2", "license": "LGPL-3.0-or-later", "source": "https://github.com/FFmpeg/FFmpeg",
         }), encoding="utf-8")
         monkeypatch.setattr(fb, "PIN", pin)
         monkeypatch.setattr(fb, "OUT", tmp_path / "out")
@@ -91,3 +91,18 @@ def test_self_test_reports_every_check(capsys, tmp_path):
         assert out[key]["ok"], (key, out[key])
     assert out["asr_processor"]["detail"].startswith("skipped")
     assert rc == (0 if out["ffmpeg"]["ok"] else 1)
+
+
+def test_only_an_lgpl_license_is_accepted():
+    assert fb.check_license("                   GNU LESSER GENERAL PUBLIC LICENSE\n                       Version 3, 29 June 2007") is None
+    assert fb.check_license("                    GNU GENERAL PUBLIC LICENSE\n                       Version 3, 29 June 2007") is not None
+    assert fb.LICENSE_ID == "LGPL-3.0-or-later"
+
+
+def test_self_test_can_require_the_bundled_ffmpeg(capsys, tmp_path, monkeypatch):
+    from app.selftest import run_self_test
+
+    monkeypatch.setenv("MVR2T_BUNDLED_FFMPEG_DIR", str(tmp_path / "missing"))
+    rc = run_self_test(["--models", str(tmp_path / "no-models"), "--expect-ffmpeg", "bundled"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 1 and not out["ffmpeg"]["ok"]

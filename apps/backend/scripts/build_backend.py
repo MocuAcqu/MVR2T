@@ -17,6 +17,8 @@ from pathlib import Path
 BACKEND = Path(__file__).resolve().parents[1]
 DIST = BACKEND / "dist"
 OUT = DIST / "mvr2t-backend"
+#: scripts.ffmpeg_bundle 的輸出；存在時 self-test 直接驗證「內附」FFmpeg（安裝後的位置是 resources/ffmpeg）
+BUNDLED_FFMPEG = BACKEND.parent / "desktop" / "build-resources" / "ffmpeg"
 
 
 def dir_size(p: Path) -> int:
@@ -46,7 +48,15 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     print("執行 --self-test …", flush=True)
     env = {**os.environ, "PYTHONUTF8": "1"}
-    return subprocess.call([str(exe), "--self-test"], env=env)
+    args = [str(exe), "--self-test"]
+    if (BUNDLED_FFMPEG / ("ffmpeg.exe" if sys.platform == "win32" else "ffmpeg")).is_file():
+        env["MVR2T_BUNDLED_FFMPEG_DIR"] = str(BUNDLED_FFMPEG)
+        env.pop("MVR2T_FFMPEG_DIR", None)
+        args += ["--expect-ffmpeg", "bundled"]
+        print(f"FFmpeg：驗證內附版本（{BUNDLED_FFMPEG}）", flush=True)
+    else:
+        print("FFmpeg：尚未執行 scripts.ffmpeg_bundle，self-test 使用這台電腦上找得到的 FFmpeg", flush=True)
+    return subprocess.call(args, env=env)
 
 
 if __name__ == "__main__":
