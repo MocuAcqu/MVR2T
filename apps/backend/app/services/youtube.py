@@ -88,6 +88,29 @@ def require_component(comp: YtDlpComponent) -> Path:
     return exe
 
 
+_SERVER_AUTH = "1.3.6.1.5.5.7.3.1"
+
+
+def _windows_ca_bundle(folder: Path) -> Path | None:
+    """把 Windows「受信任的根憑證」中可用於伺服器驗證的憑證寫成 PEM（每次重寫，反映憑證更新）。失敗時回傳 None。"""
+    import ssl
+
+    try:
+        pems = [
+            ssl.DER_cert_to_PEM_cert(der)
+            for der, enc, trust in ssl.enum_certificates("ROOT")  # type: ignore[attr-defined]  # Windows only
+            if enc == "x509_asn" and (trust is True or _SERVER_AUTH in trust)
+        ]
+        if not pems:
+            return None
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / "windows-roots.pem"
+        path.write_text("".join(pems), encoding="ascii")
+        return path
+    except (OSError, AttributeError, ValueError):
+        return None
+
+
 def base_args(cfg: Settings, comp: YtDlpComponent, loc: ff.FfmpegLocation | None) -> tuple[list[str], dict[str, str]]:
     exe = require_component(comp)
     args = [
@@ -98,6 +121,13 @@ def base_args(cfg: Settings, comp: YtDlpComponent, loc: ff.FfmpegLocation | None
         "--cache-dir", str(comp.dir / "cache"),
     ]
     env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    if sys.platform == "win32":
+        # 用 Windows 憑證存放區驗證 HTTPS（仍會驗證），不用 yt-dlp 內建的 certifi：
+        # 防毒軟體的 HTTPS 掃描（例如 Avast）把自己的根憑證裝在 Windows 存放區，certifi 沒有它 → CERTIFICATE_VERIFY_FAILED。
+        args += ["--compat-options", "no-certifi"]  # urllib／requests
+        bundle = _windows_ca_bundle(comp.dir)  # curl_cffi（下載字幕時使用）不受 no-certifi 影響，要另外指定
+        if bundle is not None:
+            env["CURL_CA_BUNDLE"] = str(bundle)
     if cfg.js_runtime:
         args += ["--js-runtimes", f"node:{cfg.js_runtime}"]
         env["ELECTRON_RUN_AS_NODE"] = "1"  # Electron 執行檔當作 Node.js 使用（對真的 Node.js 沒有影響）
