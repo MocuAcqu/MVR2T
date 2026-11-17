@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MediaInfo } from '@shared/types/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { getBackendConnection, mediaFileUrl } from '@/services/api';
@@ -45,10 +45,12 @@ export function PlayerCard({ info }: { info: MediaInfo }) {
     }
   }, [failed, extracted, kind]);
 
-  const attach = (el: HTMLMediaElement | null) => {
+  // 參照必須固定：每次繪製都換新函式時，React 會先以 null 呼叫舊的（registerPlayer(null) → ready = false），
+  // 而 loadedmetadata 不會再觸發 → 時間戳記一直無法點選。
+  const attach = useCallback((el: HTMLMediaElement | null) => {
     ref.current = el;
     registerPlayer(el);
-  };
+  }, []);
   const set = usePlayerStore.getState().set;
   const events = {
     onLoadedMetadata: () => {
