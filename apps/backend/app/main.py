@@ -62,7 +62,7 @@ def create_app(cfg: Settings = settings) -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cfg.allowed_origins,
-        allow_methods=["GET", "POST", "DELETE"],
+        allow_methods=["GET", "POST", "PUT", "DELETE"],  # PUT：逐字稿編輯、設定頁
         allow_headers=["Authorization", "Content-Type"],
     )
 
