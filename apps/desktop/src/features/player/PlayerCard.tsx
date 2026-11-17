@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { getBackendConnection, mediaFileUrl } from '@/services/api';
 import { useSessionStore } from '@/stores/sessionStore';
 import { registerPlayer, usePlayerStore } from './playerStore';
+import { t } from '@/i18n';
 
 /**
  * 工作區播放器：播放本次 Session 的原始影音（後端支援拖曳進度的 Range 請求）。
@@ -67,8 +68,8 @@ export function PlayerCard({ info }: { info: MediaInfo }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>播放器</CardTitle>
-        <CardDescription>點逐字稿的時間可以從那一句開始播放。</CardDescription>
+        <CardTitle>{t('播放器')}</CardTitle>
+        <CardDescription>{t('點逐字稿的時間可以從那一句開始播放。')}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
         {src ? (
@@ -86,10 +87,10 @@ export function PlayerCard({ info }: { info: MediaInfo }) {
             <audio key={src} ref={attach} src={src} controls preload="metadata" className="w-full" {...events} />
           )
         ) : null}
-        {kind === 'audio' ? <p className="text-xs text-body-gray">原始檔案的格式無法在程式內播放，改為播放抽取的音訊。</p> : null}
+        {kind === 'audio' ? <p className="text-xs text-body-gray">{t('原始檔案的格式無法在程式內播放，改為播放抽取的音訊。')}</p> : null}
         {failed ? (
           <p role="status" className="text-sm text-body-gray">
-            {extracted ? '無法播放這個檔案。' : '這個檔案的格式無法在程式內直接播放。完成「抽取音訊」後可以播放音訊。'}
+            {extracted ? t('無法播放這個檔案。') : t('這個檔案的格式無法在程式內直接播放。完成「抽取音訊」後可以播放音訊。')}
           </p>
         ) : null}
       </CardContent>

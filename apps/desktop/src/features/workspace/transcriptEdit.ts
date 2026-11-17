@@ -5,6 +5,7 @@
 import type { TranscriptSegment } from '@shared/types/api';
 import { ApiError, getBackendConnection, updateTranscript } from '@/services/api';
 import { useSessionStore } from '@/stores/sessionStore';
+import { t } from '@/i18n';
 
 export function editText(segments: TranscriptSegment[], id: number, text: string): TranscriptSegment[] {
   // 改了文字後，逐字的時間就對不上了 → 清掉（匯出 JSON 時不會有錯誤的逐字時間）
@@ -36,9 +37,9 @@ export function mergeWithNext(segments: TranscriptSegment[], id: number): Transc
 /** 存回後端；成功後更新畫面上的逐字稿，已有摘要時標示「摘要是依修改前的內容產生的」。 */
 export async function saveSegments(segments: TranscriptSegment[]): Promise<void> {
   const state = useSessionStore.getState();
-  if (state.import.status !== 'ready' || !state.sessionId) throw new ApiError(0, '工作階段已結束。');
+  if (state.import.status !== 'ready' || !state.sessionId) throw new ApiError(0, t('工作階段已結束。'));
   const conn = await getBackendConnection();
-  if (!conn) throw new ApiError(0, '本機後端尚未就緒，請稍候再試。');
+  if (!conn) throw new ApiError(0, t('本機後端尚未就緒，請稍候再試。'));
   const transcript = await updateTranscript(conn, state.sessionId, state.import.info.media_id, segments);
   const now = useSessionStore.getState();
   if (now.import.status !== 'ready' || now.import.info.media_id !== transcript.media_id) return;

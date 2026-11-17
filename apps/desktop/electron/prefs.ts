@@ -12,12 +12,17 @@ export interface Prefs {
   youtubeNoticeAccepted: boolean;
   /** 設定頁（規格 §12.4）：語音辨識的預設語言 */
   asrLanguage: AsrLanguagePref;
+  /** 介面語言；null = 還沒選過（依系統語言） */
+  language: UiLanguage | null;
 }
+
+export type UiLanguage = 'zh-TW' | 'en';
+export const validLanguage = (v: unknown): UiLanguage | null => (v === 'zh-TW' || v === 'en' ? v : null);
 
 export const ASR_LANGUAGE_PREFS = ['auto', 'Chinese', 'English', 'Cantonese', 'Japanese', 'Korean'] as const;
 export type AsrLanguagePref = (typeof ASR_LANGUAGE_PREFS)[number];
 
-const EMPTY: Prefs = { lastExportFolder: null, fixedExportFolder: null, youtubeNoticeAccepted: false, asrLanguage: 'auto' };
+const EMPTY: Prefs = { lastExportFolder: null, fixedExportFolder: null, youtubeNoticeAccepted: false, asrLanguage: 'auto', language: null };
 
 const validAsrLanguage = (v: unknown): AsrLanguagePref =>
   (ASR_LANGUAGE_PREFS as readonly unknown[]).includes(v) ? (v as AsrLanguagePref) : 'auto';
@@ -33,6 +38,7 @@ export async function loadPrefs(file: string): Promise<Prefs> {
       fixedExportFolder: validPath(raw.fixedExportFolder),
       youtubeNoticeAccepted: raw.youtubeNoticeAccepted === true,
       asrLanguage: validAsrLanguage(raw.asrLanguage),
+      language: validLanguage(raw.language),
     };
   } catch {
     return { ...EMPTY };

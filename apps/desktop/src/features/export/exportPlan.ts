@@ -1,5 +1,6 @@
 import { EXPORT_FORMATS, EXPORT_LABELS } from '@shared/constants/app';
 import type { ExportContent, ExportFormat, ExportItem } from '@shared/types/ipc';
+import { t } from '@/i18n';
 
 /** 匯出面板（Phase 08）的內容列表與可用性。純函式，方便測試。 */
 export const EXPORT_ROWS: { content: ExportContent; label: string; hint: string }[] = [
@@ -32,10 +33,10 @@ export interface Availability {
 }
 
 export function unavailableReason(content: ExportContent, a: Availability): string | null {
-  if ((content === 'segments' || content === 'segments_audio') && !a.segments) return '請先完成「抽取音訊」';
-  if (content === 'transcript' && !a.transcript) return '請先完成「語音辨識」';
-  if (content === 'summary' && !a.summary) return '請先「產生摘要」';
-  if (content === 'mindmap' && !a.mindmap) return '請先產生心智圖';
+  if ((content === 'segments' || content === 'segments_audio') && !a.segments) return t('請先完成「抽取音訊」');
+  if (content === 'transcript' && !a.transcript) return t('請先完成「語音辨識」');
+  if (content === 'summary' && !a.summary) return t('請先「產生摘要」');
+  if (content === 'mindmap' && !a.mindmap) return t('請先產生心智圖');
   return null;
 }
 

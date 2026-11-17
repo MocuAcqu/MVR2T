@@ -7,11 +7,12 @@ import {
   getModels,
   modelAction,
 } from '@/services/api';
+import { t } from '@/i18n';
 
 /** 模型管理的動作。回傳最新狀態；錯誤時丟出（訊息是給使用者看的繁體中文）。 */
 async function conn() {
   const c = await getBackendConnection();
-  if (!c) throw new Error('本機後端尚未連線。');
+  if (!c) throw new Error(t('本機後端尚未連線。'));
   return c;
 }
 
@@ -41,11 +42,11 @@ export function etaSeconds(done: number, total: number, speed: number): number |
 /** 「約剩 3 分鐘」 */
 export function formatEta(seconds: number | null): string {
   if (seconds === null || !Number.isFinite(seconds)) return '';
-  if (seconds < 60) return '不到 1 分鐘';
-  if (seconds < 3600) return `約剩 ${Math.ceil(seconds / 60)} 分鐘`;
+  if (seconds < 60) return t('不到 1 分鐘');
+  if (seconds < 3600) return t('約剩 {0} 分鐘', Math.ceil(seconds / 60));
   const h = Math.floor(seconds / 3600);
   const m = Math.ceil((seconds % 3600) / 60);
-  return `約剩 ${h} 小時${m ? ` ${m} 分鐘` : ''}`;
+  return t('約剩 {0} 小時{1}', h, m ? t(' {0} 分鐘', m) : '');
 }
 
 export const shortRevision = (rev: string) => rev.slice(0, 7);

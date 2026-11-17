@@ -16,6 +16,7 @@ import {
 } from '@/features/youtube/youtubeController';
 import { formatBytes, formatDuration, formatPercent } from '@/lib/format';
 import { useUiStore } from '@/stores/uiStore';
+import { t } from '@/i18n';
 
 /** 第一次使用時的說明（使用者決定 2026-11-15）：只用於自己擁有或已獲授權的影片。 */
 function Notice() {
@@ -23,19 +24,19 @@ function Notice() {
   const [checked, setChecked] = useState(false);
   return (
     <div className="flex flex-col gap-3 rounded-lg bg-chip p-4 text-sm">
-      <p className="font-medium">使用 YouTube 連結之前</p>
+      <p className="font-medium">{t('使用 YouTube 連結之前')}</p>
       <ul className="list-inside list-disc space-y-1 text-body-gray">
-        <li>YouTube 的服務條款原則上不允許下載影片內容，除非 YouTube 提供下載功能或取得權利人許可。</li>
-        <li>請只用於你自己上傳、創用 CC 授權，或已取得權利人同意的影片。是否符合條款與著作權規定由使用者自行負責。</li>
-        <li>只下載音訊，存放在本次工作階段的暫存，關閉程式或更換檔案時刪除。不支援登入、會員限定、私人影片、直播與播放清單。</li>
-        <li>下載需要網路；之後的語音辨識與摘要仍在這台電腦上進行。</li>
+        <li>{t('YouTube 的服務條款原則上不允許下載影片內容，除非 YouTube 提供下載功能或取得權利人許可。')}</li>
+        <li>{t('請只用於你自己上傳、創用 CC 授權，或已取得權利人同意的影片。是否符合條款與著作權規定由使用者自行負責。')}</li>
+        <li>{t('只下載音訊，存放在本次工作階段的暫存，關閉程式或更換檔案時刪除。不支援登入、會員限定、私人影片、直播與播放清單。')}</li>
+        <li>{t('下載需要網路；之後的語音辨識與摘要仍在這台電腦上進行。')}</li>
       </ul>
       <label htmlFor={checkId} className="flex items-start gap-2">
         <input id={checkId} type="checkbox" className="mt-1 size-4 accent-foreground" checked={checked} onChange={(e) => setChecked(e.target.checked)} />
-        <span>我了解，只會用於自己擁有或已獲授權的影片。</span>
+        <span>{t('我了解，只會用於自己擁有或已獲授權的影片。')}</span>
       </label>
       <div>
-        <Button size="sm" disabled={!checked} onClick={() => void acceptYouTubeNotice()}>同意並繼續</Button>
+        <Button size="sm" disabled={!checked} onClick={() => void acceptYouTubeNotice()}>{t('同意並繼續')}</Button>
       </div>
     </div>
   );
@@ -69,7 +70,7 @@ export function YouTubeUrlInput() {
   const header = (
     <div className="flex items-center gap-2">
       <Link className="size-5" aria-hidden="true" />
-      <span className="text-sm font-medium">YouTube 連結</span>
+      <span className="text-sm font-medium">{t('YouTube 連結')}</span>
     </div>
   );
 
@@ -79,12 +80,12 @@ export function YouTubeUrlInput() {
         {header}
         <p className="text-sm text-body-gray">
           {s.component.supported
-            ? '需要先下載「YouTube 下載元件」（約 20 MB，需要網路）。下載後貼上影片網址，就能只下載音訊並轉成逐字稿。'
-            : '這個作業系統目前不支援 YouTube 下載。'}
+            ? t('需要先下載「YouTube 下載元件」（約 20 MB，需要網路）。下載後貼上影片網址，就能只下載音訊並轉成逐字稿。')
+            : t('這個作業系統目前不支援 YouTube 下載。')}
         </p>
         {s.component.supported ? (
           <div>
-            <Button variant="secondary" size="sm" onClick={() => setPage('models')}>前往模型管理</Button>
+            <Button variant="secondary" size="sm" onClick={() => setPage('models')}>{t('前往模型管理')}</Button>
           </div>
         ) : null}
       </div>
@@ -109,7 +110,7 @@ export function YouTubeUrlInput() {
       <form onSubmit={onSubmit} className="flex flex-col gap-2" noValidate>
         <label htmlFor={inputId} className="flex items-center gap-2 text-sm font-medium">
           <Link className="size-5" aria-hidden="true" />
-          YouTube 網址
+          {t('YouTube 網址')}
         </label>
         <div className="flex gap-2">
           <Input
@@ -124,17 +125,17 @@ export function YouTubeUrlInput() {
             aria-describedby={s.message ? messageId : undefined}
           />
           {s.phase === 'probing' ? (
-            <Button type="button" variant="secondary" className="shrink-0" onClick={cancelProbe}>取消</Button>
+            <Button type="button" variant="secondary" className="shrink-0" onClick={cancelProbe}>{t('取消')}</Button>
           ) : (
-            <Button type="submit" variant="secondary" className="shrink-0" disabled={busy}>讀取影片</Button>
+            <Button type="submit" variant="secondary" className="shrink-0" disabled={busy}>{t('讀取影片')}</Button>
           )}
         </div>
       </form>
 
       {s.phase === 'probing' ? (
         <div className="flex flex-col gap-2" aria-live="polite">
-          <p className="text-sm text-body-gray">正在讀取影片資訊…（需要網路，約數秒到半分鐘）</p>
-          <Progress label="讀取影片資訊" indeterminate />
+          <p className="text-sm text-body-gray">{t('正在讀取影片資訊…（需要網路，約數秒到半分鐘）')}</p>
+          <Progress label={t('讀取影片資訊')} indeterminate />
         </div>
       ) : null}
 
@@ -143,9 +144,9 @@ export function YouTubeUrlInput() {
           <div className="min-w-0">
             <p className="font-medium" title={video.title}>{video.title}</p>
             <p className="text-sm text-body-gray">
-              {[video.channel, video.duration ? `長度 ${formatDuration(video.duration)}` : null, video.audio_size ? `音訊約 ${formatBytes(video.audio_size)}` : null]
+              {[video.channel, video.duration ? t('長度 {0}', formatDuration(video.duration)) : null, video.audio_size ? t('音訊約 {0}', formatBytes(video.audio_size)) : null]
                 .filter(Boolean)
-                .join('，')}
+                .join(t('，'))}
             </p>
           </div>
 
@@ -153,31 +154,31 @@ export function YouTubeUrlInput() {
             <div className="flex flex-col gap-2" aria-live="polite">
               <div className="flex justify-between gap-3 text-sm">
                 <span className="font-medium">
-                  {s.stage || '準備中'}
+                  {s.stage || t('準備中')}
                   {s.detail ? <span className="ml-2 font-normal text-body-gray">{s.detail}</span> : null}
                 </span>
                 <span className="tabular-nums text-body-gray">{formatPercent(s.progress)}</span>
               </div>
-              <Progress label="YouTube 下載進度" value={s.progress} indeterminate={s.phase === 'starting' || s.progress === 0} />
+              <Progress label={t('YouTube 下載進度')} value={s.progress} indeterminate={s.phase === 'starting' || s.progress === 0} />
               <div>
-                <Button variant="secondary" size="sm" onClick={() => void cancelDownload()} disabled={s.phase === 'starting'}>取消</Button>
+                <Button variant="secondary" size="sm" onClick={() => void cancelDownload()} disabled={s.phase === 'starting'}>{t('取消')}</Button>
               </div>
             </div>
           ) : (
             <>
               <fieldset className="flex flex-col gap-2 text-sm">
-                <legend className="sr-only">逐字稿的來源</legend>
+                <legend className="sr-only">{t('逐字稿的來源')}</legend>
                 <label className="flex items-start gap-2">
                   <input type="radio" name="yt-mode" className="mt-1 accent-foreground" checked={mode === 'asr'} onChange={() => setMode('asr')} />
-                  <span>在這台電腦上做語音辨識（有精確時間戳記，需要一些時間）</span>
+                  <span>{t('在這台電腦上做語音辨識（有精確時間戳記，需要一些時間）')}</span>
                 </label>
                 {video.subtitles.length > 0 ? (
                   <div className="flex flex-wrap items-center gap-2">
                     <label className="flex items-start gap-2">
                       <input type="radio" name="yt-mode" className="mt-1 accent-foreground" checked={mode === 'subtitles'} onChange={() => setMode('subtitles')} />
-                      <span>使用影片作者提供的字幕（不必辨識，較快）：</span>
+                      <span>{t('使用影片作者提供的字幕（不必辨識，較快）：')}</span>
                     </label>
-                    <label htmlFor={selectId} className="sr-only">字幕語言</label>
+                    <label htmlFor={selectId} className="sr-only">{t('字幕語言')}</label>
                     <select
                       id={selectId}
                       value={lang}
@@ -193,11 +194,11 @@ export function YouTubeUrlInput() {
                     </select>
                   </div>
                 ) : (
-                  <p className="text-xs text-body-gray">這部影片沒有作者提供的字幕，下載後請用語音辨識。</p>
+                  <p className="text-xs text-body-gray">{t('這部影片沒有作者提供的字幕，下載後請用語音辨識。')}</p>
                 )}
               </fieldset>
               <div className="flex flex-wrap gap-2">
-                <Button onClick={() => void downloadVideo(subtitle)}>下載音訊</Button>
+                <Button onClick={() => void downloadVideo(subtitle)}>{t('下載音訊')}</Button>
               </div>
             </>
           )}
@@ -211,7 +212,7 @@ export function YouTubeUrlInput() {
         </p>
       ) : null}
       {s.component?.update_available ? (
-        <p className="text-xs text-body-gray">YouTube 下載元件有新版本（{s.component.latest_version}），可以到「模型管理」更新。</p>
+        <p className="text-xs text-body-gray">{t('YouTube 下載元件有新版本（{0}），可以到「模型管理」更新。', s.component.latest_version)}</p>
       ) : null}
     </div>
   );

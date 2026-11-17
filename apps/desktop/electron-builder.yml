@@ -24,15 +24,16 @@ files:
 npmRebuild: false
 asar: true
 extraResources:
-  # PyInstaller onedir（apps/backend/dist/mvr2t-backend）→ resources/backend/mvr2t-backend.exe（electron/backend.ts）
+  # PyInstaller onedir（apps/backend/dist/mvr2t-backend）→ resources/backend/mvr2t-backend(.exe)（electron/backend.ts）
   - from: ../backend/dist/mvr2t-backend
     to: backend
-  # LGPL 版 FFmpeg（apps/backend 的 scripts.ffmpeg_bundle 下載並驗證）→ resources/ffmpeg/
-  - from: build-resources/ffmpeg
-    to: ffmpeg
   - from: build-resources/THIRD_PARTY_NOTICES.md
     to: THIRD_PARTY_NOTICES.md
 win:
+  # LGPL 版 FFmpeg（apps/backend 的 scripts.ffmpeg_bundle 下載並驗證）→ resources/ffmpeg/（只有 Windows 內附）
+  extraResources:
+    - from: build-resources/ffmpeg
+      to: ffmpeg
   target:
     - target: nsis
       arch: [x64]
@@ -54,8 +55,25 @@ nsis:
   # 解除安裝登錄項目補上 InstallLocation；刪除 electron-builder 為自動更新保留的安裝檔副本（約 350 MB）
   include: build/installer.nsh
   artifactName: MVR2T-Setup-${version}-x64.${ext}
+mac:
+  # Phase 12（使用者決定 2026-11-17）：沒有 Mac 可測試、不購買簽章 → 只準備設定，未實機驗證。
+  # 必須在 Mac 上組建（後端 PyInstaller 要在 macOS 打包）：見 README「macOS（未驗證）」。
+  # - 只做 Apple Silicon（arm64）：llama.cpp 只固定了 macos-arm64；Intel Mac 規格 §6.3 第一版用 CPU，尚未提供。
+  # - 不簽章、不公證（identity: null）：第一次開啟要在「系統設定 → 隱私權與安全性」按「強制打開」，或右鍵 → 打開。
+  # - 不內附 FFmpeg（找不到可直接散布的 LGPL macOS 版）：請使用者以 Homebrew 安裝（brew install ffmpeg），後端會到 /opt/homebrew/bin 尋找。
+  target:
+    - target: dmg
+      arch: [arm64]
+  category: public.app-category.productivity
+  icon: build/icon.png
+  identity: null
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  artifactName: MVR2T-${version}-arm64.${ext}
+dmg:
+  title: MVR2T ${version}
 linux:
-  # 只用於沙盒驗證打包設定（目標平台是 Windows；macOS 在 Phase 12）
+  # 只用於沙盒驗證打包設定（目標平台是 Windows；macOS 見上方）
   target: [dir]
   executableName: mvr2t
   category: AudioVideo

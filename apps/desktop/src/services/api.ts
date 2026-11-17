@@ -28,6 +28,7 @@ import type {
   YtDlpState,
 } from '@shared/types/api';
 import type { AppInfo } from '@shared/types/ipc';
+import { getLang, t } from '@/i18n';
 
 export interface BackendConnection {
   url: string;
@@ -65,6 +66,7 @@ export async function getBackendConnection(): Promise<BackendConnection | null> 
 export async function backendFetch(conn: BackendConnection, path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   if (conn.token) headers.set('Authorization', `Bearer ${conn.token}`);
+  if (getLang() === 'en') headers.set('X-MVR2T-Lang', 'en'); // 後端把畫面訊息翻成英文（app/core/i18n.py）
   return fetch(`${conn.url}${path}`, { ...init, headers });
 }
 
@@ -92,7 +94,7 @@ export class ApiError extends Error {
 /** 使用者取消（上傳或請求被中止）。 */
 export class AbortedError extends Error {
   constructor() {
-    super('已取消');
+    super(t('已取消'));
     this.name = 'AbortedError';
   }
 }
@@ -100,7 +102,7 @@ export class AbortedError extends Error {
 function detailOf(body: unknown, status: number): string {
   const detail = (body as { detail?: unknown } | null)?.detail;
   if (typeof detail === 'string') return detail;
-  return `後端回應錯誤（HTTP ${status}）。`;
+  return t('後端回應錯誤（HTTP {0}）。', status);
 }
 
 async function apiJson<T>(conn: BackendConnection, path: string, init: RequestInit = {}): Promise<T> {
@@ -109,7 +111,7 @@ async function apiJson<T>(conn: BackendConnection, path: string, init: RequestIn
     res = await backendFetch(conn, path, init);
   } catch (err) {
     if ((err as Error).name === 'AbortError') throw new AbortedError();
-    throw new ApiError(0, '無法連線到本機後端。');
+    throw new ApiError(0, t('無法連線到本機後端。'));
   }
   if (res.status === 204) return undefined as T;
   const body: unknown = await res.json().catch(() => null);
@@ -161,6 +163,7 @@ export function uploadMedia(
       `&filename=${encodeURIComponent(file.name)}`;
     xhr.open('POST', url);
     if (conn.token) xhr.setRequestHeader('Authorization', `Bearer ${conn.token}`);
+    if (getLang() === 'en') xhr.setRequestHeader('X-MVR2T-Lang', 'en');
     xhr.setRequestHeader('Content-Type', 'application/octet-stream');
     xhr.responseType = 'json';
     xhr.upload.onprogress = (e) => {
@@ -170,7 +173,7 @@ export function uploadMedia(
       if (xhr.status >= 200 && xhr.status < 300) resolve(xhr.response as MediaInfo);
       else reject(new ApiError(xhr.status, detailOf(xhr.response, xhr.status)));
     };
-    xhr.onerror = () => reject(new ApiError(0, '上傳失敗：無法連線到本機後端。'));
+    xhr.onerror = () => reject(new ApiError(0, t('上傳失敗：無法連線到本機後端。')));
     xhr.onabort = () => reject(new AbortedError());
     if (signal.aborted) return reject(new AbortedError());
     signal.addEventListener('abort', () => xhr.abort(), { once: true });

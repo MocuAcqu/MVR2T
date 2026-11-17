@@ -1,6 +1,6 @@
 # 開發紀錄（給接手的 Claude / Claude Code）
 
-最後更新：2026-11-14。Phase 10（含 fix1，本機 dbece16）已在 Windows 驗收；CUDA／Metal 路線待實機驗證。Phase 11（含 fix1、步驟 7.1）與 YouTube 連結（含 fix1，本機 867bc52）都已在 Windows 驗收。逐字稿編輯器＋設定頁已交付（待驗收）；接著：英文介面、macOS 打包設定（不測試）、最終打包，然後結束專案。
+最後更新：2026-11-14。Phase 10（含 fix1，本機 dbece16）已在 Windows 驗收；CUDA／Metal 路線待實機驗證。Phase 11（含 fix1、步驟 7.1）與 YouTube 連結（含 fix1，本機 867bc52）都已在 Windows 驗收。逐字稿編輯器＋設定頁（含本機 CORS 修正）、英文介面、macOS 打包設定（未驗證）已交付；最後一步：Windows 最終打包與驗收，然後結束專案。
 
 ## 目前進度
 
@@ -115,6 +115,28 @@
 - 沙盒的 init 不會立即回收殭屍行程，`kill -0` 對殭屍也成功；判斷行程是否存活請看 `/proc/<pid>/stat` 狀態不是 `Z`。
 - 在沙盒跑 Electron：`xvfb-run -a`，並加 `--no-sandbox`（root）。
 
+## 最後一批：英文介面、macOS 設定、最終打包（2026-11-18）
+
+### 英文介面（設定 → 介面語言：繁體中文／English）
+- 前端 `src/i18n`：原文（繁體中文）就是 key，`t('匯入影音')`；`{0}` 代入參數；EN 表查不到顯示原文。語言存在 Main 的 preferences.json
+  （`language`；沒選過時依 `app.getLocale()`：中文系統繁中，其他英文）。切換時 App 以 `key={lang}` 重新繪製（store 的工作階段資料不變）。
+- 以 TypeScript AST 自動包裝畫面文字（字串、JSX 文字、樣板字串、文字與 {變數} 混合的 JSX 子節點合併成一個樣板），
+  模組層級的常數（導覽、狀態標籤、引導文字…）保留原文、在顯示時 `t(x)`。shadowing 的區域變數 `t` 改名（tr、task、ty）。
+  比對中文的 `stage.includes('載入')` 改為 `/載入|Loading/`（後端英文時是 Loading…）。
+- `src/i18n/en.ts`（約 490 句）；測試掃描所有 `t('…')` 必須有英文、佔位符一致。
+- Main 行程（對話框標題、後端狀態訊息、匯出錯誤）：`electron/i18n.ts` 的 `mt()`；renderer 讀寫介面偏好時同步語言。
+- 後端：`app/core/i18n.py` 的 EN 表以「訊息樣板」（f-string 的 {} 位置）對照英文，`LanguageMiddleware` 在前端帶
+  `X-MVR2T-Lang: en` 時翻譯：錯誤回應的 detail、/api/tasks、models、system、youtube/component、settings、transcript 的訊息欄位
+  （stage、detail、message、warnings、reason、name、role…），**不碰逐字稿句子、摘要內容、檔名**。整句對不到時依「。」「；」逐句翻，
+  插入值是中文時遞迴翻譯；樣板依固定文字多寡排序（「第 {} / {} 段」先於「{} 段」）。測試用 AST 掃描後端所有給畫面的字串都要在 EN 表。
+- 刻意維持中文：摘要內容（模型輸出）、匯出的 Word／PDF 標題、逐字稿。
+- 沙盒 Electron E2E（English）：設定、首頁、工作區、模型管理掃描畫面文字與 title／aria-label，除了使用者內容（檔名、逐字稿）沒有中文。
+
+### macOS（沒有 Mac，只準備設定）
+- electron-builder：`mac` dmg arm64、identity null（不簽章）、不公證；`win.extraResources` 才放 FFmpeg（macOS 不內附）。`dist:mac`。
+- llama.cpp `macos-arm64` 固定（b11312，Phase 10 fix1 回報的數值）。FFmpeg：macOS 另找 /opt/homebrew/bin、/usr/local/bin、/opt/local/bin
+  （Finder 開啟的程式 PATH 沒有它們）。PyInstaller spec 的 .ico 只用於 Windows。README「macOS（未驗證）」。
+
 ## 收尾計畫（使用者決定 2026-11-17）
 
 完成逐字稿編輯器（規格 2.1-D）與設定頁（12.4）、最終打包後結束專案。沒有 Mac → Phase 12 只準備設定、不測試；不購買程式碼簽章。
@@ -142,6 +164,11 @@
 - `GET /api/settings/storage`、`POST /api/settings/cleanup`：目前工作階段（不清除）、其他工作階段留下的資料夾、yt-dlp 快取。
 - Main 的 preferences.json 新增 asrLanguage（預設辨識語言）；IPC getUiPrefs／setUiPrefs、openAppLocation(data|notices)。
 - 「預設模型」目前每項功能只有一個驗證過的模型 → 顯示（下載與刪除在模型管理）。「語言（英文介面）」在下一次交付。
+
+### Windows 驗收中發現（2026-11-18，本機 f663ba0，已同步 5e91ef5）
+- CORS 的 allow_methods 沒有 PUT → 開發版（http://127.0.0.1:5173）的逐字稿編輯與設定儲存被 preflight 擋下。加上 PUT，
+  並新增測試：前端用到的每個方法（GET／POST／PUT／DELETE）preflight 都要通過。
+- 教訓：沙盒 E2E 用 build 後的 file:// 頁面沒有擋下（Origin null 的行為不同），新增 HTTP 方法時要同時更新 CORS 並跑 preflight 測試。
 
 ### 驗證
 - 後端 +11（編輯、時間檢查、播放器 Range／token、設定、暫存清理、force_cpu／省記憶體），前端 +7（編輯操作、播放位置、儲存與提示）。

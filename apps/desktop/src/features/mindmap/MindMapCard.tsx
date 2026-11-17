@@ -43,6 +43,7 @@ import {
   toggleConclusion,
   type MindNode,
 } from './model';
+import { t } from '@/i18n';
 
 const NODE_TYPES = { mind: MindNodeView };
 const HISTORY_LIMIT = 100;
@@ -298,7 +299,7 @@ function MindMapEditor({ root, mediaName }: { root: MindNode; mediaName: string 
   const capture = useCallback(
     async (kind: SaveFileKind): Promise<string> => {
       const viewport = wrapRef.current?.querySelector<HTMLElement>('.react-flow__viewport');
-      if (!viewport) throw new Error('找不到心智圖畫面');
+      if (!viewport) throw new Error(t('找不到心智圖畫面'));
       const keepSelected = selectedRef.current;
       setSelectedId(null); // 選取框不要出現在圖片中
       setEditingId(null);
@@ -318,9 +319,9 @@ function MindMapEditor({ root, mediaName }: { root: MindNode; mediaName: string 
     setNotice(null);
     try {
       const path = await saveImage(await capture(kind), kind, exportFileName(mediaName));
-      if (path) setNotice(`已儲存：${path}`);
+      if (path) setNotice(t('已儲存：{0}', path));
     } catch (err) {
-      setNotice(`匯出失敗：${err instanceof Error ? err.message : String(err)}`);
+      setNotice(t('匯出失敗：{0}', err instanceof Error ? err.message : String(err)));
     } finally {
       setExporting(false);
     }
@@ -335,36 +336,36 @@ function MindMapEditor({ root, mediaName }: { root: MindNode; mediaName: string 
         expanded && 'fixed inset-0 z-40 bg-background p-4',
       )}
     >
-      <div role="toolbar" aria-label="心智圖工具" className="flex flex-wrap items-center gap-2">
-        <ToolButton onClick={() => add('child')} disabled={!canAddChild} title="新增子節點（Tab）">＋ 子節點</ToolButton>
-        <ToolButton onClick={() => add('sibling')} disabled={!canAddSibling} title="新增同層節點（Enter）">＋ 同層</ToolButton>
-        <ToolButton onClick={() => selected && actions.startEdit(selected.id)} disabled={!selected} title="修改節點文字（也可以雙擊節點或按 F2）">改文字</ToolButton>
-        <ToolButton onClick={remove} disabled={!canAddSibling} title="刪除節點與它的子節點（Delete）">刪除</ToolButton>
-        <ToolButton onClick={() => selected && commit(toggleConclusion(root, selected.id))} disabled={!canConclude} title="把細節標為結論，或取消">
-          {selected?.kind === 'conclusion' ? '取消結論' : '標為結論'}
+      <div role="toolbar" aria-label={t('心智圖工具')} className="flex flex-wrap items-center gap-2">
+        <ToolButton onClick={() => add('child')} disabled={!canAddChild} title={t('新增子節點（Tab）')}>{t('＋ 子節點')}</ToolButton>
+        <ToolButton onClick={() => add('sibling')} disabled={!canAddSibling} title={t('新增同層節點（Enter）')}>{t('＋ 同層')}</ToolButton>
+        <ToolButton onClick={() => selected && actions.startEdit(selected.id)} disabled={!selected} title={t('修改節點文字（也可以雙擊節點或按 F2）')}>{t('改文字')}</ToolButton>
+        <ToolButton onClick={remove} disabled={!canAddSibling} title={t('刪除節點與它的子節點（Delete）')}>{t('刪除')}</ToolButton>
+        <ToolButton onClick={() => selected && commit(toggleConclusion(root, selected.id))} disabled={!canConclude} title={t('把細節標為結論，或取消')}>
+          {selected?.kind === 'conclusion' ? t('取消結論') : t('標為結論')}
         </ToolButton>
-        {selected ? null : <span className="text-xs text-body-gray">先點選一個節點</span>}
+        {selected ? null : <span className="text-xs text-body-gray">{t('先點選一個節點')}</span>}
         <Sep />
-        <ToolButton onClick={undo} disabled={past.current.length === 0} title={`復原（${modKey}+Z）`}>復原</ToolButton>
-        <ToolButton onClick={redo} disabled={future.current.length === 0} title={`重做（${modKey}+Shift+Z）`}>重做</ToolButton>
+        <ToolButton onClick={undo} disabled={past.current.length === 0} title={t('復原（{0}+Z）', modKey)}>{t('復原')}</ToolButton>
+        <ToolButton onClick={redo} disabled={future.current.length === 0} title={t('重做（{0}+Shift+Z）', modKey)}>{t('重做')}</ToolButton>
         <Sep />
-        <ToolButton onClick={() => commit(setAllCollapsed(root, false))} title="展開所有節點">全部展開</ToolButton>
-        <ToolButton onClick={() => commit(setAllCollapsed(root, true))} title="只顯示中心與主要分支">全部收合</ToolButton>
+        <ToolButton onClick={() => commit(setAllCollapsed(root, false))} title={t('展開所有節點')}>{t('全部展開')}</ToolButton>
+        <ToolButton onClick={() => commit(setAllCollapsed(root, true))} title={t('只顯示中心與主要分支')}>{t('全部收合')}</ToolButton>
         <ToolButton
           onClick={() => {
             commit(resetLayout(root));
             requestAnimationFrame(() => void rf.fitView({ padding: 0.15, duration: 200 }));
           }}
-          title="清除拖曳，恢復自動排列"
+          title={t('清除拖曳，恢復自動排列')}
         >
-          重新排列
+          {t('重新排列')}
         </ToolButton>
-        <ToolButton onClick={() => setExpanded((v) => !v)} title={expanded ? '縮小（Esc）' : '放大到整個視窗'}>
-          {expanded ? '縮小' : '放大'}
+        <ToolButton onClick={() => setExpanded((v) => !v)} title={expanded ? t('縮小（Esc）') : t('放大到整個視窗')}>
+          {expanded ? t('縮小') : t('放大')}
         </ToolButton>
         <Sep />
-        <ToolButton onClick={() => void doExport('png')} disabled={exporting} title="匯出成 PNG 圖片">匯出 PNG</ToolButton>
-        <ToolButton onClick={() => void doExport('svg')} disabled={exporting} title="匯出成 SVG 向量圖">匯出 SVG</ToolButton>
+        <ToolButton onClick={() => void doExport('png')} disabled={exporting} title={t('匯出成 PNG 圖片')}>{t('匯出 PNG')}</ToolButton>
+        <ToolButton onClick={() => void doExport('svg')} disabled={exporting} title={t('匯出成 SVG 向量圖')}>{t('匯出 SVG')}</ToolButton>
       </div>
 
       <MindActionsContext.Provider value={actions}>
@@ -372,7 +373,7 @@ function MindMapEditor({ root, mediaName }: { root: MindNode; mediaName: string 
           ref={wrapRef}
           tabIndex={0}
           onKeyDown={onKeyDown}
-          aria-label="心智圖。點選節點後可用 Tab 新增子節點、Enter 新增同層、F2 編輯、Delete 刪除。"
+          aria-label={t('心智圖。點選節點後可用 Tab 新增子節點、Enter 新增同層、F2 編輯、Delete 刪除。')}
           className={cn(
             'mm-canvas overflow-hidden rounded-lg border border-chip focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground',
             expanded ? 'min-h-0 flex-1' : 'h-[600px]',
@@ -417,7 +418,7 @@ function MindMapEditor({ root, mediaName }: { root: MindNode; mediaName: string 
       </MindActionsContext.Provider>
 
       <p className="text-xs text-body-gray" aria-live="polite">
-        {notice ?? '拖曳節點可移動（子節點會跟著）；把主要分支拖到另一側可換邊。雙擊編輯文字，點時間跳到逐字稿。編輯只保留在這次開啟的程式中。'}
+        {notice ?? t('拖曳節點可移動（子節點會跟著）；把主要分支拖到另一側可換邊。雙擊編輯文字，點時間跳到逐字稿。編輯只保留在這次開啟的程式中。')}
       </p>
     </div>
   );
@@ -433,7 +434,7 @@ export function MindMapCard() {
 
   const ready = !!transcript && transcript.segments.length > 0;
   const busy = s.status === 'starting' || s.status === 'queued' || s.status === 'running';
-  const mediaName = imp.status === 'ready' ? imp.info.filename : '心智圖';
+  const mediaName = imp.status === 'ready' ? imp.info.filename : t('心智圖');
 
   const regenerate = () => {
     setConfirming(false);
@@ -443,8 +444,8 @@ export function MindMapCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>心智圖</CardTitle>
-        <CardDescription>從中心主題向左右展開；節點可以拖曳、編輯、新增或刪除，也能匯出成 PNG 或 SVG。</CardDescription>
+        <CardTitle>{t('心智圖')}</CardTitle>
+        <CardDescription>{t('從中心主題向左右展開；節點可以拖曳、編輯、新增或刪除，也能匯出成 PNG 或 SVG。')}</CardDescription>
       </CardHeader>
       <CardContent>
         {mindmap ? (
@@ -454,20 +455,20 @@ export function MindMapCard() {
         ) : busy ? (
           <div className="flex items-end gap-4">
             <Mono animation="video" scale={2} />
-            <p className="text-sm text-body-gray">正在整理中，進度請看上方「摘要」。有勾選「心智圖」時，完成後會顯示在這裡。</p>
+            <p className="text-sm text-body-gray">{t('正在整理中，進度請看上方「摘要」。有勾選「心智圖」時，完成後會顯示在這裡。')}</p>
           </div>
         ) : (
           <p className="text-sm text-body-gray">
-            {ready ? '產生摘要時勾選「心智圖」，或直接按下方的「產生心智圖」。' : '請先完成「語音辨識」，再產生心智圖。'}
+            {ready ? t('產生摘要時勾選「心智圖」，或直接按下方的「產生心智圖」。') : t('請先完成「語音辨識」，再產生心智圖。')}
           </p>
         )}
       </CardContent>
       <CardFooter className="flex flex-wrap items-center gap-3">
         {confirming ? (
           <>
-            <span className="text-sm font-medium">重新產生會取代目前的心智圖（包含你的編輯），確定嗎？</span>
-            <Button onClick={regenerate}>確定重新產生</Button>
-            <Button variant="secondary" onClick={() => setConfirming(false)}>取消</Button>
+            <span className="text-sm font-medium">{t('重新產生會取代目前的心智圖（包含你的編輯），確定嗎？')}</span>
+            <Button onClick={regenerate}>{t('確定重新產生')}</Button>
+            <Button variant="secondary" onClick={() => setConfirming(false)}>{t('取消')}</Button>
           </>
         ) : (
           <Button
@@ -475,13 +476,13 @@ export function MindMapCard() {
             disabled={!ready || busy}
             onClick={() => (mindmap ? setConfirming(true) : regenerate())}
           >
-            {mindmap ? '重新產生心智圖' : '產生心智圖'}
+            {mindmap ? t('重新產生心智圖') : t('產生心智圖')}
           </Button>
         )}
-        {busy && mindmap ? <span className="text-sm text-body-gray">處理中，進度請看上方「摘要」。</span> : null}
+        {busy && mindmap ? <span className="text-sm text-body-gray">{t('處理中，進度請看上方「摘要」。')}</span> : null}
         {mindmap && !confirming ? (
           <Button variant="secondary" className="ml-auto" onClick={() => useExportUi.getState().openPanel(['mindmap'])}>
-            匯出
+            {t('匯出')}
           </Button>
         ) : null}
       </CardFooter>

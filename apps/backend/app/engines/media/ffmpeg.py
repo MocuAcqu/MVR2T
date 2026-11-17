@@ -63,9 +63,13 @@ def _winget_candidates() -> list[Path]:
     return [Path(p) for p in sorted(glob.glob(pattern), reverse=True)]
 
 
+#: macOS 從 Finder 開啟的程式 PATH 只有 /usr/bin 等系統資料夾，找不到 Homebrew／MacPorts 安裝的 FFmpeg
+MAC_PACKAGE_DIRS = ("/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin")
+
+
 def locate_ffmpeg(settings_dir: str, runtime_dir: Path, bundled_dir: str = "") -> FfmpegLocation | None:
     """依優先順序尋找 FFmpeg；ffmpeg 與 ffprobe 必須來自同一處，避免版本混用。
-    順序：設定指定 → 安裝程式內附（Phase 11）→ 程式資料夾 runtime → PATH → winget。"""
+    順序：設定指定 → 安裝程式內附（Phase 11）→ 程式資料夾 runtime → PATH →（macOS）Homebrew／MacPorts →（Windows）winget。"""
     if settings_dir:
         pair = _pair_in_dir(Path(settings_dir))
         if pair:
@@ -80,6 +84,11 @@ def locate_ffmpeg(settings_dir: str, runtime_dir: Path, bundled_dir: str = "") -
     ff, fp = shutil.which("ffmpeg"), shutil.which("ffprobe")
     if ff and fp:
         return FfmpegLocation(Path(ff), Path(fp), source="path")
+    if sys.platform == "darwin":
+        for d in MAC_PACKAGE_DIRS:
+            pair = _pair_in_dir(Path(d))
+            if pair:
+                return FfmpegLocation(*pair, source="path")
     for d in _winget_candidates():
         pair = _pair_in_dir(d)
         if pair:

@@ -106,3 +106,20 @@ def test_self_test_can_require_the_bundled_ffmpeg(capsys, tmp_path, monkeypatch)
     rc = run_self_test(["--models", str(tmp_path / "no-models"), "--expect-ffmpeg", "bundled"])
     out = json.loads(capsys.readouterr().out)
     assert rc == 1 and not out["ffmpeg"]["ok"]
+
+
+def test_macos_finds_homebrew_ffmpeg_outside_the_gui_path(tmp_path, monkeypatch):
+    """macOS 從 Finder 開啟時 PATH 沒有 /opt/homebrew/bin（安裝程式不內附 FFmpeg，使用者以 brew 安裝）。"""
+    from app.engines.media import ffmpeg as ff
+
+    brew = tmp_path / "homebrew" / "bin"
+    brew.mkdir(parents=True)
+    for name in ("ffmpeg", "ffprobe"):
+        (brew / name).write_bytes(b"x")
+        (brew / name).chmod(0o755)
+    monkeypatch.setattr(ff.sys, "platform", "darwin")
+    monkeypatch.setattr(ff, "EXE_SUFFIX", "")
+    monkeypatch.setattr(ff, "MAC_PACKAGE_DIRS", (str(tmp_path / "missing"), str(brew)))
+    monkeypatch.setattr(ff.shutil, "which", lambda name: None)
+    loc = ff.locate_ffmpeg("", tmp_path / "no-runtime")
+    assert loc is not None and loc.source == "path" and loc.ffmpeg.parent == brew

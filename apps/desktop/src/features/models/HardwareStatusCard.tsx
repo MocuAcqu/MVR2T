@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useSystemStatus } from '@/hooks/useSystemStatus';
 import { formatBytes } from '@/lib/format';
 import { getBackendConnection, getSystemInfo } from '@/services/api';
+import { t } from '@/i18n';
 
 /** "7.1-full_build-www.gyan.dev" → "7.1"；"n6.1.1" → "6.1.1"。 */
 function shortVersion(v: string | null): string {
@@ -60,22 +61,22 @@ export function HardwareStatusCard() {
     app.status === 'electron'
       ? `${OS_NAMES[app.info.platform] ?? app.info.platform} ${app.info.arch}`
       : app.status === 'browser'
-        ? '瀏覽器預覽'
-        : '檢查中';
+        ? t('瀏覽器預覽')
+        : t('檢查中');
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>這台電腦</CardTitle>
-        <CardDescription>目前的執行環境與本機後端狀態。</CardDescription>
+        <CardTitle>{t('這台電腦')}</CardTitle>
+        <CardDescription>{t('目前的執行環境與本機後端狀態。')}</CardDescription>
       </CardHeader>
       <CardContent>
         <dl>
-          <Row label="作業系統">{hw ? `${hw.os_name} ${hw.arch}` : system}</Row>
-          <Row label="本機後端">
+          <Row label={t('作業系統')}>{hw ? `${hw.os_name} ${hw.arch}` : system}</Row>
+          <Row label={t('本機後端')}>
             <span className="inline-flex items-center gap-2">
               <StatusDot state={status.state} />
-              {backend.status === 'online' ? `已連線，版本 ${backend.health.version}` : status.label}
+              {backend.status === 'online' ? t('已連線，版本 {0}', backend.health.version) : status.label}
             </span>
           </Row>
           <Row label="FFmpeg">
@@ -85,31 +86,31 @@ export function HardwareStatusCard() {
               />
               {ffmpeg.status === 'done'
                 ? ffmpeg.ffmpeg.available
-                  ? `已安裝 ${shortVersion(ffmpeg.ffmpeg.version)}`
-                  : '未安裝'
+                  ? t('已安裝 {0}', shortVersion(ffmpeg.ffmpeg.version))
+                  : t('未安裝')
                 : ffmpeg.status === 'checking'
-                  ? '檢查中'
+                  ? t('檢查中')
                   : '-'}
             </span>
           </Row>
           {hw ? (
             <>
-              <Row label="處理器">
+              <Row label={t('處理器')}>
                 <span className="block break-words">{hw.cpu_name}</span>
-                <span className="block text-xs font-normal text-body-gray">{hw.cpu_threads} 執行緒</span>
+                <span className="block text-xs font-normal text-body-gray">{t('{0} 執行緒', hw.cpu_threads)}</span>
               </Row>
-              <Row label="記憶體">
+              <Row label={t('記憶體')}>
                 {formatBytes(hw.ram_total)}
-                <span className="block text-xs font-normal text-body-gray">目前可用 {formatBytes(hw.ram_available)}</span>
+                <span className="block text-xs font-normal text-body-gray">{t('目前可用 {0}', formatBytes(hw.ram_available))}</span>
               </Row>
-              <Row label="顯示卡">
+              <Row label={t('顯示卡')}>
                 {hw.gpus.length === 0 ? (
-                  '未偵測到'
+                  t('未偵測到')
                 ) : (
                   hw.gpus.map((g) => (
                     <span key={g.name} className="block">
                       {g.name}
-                      {g.vram_total ? <span className="text-xs font-normal text-body-gray">（{formatBytes(g.vram_total)}）</span> : null}
+                      {g.vram_total ? <span className="text-xs font-normal text-body-gray">{t('（{0}）', formatBytes(g.vram_total))}</span> : null}
                     </span>
                   ))
                 )}
@@ -117,18 +118,18 @@ export function HardwareStatusCard() {
               <Row label={hw.platform === 'darwin' ? 'Metal' : 'CUDA'}>
                 <span className="inline-flex items-center gap-2">
                   <StatusDot state={(hw.platform === 'darwin' ? hw.metal_available : hw.cuda_available) ? 'ok' : 'fail'} />
-                  {(hw.platform === 'darwin' ? hw.metal_available : hw.cuda_available) ? '可用' : '不可用'}
+                  {(hw.platform === 'darwin' ? hw.metal_available : hw.cuda_available) ? t('可用') : t('不可用')}
                 </span>
                 <span className="block text-xs font-normal text-body-gray">{hw.platform === 'darwin' ? hw.metal_reason : hw.cuda_reason}</span>
               </Row>
-              <Row label="運算裝置">
-                <span className="block">語音辨識：{DEVICE[info.asr.device]}</span>
-                <span className="block">摘要：{DEVICE[info.llm.device]}</span>
+              <Row label={t('運算裝置')}>
+                <span className="block">{t('語音辨識：{0}', DEVICE[info.asr.device])}</span>
+                <span className="block">{t('摘要：{0}', DEVICE[info.llm.device])}</span>
                 {info.llm.reason !== 'CPU' ? <span className="block text-xs font-normal text-body-gray">{info.llm.reason}</span> : null}
               </Row>
             </>
           ) : (
-            <Row label="運算裝置">{backend.status === 'online' ? (loading ? '偵測中…' : '無法取得') : '-'}</Row>
+            <Row label={t('運算裝置')}>{backend.status === 'online' ? (loading ? t('偵測中…') : t('無法取得')) : '-'}</Row>
           )}
         </dl>
         {info && [...info.llm.warnings, ...info.asr.warnings].length > 0 ? (
@@ -140,20 +141,19 @@ export function HardwareStatusCard() {
         ) : null}
         {hw ? (
           <Button size="sm" variant="secondary" className="mt-3" onClick={redetect} disabled={loading}>
-            {loading ? '偵測中…' : '重新偵測'}
+            {loading ? t('偵測中…') : t('重新偵測')}
           </Button>
         ) : null}
 
         {ffmpegMissing ? (
           <div role="alert" className="mt-2 flex flex-col gap-3 rounded-lg bg-chip p-4 text-sm">
-            <p className="font-medium">需要 FFmpeg 才能處理影音檔。</p>
+            <p className="font-medium">{t('需要 FFmpeg 才能處理影音檔。')}</p>
             <p>
-              Windows：在 PowerShell 執行 <code className="rounded bg-background px-1 font-mono">winget install Gyan.FFmpeg</code>，
-              完成後按「重新檢查」；若仍偵測不到，請關閉並重新開啟 MVR2T（開發時請一併重開終端機）。
+              {t('Windows：在 PowerShell 執行')} <code className="rounded bg-background px-1 font-mono">winget install Gyan.FFmpeg</code>{t('， 完成後按「重新檢查」；若仍偵測不到，請關閉並重新開啟 MVR2T（開發時請一併重開終端機）。')}
             </p>
-            <p>macOS：在終端機執行 <code className="rounded bg-background px-1 font-mono">brew install ffmpeg</code>。</p>
+            <p>{t('macOS：在終端機執行')} <code className="rounded bg-background px-1 font-mono">brew install ffmpeg</code>{t('。')}</p>
             <Button size="sm" variant="outline" className="self-start" onClick={recheckFfmpeg}>
-              重新檢查
+              {t('重新檢查')}
             </Button>
           </div>
         ) : null}
@@ -164,7 +164,7 @@ export function HardwareStatusCard() {
             {backend.logTail.length > 0 ? (
               <details className="text-xs text-body-gray">
                 <summary className="cursor-pointer rounded-pill font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2">
-                  顯示後端輸出
+                  {t('顯示後端輸出')}
                 </summary>
                 <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-all font-mono">
                   {backend.logTail.join('\n')}
@@ -173,7 +173,7 @@ export function HardwareStatusCard() {
             ) : null}
             {restartBackend ? (
               <Button size="sm" className="self-start" onClick={restartBackend}>
-                重新啟動後端
+                {t('重新啟動後端')}
               </Button>
             ) : null}
           </div>

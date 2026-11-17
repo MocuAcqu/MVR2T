@@ -21,7 +21,8 @@ import { APP_NAME, IPC_CHANNELS } from '@shared/constants/app';
 import type { AppInfo, BackendState, ExportFilesResult, ExportPrefs, SaveFileResult } from '@shared/types/ipc';
 import { BackendManager, resolveBackendCommand } from './backend';
 import { parseExportRequest, runExport } from './exporter';
-import { ASR_LANGUAGE_PREFS, isDirectory, loadPrefs, savePrefs, type AsrLanguagePref } from './prefs';
+import { ASR_LANGUAGE_PREFS, isDirectory, loadPrefs, savePrefs, validLanguage, type AsrLanguagePref, type Prefs } from './prefs';
+import { mt, setMainLang } from './i18n';
 import { StartupTimer } from './startup-timing';
 import { isAppUrl, isSafeExternalUrl, parseNotification, parseSaveRequest, rendererOrigins } from './security';
 
@@ -192,9 +193,9 @@ async function saveFile(input: unknown): Promise<SaveFileResult> {
   if (!req) throw new Error('Invalid save request');
   const win = mainWindow();
   const options = {
-    title: '另存新檔',
+    title: mt('另存新檔'),
     defaultPath: path.join(app.getPath('documents'), req.fileName),
-    filters: [{ name: req.label, extensions: [req.ext] }],
+    filters: [{ name: mt(req.label), extensions: [req.ext] }],
   };
   const { canceled, filePath } = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
   if (canceled || !filePath) return { saved: false, path: null };
@@ -257,7 +258,7 @@ async function exportPrefs(): Promise<ExportPrefs> {
 
 async function chooseFixedExportFolder(): Promise<ExportPrefs> {
   const p = await loadPrefs(prefsFile());
-  const folder = await pickFolder('選擇固定的匯出資料夾', '使用這個資料夾', p.fixedExportFolder ?? p.lastExportFolder);
+  const folder = await pickFolder(mt('選擇固定的匯出資料夾'), mt('使用這個資料夾'), p.fixedExportFolder ?? p.lastExportFolder);
   if (folder) await savePrefs(prefsFile(), { fixedExportFolder: folder });
   return exportPrefs();
 }
@@ -275,7 +276,7 @@ async function exportFiles(input: unknown): Promise<ExportFilesResult> {
   const req = parseExportRequest(input);
   if (!req) throw new Error('Invalid export request');
   const state = currentBackendState();
-  if (state.phase !== 'running' || !state.url) throw new Error('後端尚未就緒，請稍後再試。');
+  if (state.phase !== 'running' || !state.url) throw new Error(mt('後端尚未就緒，請稍後再試。'));
   // 設定中指定了固定資料夾（且存在）就直接使用；否則詢問，對話框從上次的資料夾開始
   const prefs = await loadPrefs(prefsFile());
   let folder: string;
@@ -284,7 +285,7 @@ async function exportFiles(input: unknown): Promise<ExportFilesResult> {
   } else if (!req.askFolder && prefs.fixedExportFolder && (await isDirectory(prefs.fixedExportFolder))) {
     folder = prefs.fixedExportFolder;
   } else {
-    const picked = await pickFolder('選擇匯出資料夾', '匯出到這裡', prefs.lastExportFolder);
+    const picked = await pickFolder(mt('選擇匯出資料夾'), mt('匯出到這裡'), prefs.lastExportFolder);
     if (!picked) return { folder: null, results: [] };
     folder = picked;
     await savePrefs(prefsFile(), { lastExportFolder: folder }).catch(() => undefined);
@@ -368,13 +369,18 @@ function registerIpc(): void {
     await savePrefs(prefsFile(), { youtubeNoticeAccepted: true });
     return true;
   });
-  handle(IPC_CHANNELS.getUiPrefs, async () => ({ asrLanguage: (await loadPrefs(prefsFile())).asrLanguage }));
+  const uiPrefs = (p: Prefs) => {
+    const language = p.language ?? (app.getLocale().toLowerCase().startsWith('zh') ? 'zh-TW' : 'en');
+    setMainLang(language);
+    return { asrLanguage: p.asrLanguage, language };
+  };
+  handle(IPC_CHANNELS.getUiPrefs, async () => uiPrefs(await loadPrefs(prefsFile())));
   handle(IPC_CHANNELS.setUiPrefs, async (patch: unknown) => {
     const raw = (patch ?? {}) as Record<string, unknown>;
-    const next = (ASR_LANGUAGE_PREFS as readonly unknown[]).includes(raw.asrLanguage)
-      ? await savePrefs(prefsFile(), { asrLanguage: raw.asrLanguage as AsrLanguagePref })
-      : await loadPrefs(prefsFile());
-    return { asrLanguage: next.asrLanguage };
+    const change: Partial<Prefs> = {};
+    if ((ASR_LANGUAGE_PREFS as readonly unknown[]).includes(raw.asrLanguage)) change.asrLanguage = raw.asrLanguage as AsrLanguagePref;
+    if (validLanguage(raw.language)) change.language = validLanguage(raw.language);
+    return uiPrefs(Object.keys(change).length ? await savePrefs(prefsFile(), change) : await loadPrefs(prefsFile()));
   });
   handle(IPC_CHANNELS.openAppLocation, async (which: unknown) => {
     if (which === 'data') return (await shell.openPath(app.getPath('userData'))) === '';

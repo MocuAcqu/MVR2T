@@ -2,14 +2,15 @@ import { toPng, toSvg } from 'html-to-image';
 import { getViewportForBounds, type Rect } from '@xyflow/react';
 import type { SaveFileKind } from '@shared/types/ipc';
 import { NO_EXPORT } from './MindMapNode';
+import { t } from '@/i18n';
 
 const PADDING = 40;
 /** PNG 最長邊上限（避免超大畫布在部分電腦上失敗） */
 const MAX_PNG_SIDE = 8000;
 
 export function exportFileName(mediaName: string): string {
-  const base = mediaName.replace(/\.[^.]+$/, '').trim() || '心智圖';
-  return `${base}-心智圖`;
+  const base = mediaName.replace(/\.[^.]+$/, '').trim() || t('心智圖');
+  return t('{0}-心智圖', base);
 }
 
 /**

@@ -1,6 +1,7 @@
 import { Mono } from '@/components/mono/Mono';
 import { cn } from '@/lib/utils';
 import { GUIDE_MESSAGES, type GuideStepId } from './guide';
+import { t } from '@/i18n';
 import { useActiveGuideStep } from './useGuide';
 
 /** Mono 的對話框（外觀）。設計規範頁也用它展示。 */
@@ -14,8 +15,8 @@ export function GuideBubble({ step, className }: { step: GuideStepId; className?
           aria-hidden
           className="absolute -left-[12px] bottom-3 size-0 border-y-[6px] border-r-[9px] border-y-transparent border-r-foreground"
         />
-        <p className="font-bold">{msg.title}</p>
-        <p className="mt-1 text-body-gray">{msg.body}</p>
+        <p className="font-bold">{t(msg.title)}</p>
+        <p className="mt-1 text-body-gray">{t(msg.body)}</p>
       </div>
     </div>
   );

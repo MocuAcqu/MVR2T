@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
+import { t } from '@/i18n';
 
 const WORDS = ['Media', 'Video', 'Record'] as const;
 
@@ -47,7 +48,7 @@ export function HeroTitle() {
           </span>
         )}
       </h1>
-      <p className="text-lg text-body-gray">把影片與錄音轉成逐字稿、摘要和心智圖</p>
+      <p className="text-lg text-body-gray">{t('把影片與錄音轉成逐字稿、摘要和心智圖')}</p>
       <div aria-hidden className="mt-2 flex h-14 items-end gap-1">
         {BARS.map((h, k) => (
           <i

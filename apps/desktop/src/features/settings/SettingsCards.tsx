@@ -8,12 +8,13 @@ import { formatBytes } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { cleanupStorage, getBackendConnection, getBackendSettings, getStorageInfo, putBackendSettings } from '@/services/api';
 import { setUiPrefs, useUiPrefs } from './uiPrefs';
+import { t } from '@/i18n';
 
 const bridge = () => (typeof window !== 'undefined' ? window.mvr2t : undefined);
 
 async function conn() {
   const c = await getBackendConnection();
-  if (!c) throw new Error('本機後端尚未連線。');
+  if (!c) throw new Error(t('本機後端尚未連線。'));
   return c;
 }
 
@@ -73,17 +74,32 @@ function Choice<T extends string>({
 export function RecognitionSettings() {
   const selectId = useId();
   const asrLanguage = useUiPrefs((p) => p.asrLanguage);
+  const language = useUiPrefs((p) => p.language);
+  const langId = useId();
   const { models } = useSystemStatus();
   const packages = models.status === 'done' ? models.data.packages.filter((p) => p.id !== 'llm_gpu') : [];
   return (
     <Card>
       <CardHeader>
-        <CardTitle>語音辨識與模型</CardTitle>
-        <CardDescription>工作區「逐字稿」會預先選好這個語言；每次辨識前仍可以改。</CardDescription>
+        <CardTitle>{t('語言與模型')}</CardTitle>
+        <CardDescription>{t('工作區「逐字稿」會預先選好這個語言；每次辨識前仍可以改。')}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
-          <label htmlFor={selectId} className="text-sm font-medium">預設辨識語言</label>
+          <label htmlFor={langId} className="text-sm font-medium">{t('介面語言')}</label>
+          <select
+            id={langId}
+            value={language}
+            onChange={(e) => void setUiPrefs({ language: e.target.value as UiPrefs['language'] })}
+            className="h-11 rounded-pill border border-foreground bg-background px-4 text-base font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2"
+          >
+            <option value="zh-TW">繁體中文</option>
+            <option value="en">English</option>
+          </select>
+          <p className="text-xs text-body-gray">{t('切換後畫面會重新整理（處理中的工作不受影響）。摘要內容、匯出的 Word／PDF 標題維持中文。')}</p>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor={selectId} className="text-sm font-medium">{t('預設辨識語言')}</label>
           <select
             id={selectId}
             value={asrLanguage}
@@ -91,22 +107,22 @@ export function RecognitionSettings() {
             className="h-11 rounded-pill border border-foreground bg-background px-4 text-base font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2"
           >
             {ASR_LANGUAGES.map((l) => (
-              <option key={l.value} value={l.value}>{l.label}</option>
+              <option key={l.value} value={l.value}>{t(l.label)}</option>
             ))}
           </select>
-          <p className="text-xs text-body-gray">確定影片的語言時直接指定，比自動偵測更準確；混合多種語言時用自動偵測。</p>
+          <p className="text-xs text-body-gray">{t('確定影片的語言時直接指定，比自動偵測更準確；混合多種語言時用自動偵測。')}</p>
         </div>
         <div className="flex flex-col gap-1.5">
-          <p className="text-sm font-medium">預設模型</p>
+          <p className="text-sm font-medium">{t('預設模型')}</p>
           <ul className="flex flex-col text-sm">
             {packages.map((p) => (
               <li key={p.id} className="flex justify-between gap-4 border-t border-chip py-2.5">
                 <span className="text-body-gray">{p.name}</span>
-                <span className="text-right font-medium">{p.models.map((m) => m.display_name).join(' ＋ ')}</span>
+                <span className="text-right font-medium">{p.models.map((m) => m.display_name).join(t(' ＋ '))}</span>
               </li>
             ))}
           </ul>
-          <p className="text-xs text-body-gray">目前每項功能各有一個經過驗證的模型；下載、刪除與更新請到「模型管理」。</p>
+          <p className="text-xs text-body-gray">{t('目前每項功能各有一個經過驗證的模型；下載、刪除與更新請到「模型管理」。')}</p>
         </div>
       </CardContent>
     </Card>
@@ -141,38 +157,38 @@ export function ComputeSettings() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>推論裝置與記憶體</CardTitle>
-        <CardDescription>下次開始語音辨識或產生摘要時生效。「模型管理 → 這台電腦」會顯示實際使用的裝置。</CardDescription>
+        <CardTitle>{t('推論裝置與記憶體')}</CardTitle>
+        <CardDescription>{t('下次開始語音辨識或產生摘要時生效。「模型管理 → 這台電腦」會顯示實際使用的裝置。')}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
-        {!value && !error ? <p className="text-sm text-body-gray">讀取中…</p> : null}
+        {!value && !error ? <p className="text-sm text-body-gray">{t('讀取中…')}</p> : null}
         {value ? (
           <>
             <Choice
-              legend="推論裝置"
+              legend={t('推論裝置')}
               value={value.device}
               onChange={(device) => void update({ device })}
               options={[
-                { value: 'auto', label: '自動（建議）', hint: '有可用的 NVIDIA 顯示卡（或 Apple Silicon）時，摘要使用 GPU；其他情況用 CPU。' },
-                { value: 'cpu', label: '一律使用 CPU', hint: 'GPU 驅動程式不穩定、或想讓顯示卡留給其他程式時使用。語音辨識本來就使用 CPU。' },
+                { value: 'auto', label: t('自動（建議）'), hint: t('有可用的 NVIDIA 顯示卡（或 Apple Silicon）時，摘要使用 GPU；其他情況用 CPU。') },
+                { value: 'cpu', label: t('一律使用 CPU'), hint: t('GPU 驅動程式不穩定、或想讓顯示卡留給其他程式時使用。語音辨識本來就使用 CPU。') },
               ]}
             />
             <Choice
-              legend="記憶體使用"
+              legend={t('記憶體使用')}
               value={value.memory}
               onChange={(memory) => void update({ memory })}
               options={[
-                { value: 'standard', label: '標準', hint: '可用記憶體不足時仍會自動降級並提醒。' },
+                { value: 'standard', label: t('標準'), hint: t('可用記憶體不足時仍會自動降級並提醒。') },
                 {
                   value: 'low',
-                  label: '省記憶體',
-                  hint: '摘要使用較短的 context（長逐字稿會分成較多段，時間稍長），語音辨識一次只處理一段。適合可用記憶體少於 4 GB 的電腦。',
+                  label: t('省記憶體'),
+                  hint: t('摘要使用較短的 context（長逐字稿會分成較多段，時間稍長），語音辨識一次只處理一段。適合可用記憶體少於 4 GB 的電腦。'),
                 },
               ]}
             />
           </>
         ) : null}
-        {saved ? <p role="status" className="text-sm text-body-gray">已儲存。</p> : null}
+        {saved ? <p role="status" className="text-sm text-body-gray">{t('已儲存。')}</p> : null}
         {error ? <p role="alert" className="text-sm font-medium">{error}</p> : null}
       </CardContent>
     </Card>
@@ -199,16 +215,16 @@ export function StorageSettings() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>暫存檔案</CardTitle>
-        <CardDescription>匯入的影音與抽取的音訊只存在本次工作階段，換檔案或關閉程式時自動刪除。</CardDescription>
+        <CardTitle>{t('暫存檔案')}</CardTitle>
+        <CardDescription>{t('匯入的影音與抽取的音訊只存在本次工作階段，換檔案或關閉程式時自動刪除。')}</CardDescription>
       </CardHeader>
       <CardContent>
         {info ? (
           <dl className="text-sm">
             {[
-              ['本次工作階段', formatBytes(info.current_session_bytes)],
-              ['其他工作階段留下的暫存', formatBytes(info.stale_bytes)],
-              ['YouTube 下載元件的快取', formatBytes(info.cache_bytes)],
+              [t('本次工作階段'), formatBytes(info.current_session_bytes)],
+              [t('其他工作階段留下的暫存'), formatBytes(info.stale_bytes)],
+              [t('YouTube 下載元件的快取'), formatBytes(info.cache_bytes)],
             ].map(([k, v]) => (
               <div key={k} className="flex justify-between gap-4 border-t border-chip py-2.5">
                 <dt className="text-body-gray">{k}</dt>
@@ -217,7 +233,7 @@ export function StorageSettings() {
             ))}
           </dl>
         ) : (
-          <p className="text-sm text-body-gray">讀取中…</p>
+          <p className="text-sm text-body-gray">{t('讀取中…')}</p>
         )}
         {message ? <p role="status" className="mt-3 text-sm">{message}</p> : null}
       </CardContent>
@@ -230,17 +246,15 @@ export function StorageSettings() {
             setMessage(null);
             void conn()
               .then(cleanupStorage)
-              .then((r) => setMessage(`已清除 ${formatBytes(r.freed_bytes)}。`))
+              .then((r) => setMessage(t('已清除 {0}。', formatBytes(r.freed_bytes))))
               .catch((e: unknown) => setMessage(e instanceof Error ? e.message : String(e)))
               .finally(() => {
                 setBusy(false);
                 void refresh();
               });
           }}
-        >
-          清除暫存{cleanable ? `（${formatBytes(cleanable)}）` : ''}
-        </Button>
-        <Button variant="ghost" onClick={() => void refresh()} disabled={busy}>重新計算</Button>
+        >{t('清除暫存{0}', cleanable ? t('（{0}）', formatBytes(cleanable)) : '')}</Button>
+        <Button variant="ghost" onClick={() => void refresh()} disabled={busy}>{t('重新計算')}</Button>
       </CardFooter>
     </Card>
   );
@@ -260,18 +274,18 @@ export function AboutCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>關於 MVR2T</CardTitle>
-        <CardDescription>Local Media Studio：在你的電腦上把影片與錄音轉成逐字稿、摘要與心智圖。所有處理都在本機完成，不保存處理歷史。</CardDescription>
+        <CardTitle>{t('關於 MVR2T')}</CardTitle>
+        <CardDescription>{t('Local Media Studio：在你的電腦上把影片與錄音轉成逐字稿、摘要與心智圖。所有處理都在本機完成，不保存處理歷史。')}</CardDescription>
       </CardHeader>
       <CardContent>
         <dl className="text-sm">
           <div className="flex justify-between gap-4 border-t border-chip py-2.5">
-            <dt className="text-body-gray">版本</dt>
-            <dd className="font-medium tabular-nums">{app.status === 'electron' ? app.info.version : '開發預覽'}</dd>
+            <dt className="text-body-gray">{t('版本')}</dt>
+            <dd className="font-medium tabular-nums">{app.status === 'electron' ? app.info.version : t('開發預覽')}</dd>
           </div>
           {dataDir ? (
             <div className="flex justify-between gap-4 border-t border-chip py-2.5">
-              <dt className="shrink-0 text-body-gray">資料夾（模型、設定）</dt>
+              <dt className="shrink-0 text-body-gray">{t('資料夾（模型、設定）')}</dt>
               <dd className="min-w-0 break-all text-right font-medium">{dataDir}</dd>
             </div>
           ) : null}
@@ -279,8 +293,8 @@ export function AboutCard() {
       </CardContent>
       {b ? (
         <CardFooter className="flex-wrap gap-2">
-          <Button variant="secondary" onClick={() => void b.openAppLocation('data')}>開啟資料夾</Button>
-          <Button variant="secondary" onClick={() => void b.openAppLocation('notices')}>第三方授權</Button>
+          <Button variant="secondary" onClick={() => void b.openAppLocation('data')}>{t('開啟資料夾')}</Button>
+          <Button variant="secondary" onClick={() => void b.openAppLocation('notices')}>{t('第三方授權')}</Button>
         </CardFooter>
       ) : null}
     </Card>

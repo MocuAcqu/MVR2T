@@ -315,7 +315,7 @@ class ModelManager:
                 raise ManagerError(409, f"{p.name}已在處理中。")
             if action == "download":
                 if p.runtime and not self._runtime_installed(p) and not self._runtime_supported(p):
-                    raise ManagerError(422, "這個作業系統目前沒有可用的 llama.cpp 執行檔（macOS 版本在 Phase 11 提供）。")
+                    raise ManagerError(422, "這個作業系統目前沒有可用的 llama.cpp 執行檔。")
                 repair = self._status(p) == "damaged"
                 if self.package_installed(p) and not repair:
                     raise ManagerError(409, f"{p.name}已安裝。")

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { HealthResponse } from '@shared/types/api';
 import type { BackendState } from '@shared/types/ipc';
 import { browserFallbackConnection, fetchHealth, type BackendConnection } from '@/services/api';
+import { t } from '@/i18n';
 
 export type BackendHealthState =
   | { status: 'checking'; backendUrl: string | null }
@@ -103,7 +104,7 @@ export function useBackendHealth(): BackendHealth {
       state = {
         status: 'error',
         backendUrl: null,
-        message: managed.message ?? '後端發生未知錯誤。',
+        message: managed.message ?? t('後端發生未知錯誤。'),
         logTail: managed.logTail,
       };
       break;

@@ -20,6 +20,7 @@ import {
 import { beginExternalImport, ensureSession, finishExternalImport, setExternalImportCanceller } from '@/features/media/mediaController';
 import { useSessionStore } from '@/stores/sessionStore';
 import { useUiStore } from '@/stores/uiStore';
+import { t } from '@/i18n';
 
 const POLL_MS = 400;
 const RECONNECT_MS = 2000;
@@ -67,12 +68,12 @@ const bridge = () => (typeof window !== 'undefined' ? window.mvr2t : undefined);
 
 function messageOf(err: unknown): string {
   if (err instanceof ApiError) return err.message;
-  return '發生未預期的錯誤，請再試一次。';
+  return t('發生未預期的錯誤，請再試一次。');
 }
 
 async function connection(): Promise<BackendConnection> {
   const conn = await getBackendConnection();
-  if (!conn) throw new ApiError(0, '本機後端尚未就緒，請稍候再試。');
+  if (!conn) throw new ApiError(0, t('本機後端尚未就緒，請稍候再試。'));
   return conn;
 }
 
@@ -113,8 +114,8 @@ export function setYouTubeUrl(url: string): void {
 /** 讀取影片資訊（標題、長度、作者上傳的字幕）。 */
 export async function probeVideo(): Promise<void> {
   const { url } = ys();
-  if (!url.trim()) return ys().set({ phase: 'error', message: '請輸入 YouTube 網址。' });
-  if (!parseYouTubeUrl(url)) return ys().set({ phase: 'error', message: '這不是有效的 YouTube 影片網址（只支援單一影片，不支援播放清單）。' });
+  if (!url.trim()) return ys().set({ phase: 'error', message: t('請輸入 YouTube 網址。') });
+  if (!parseYouTubeUrl(url)) return ys().set({ phase: 'error', message: t('這不是有效的 YouTube 影片網址（只支援單一影片，不支援播放清單）。') });
   probeController?.abort();
   const controller = new AbortController();
   probeController = controller;
@@ -146,7 +147,7 @@ export async function downloadVideo(subtitle: SubtitleChoice | null): Promise<vo
   stopPolling();
   beginExternalImport();
   setExternalImportCanceller(() => void cancelDownload());
-  ys().set({ phase: 'starting', taskId: null, progress: 0, stage: '準備中', detail: '', message: null });
+  ys().set({ phase: 'starting', taskId: null, progress: 0, stage: t('準備中'), detail: '', message: null });
   try {
     const conn = await connection();
     const sessionId = await ensureSession(conn);
@@ -164,16 +165,16 @@ export async function downloadVideo(subtitle: SubtitleChoice | null): Promise<vo
 async function poll(conn: BackendConnection, sessionId: string, taskId: string, video: YouTubeVideo, failures = 0): Promise<void> {
   const current = () => ys().taskId === taskId;
   try {
-    const t = await getTask<YouTubeDownloadResult>(conn, sessionId, taskId);
+    const task = await getTask<YouTubeDownloadResult>(conn, sessionId, taskId);
     if (!current()) return;
-    if (t.status === 'queued' || t.status === 'running') {
-      ys().set({ progress: t.progress, stage: t.stage, detail: t.detail });
+    if (task.status === 'queued' || task.status === 'running') {
+      ys().set({ progress: task.progress, stage: task.stage, detail: task.detail });
       pollTimer = setTimeout(() => void poll(conn, sessionId, taskId, video), POLL_MS);
       return;
     }
     setExternalImportCanceller(null);
-    if (t.status === 'completed' && t.result) {
-      const { media, subtitles } = t.result;
+    if (task.status === 'completed' && task.result) {
+      const { media, subtitles } = task.result;
       let transcript: Transcript | null = null;
       if (subtitles) {
         try {
@@ -186,17 +187,17 @@ async function poll(conn: BackendConnection, sessionId: string, taskId: string, 
       finishExternalImport({ name: media.filename, size: media.size }, media, transcript);
       // 用影片字幕時逐字稿已完成：直接到工作區的逐字稿（語音辨識時仍由使用者按「開啟工作區」）
       if (transcript) useUiStore.getState().goTo('workspace', 'transcript');
-      ys().set({ phase: 'idle', url: '', video: null, taskId: null, progress: 1, message: t.result.warnings[0] ?? null });
-    } else if (t.status === 'cancelled') {
-      ys().set({ phase: 'ready', taskId: null, message: '已取消下載。' });
+      ys().set({ phase: 'idle', url: '', video: null, taskId: null, progress: 1, message: task.result.warnings[0] ?? null });
+    } else if (task.status === 'cancelled') {
+      ys().set({ phase: 'ready', taskId: null, message: t('已取消下載。') });
     } else {
-      ys().set({ phase: 'ready', taskId: null, message: t.message ?? 'YouTube 下載失敗。' });
+      ys().set({ phase: 'ready', taskId: null, message: task.message ?? t('YouTube 下載失敗。') });
     }
   } catch (err) {
     if (!current()) return;
     const network = err instanceof ApiError && err.status === 0;
     if (network && failures < MAX_RECONNECT_ATTEMPTS) {
-      ys().set({ detail: '連線中斷，重新連線中…' });
+      ys().set({ detail: t('連線中斷，重新連線中…') });
       pollTimer = setTimeout(() => void poll(conn, sessionId, taskId, video, failures + 1), RECONNECT_MS);
       return;
     }
@@ -209,7 +210,7 @@ export async function cancelDownload(): Promise<void> {
   const { taskId } = ys();
   const sessionId = useSessionStore.getState().sessionId;
   if (!taskId || !sessionId) return;
-  ys().set({ stage: '正在取消' });
+  ys().set({ stage: t('正在取消') });
   try {
     await cancelTask(await connection(), sessionId, taskId);
   } catch {

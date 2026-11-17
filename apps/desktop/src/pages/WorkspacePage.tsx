@@ -14,6 +14,7 @@ import { SummaryCard } from '@/features/workspace/SummaryCard';
 import { TranscriptCard } from '@/features/workspace/TranscriptCard';
 import { useSessionStore } from '@/stores/sessionStore';
 import { useUiStore } from '@/stores/uiStore';
+import { t } from '@/i18n';
 
 /** Media workspace: media info, audio extraction (Phase 04), transcript (Phase 05), summary (Phase 06), mind map (Phase 07). */
 export function WorkspacePage() {
@@ -37,19 +38,19 @@ export function WorkspacePage() {
     const inProgress = imp.status === 'uploading' || imp.status === 'probing';
     return (
       <PageContainer>
-        <h1 className="text-h1">工作區</h1>
+        <h1 className="text-h1">{t('工作區')}</h1>
         <Card className="mt-6 max-w-xl">
           <CardHeader className="flex-row items-end gap-4">
             <Mono animation={inProgress ? 'loading' : 'idle'} scale={2} interactive />
             <div className="flex flex-col gap-1.5">
-            <CardTitle>{inProgress ? '檔案匯入中' : '還沒有匯入影音'}</CardTitle>
+            <CardTitle>{inProgress ? t('檔案匯入中') : t('還沒有匯入影音')}</CardTitle>
             <CardDescription>
-              {inProgress ? '請回到首頁查看匯入進度。' : '回到首頁匯入影片或錄音，就能在這裡處理。'}
+              {inProgress ? t('請回到首頁查看匯入進度。') : t('回到首頁匯入影片或錄音，就能在這裡處理。')}
             </CardDescription>
             </div>
           </CardHeader>
           <CardFooter>
-            <Button onClick={() => setPage('dashboard')}>回到首頁</Button>
+            <Button onClick={() => setPage('dashboard')}>{t('回到首頁')}</Button>
           </CardFooter>
         </Card>
       </PageContainer>
@@ -60,11 +61,11 @@ export function WorkspacePage() {
     <PageContainer>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-h1">工作區</h1>
+          <h1 className="text-h1">{t('工作區')}</h1>
           <p className="mt-1 truncate text-body-gray" title={imp.info.filename}>{imp.info.filename}</p>
         </div>
         <div className="flex flex-wrap gap-3">
-          <Button onClick={() => openExport()} title="一次匯出切段、逐字稿、摘要與心智圖">匯出</Button>
+          <Button onClick={() => openExport()} title={t('一次匯出切段、逐字稿、摘要與心智圖')}>{t('匯出')}</Button>
           <Button
             variant="secondary"
             onClick={() => {
@@ -72,7 +73,7 @@ export function WorkspacePage() {
               setPage('dashboard');
             }}
           >
-            換一個檔案
+            {t('換一個檔案')}
           </Button>
         </div>
       </div>

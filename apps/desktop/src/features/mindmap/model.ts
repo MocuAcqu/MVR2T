@@ -1,4 +1,5 @@
 import type { MindMapKind, MindMapNode, TimeSpan } from '@shared/types/api';
+import { t } from '@/i18n';
 
 /**
  * 可編輯的心智圖（PROJECT_SPEC §4-F、Phase 07）。只存在本次 Session 的記憶體中（§8.3）。
@@ -159,7 +160,7 @@ let seq = 0;
 const newId = (parentId: string) => `${parentId}-u${Date.now().toString(36)}${(seq++).toString(36)}`;
 
 /** 新增子節點；回傳 [新樹, 新節點 id]。細節／結論之下不能再新增（最多四層）。 */
-export function addChild(root: MindNode, parentId: string, text = '新節點'): [MindNode, string | null] {
+export function addChild(root: MindNode, parentId: string, text = t('新節點')): [MindNode, string | null] {
   const parent = findNode(root, parentId);
   if (!parent || LEVEL_OF[parent.kind] >= MAX_LEVEL) return [root, null];
   const id = newId(parentId);
@@ -178,7 +179,7 @@ export function addChild(root: MindNode, parentId: string, text = '新節點'): 
 }
 
 /** 在同一層、這個節點之後新增；中心主題沒有同層。 */
-export function addSibling(root: MindNode, id: string, text = '新節點'): [MindNode, string | null] {
+export function addSibling(root: MindNode, id: string, text = t('新節點')): [MindNode, string | null] {
   const parent = findParent(root, id);
   if (!parent) return [root, null];
   const self = findNode(root, id)!;

@@ -151,4 +151,6 @@ export interface Mvr2tBridge {
 /** 設定頁（規格 §12.4）的介面偏好（存在 Main 的 preferences.json） */
 export interface UiPrefs {
   asrLanguage: 'auto' | 'Chinese' | 'English' | 'Cantonese' | 'Japanese' | 'Korean';
+  /** 介面語言（還沒選過時，Main 依系統語言決定） */
+  language: 'zh-TW' | 'en';
 }

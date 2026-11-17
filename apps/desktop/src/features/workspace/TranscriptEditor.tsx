@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { seekTo, usePlayerStore } from '@/features/player/playerStore';
 import { formatTimestamp } from '@/lib/format';
 import { deleteSegment, editText, mergeWithNext, saveSegments } from './transcriptEdit';
+import { t } from '@/i18n';
 
 const SAVE_DELAY_MS = 700;
 const MAX_UNDO = 50;
@@ -99,14 +100,14 @@ export function TranscriptEditor({ transcript, onDone }: { transcript: Transcrip
   };
 
   const status =
-    save.status === 'saving' ? '儲存中…' : save.status === 'saved' ? '已儲存' : save.status === 'error' ? `儲存失敗：${save.message}` : '修改會自動儲存';
+    save.status === 'saving' ? t('儲存中…') : save.status === 'saved' ? t('已儲存') : save.status === 'error' ? t('儲存失敗：{0}', save.message) : t('修改會自動儲存');
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="secondary" size="sm" onClick={undo} disabled={history.length === 0}>
           <Undo2 className="size-4" aria-hidden="true" />
-          復原
+          {t('復原')}
         </Button>
         <span role="status" className={save.status === 'error' ? 'text-sm font-medium' : 'text-sm text-body-gray'}>
           {status}
@@ -120,13 +121,13 @@ export function TranscriptEditor({ transcript, onDone }: { transcript: Transcrip
             });
           }}
         >
-          完成編輯
+          {t('完成編輯')}
         </Button>
       </div>
       <p className="text-xs text-body-gray">
-        直接修改文字；把一句的文字全部刪掉等於刪除這一句。時間戳記不會改變；合併時開始時間取第一句、結束時間取第二句。
+        {t('直接修改文字；把一句的文字全部刪掉等於刪除這一句。時間戳記不會改變；合併時開始時間取第一句、結束時間取第二句。')}
       </p>
-      <ol className="max-h-[40rem] overflow-auto rounded-lg border border-chip" aria-label="編輯逐字稿">
+      <ol className="max-h-[40rem] overflow-auto rounded-lg border border-chip" aria-label={t('編輯逐字稿')}>
         {draft.map((s, i) => (
           <li key={s.id} className="flex gap-3 border-t border-chip px-3 py-2 first:border-t-0">
             <div className="flex w-24 shrink-0 flex-col gap-1 pt-1">
@@ -136,14 +137,14 @@ export function TranscriptEditor({ transcript, onDone }: { transcript: Transcrip
                 className="flex items-center gap-1 self-start rounded-pill px-1.5 py-0.5 text-xs hover:bg-chip disabled:opacity-40"
                 onClick={() => seekTo(s.start)}
                 disabled={!playerReady}
-                title="從這一句開始播放"
+                title={t('從這一句開始播放')}
               >
                 <Play className="size-3" aria-hidden="true" />
-                播放
+                {t('播放')}
               </button>
             </div>
             <div className="min-w-0 flex-1">
-              <AutoTextarea value={s.text} onChange={(v) => onText(s.id, v)} label={`第 ${i + 1} 句`} />
+              <AutoTextarea value={s.text} onChange={(v) => onText(s.id, v)} label={t('第 {0} 句', i + 1)} />
             </div>
             <div className="flex shrink-0 flex-col gap-1">
               <button
@@ -151,19 +152,19 @@ export function TranscriptEditor({ transcript, onDone }: { transcript: Transcrip
                 className="flex items-center gap-1 rounded-pill px-2 py-1 text-xs hover:bg-chip disabled:opacity-40"
                 onClick={() => structural(mergeWithNext(draft, s.id))}
                 disabled={i === draft.length - 1}
-                title="把下一句接在這一句後面"
+                title={t('把下一句接在這一句後面')}
               >
                 <Combine className="size-3.5" aria-hidden="true" />
-                與下一句合併
+                {t('與下一句合併')}
               </button>
               <button
                 type="button"
                 className="flex items-center gap-1 rounded-pill px-2 py-1 text-xs hover:bg-chip"
                 onClick={() => structural(deleteSegment(draft, s.id))}
-                title="刪除這一句"
+                title={t('刪除這一句')}
               >
                 <Trash2 className="size-3.5" aria-hidden="true" />
-                刪除
+                {t('刪除')}
               </button>
             </div>
           </li>

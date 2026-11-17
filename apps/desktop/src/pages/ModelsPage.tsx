@@ -8,6 +8,7 @@ import { YouTubeComponentCard } from '@/features/models/YouTubeComponentCard';
 import { downloadAll } from '@/features/models/modelActions';
 import { useSystemStatus } from '@/hooks/useSystemStatus';
 import { formatBytes } from '@/lib/format';
+import { t } from '@/i18n';
 
 /** 模型管理（Phase 09）：下載（進度、取消、續傳）、驗證、刪除、版本更新、清除不再使用的檔案。 */
 export function ModelsPage() {
@@ -21,8 +22,8 @@ export function ModelsPage() {
     <PageContainer>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-h1">模型管理</h1>
-          <p className="mt-1 text-body-gray">AI 模型只需下載一次，之後完全離線使用；只有在這裡按下下載時才會連網。</p>
+          <h1 className="text-h1">{t('模型管理')}</h1>
+          <p className="mt-1 text-body-gray">{t('AI 模型只需下載一次，之後完全離線使用；只有在這裡按下下載時才會連網。')}</p>
         </div>
         {missing.length > 1 ? (
           <Button
@@ -32,20 +33,18 @@ export function ModelsPage() {
                 .then(applyModels)
                 .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
             }}
-          >
-            全部下載（{formatBytes(missingBytes)}）
-          </Button>
+          >{t('全部下載（{0}）', formatBytes(missingBytes))}</Button>
         ) : null}
       </div>
       {data ? (
         <p className="mt-2 text-sm text-body-gray">
-          存放位置：<span className="break-all">{data.models_dir}</span>・剩餘空間 {formatBytes(data.free_bytes)}
+          {t('存放位置：')}<span className="break-all">{data.models_dir}</span>{t('・剩餘空間')} {formatBytes(data.free_bytes)}
         </p>
       ) : null}
       {error ? <p role="alert" className="mt-2 text-sm font-medium">{error}</p> : null}
 
       {!data ? (
-        <p className="mt-6 text-sm text-body-gray">{models.status === 'loading' ? '讀取中…' : '等待本機後端連線。'}</p>
+        <p className="mt-6 text-sm text-body-gray">{models.status === 'loading' ? t('讀取中…') : t('等待本機後端連線。')}</p>
       ) : null}
       {/* 兩個獨立的欄，各自往下排，不會因為另一欄的卡片比較高而留下空白（2026-11-14 使用者建議）：
           左欄：語音辨識＋這台電腦；右欄：摘要與心智圖（＋GPU 加速）＋YouTube 下載元件＋不再使用的檔案 */}

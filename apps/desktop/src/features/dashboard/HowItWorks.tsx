@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 const STEPS = [
   { title: '匯入影音', body: '拖曳影片或錄音，或貼上 YouTube 網址。' },
   { title: '語音辨識', body: '本機 AI 產生帶時間戳記的逐字稿，可直接編輯。' },
@@ -9,15 +10,15 @@ const STEPS = [
 export function HowItWorks({ className }: { className?: string }) {
   return (
     <section aria-labelledby="how-heading" className={className}>
-      <h2 id="how-heading" className="text-h2">使用方式</h2>
+      <h2 id="how-heading" className="text-h2">{t('使用方式')}</h2>
       <ol className="mt-6 grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
         {STEPS.map((s, i) => (
           <li key={s.title} className="flex flex-col gap-3">
             <span className="flex size-8 items-center justify-center rounded-full bg-foreground text-sm font-bold text-background">
               {i + 1}
             </span>
-            <h3 className="text-h3">{s.title}</h3>
-            <p className="text-sm text-body-gray">{s.body}</p>
+            <h3 className="text-h3">{t(s.title)}</h3>
+            <p className="text-sm text-body-gray">{t(s.body)}</p>
           </li>
         ))}
       </ol>

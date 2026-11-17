@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatBytes } from '@/lib/format';
 import { deleteUnused } from './modelActions';
+import { t } from '@/i18n';
 
 /** 不再使用的檔案：舊版本、之前比較用的模型、中斷留下的暫存（Phase 09 版本管理）。沒有時不顯示。 */
 export function UnusedModelsCard({ items, onState }: { items: UnusedItem[]; onState: (s: ModelManagerState) => void }) {
@@ -27,8 +28,8 @@ export function UnusedModelsCard({ items, onState }: { items: UnusedItem[]; onSt
   return (
     <Card>
       <CardHeader>
-        <CardTitle>不再使用的檔案</CardTitle>
-        <CardDescription>舊版本的模型或執行程式、之前比較用的模型，或中斷留下的暫存，共 {formatBytes(total)}。目前的功能不會用到，可以刪除以節省空間。</CardDescription>
+        <CardTitle>{t('不再使用的檔案')}</CardTitle>
+        <CardDescription>{t('舊版本的模型或執行程式、之前比較用的模型，或中斷留下的暫存，共 {0}。目前的功能不會用到，可以刪除以節省空間。', formatBytes(total))}</CardDescription>
       </CardHeader>
       <CardContent>
         <ul className="flex flex-col">
@@ -36,10 +37,10 @@ export function UnusedModelsCard({ items, onState }: { items: UnusedItem[]; onSt
             <li key={i.key} className="flex items-center justify-between gap-3 border-t border-chip py-2.5 text-sm">
               <div className="min-w-0">
                 <p className="truncate font-medium">{i.label}</p>
-                <p className="text-xs text-body-gray">{i.partial ? '下載未完成的暫存・' : ''}{formatBytes(i.size_bytes)}</p>
+                <p className="text-xs text-body-gray">{i.partial ? t('下載未完成的暫存・') : ''}{formatBytes(i.size_bytes)}</p>
               </div>
               <Button size="sm" variant="secondary" onClick={() => void remove(i.key)} disabled={busy !== null}>
-                {busy === i.key ? '刪除中…' : '刪除'}
+                {busy === i.key ? t('刪除中…') : t('刪除')}
               </Button>
             </li>
           ))}

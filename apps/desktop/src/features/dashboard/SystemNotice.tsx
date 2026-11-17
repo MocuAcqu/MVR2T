@@ -7,6 +7,7 @@ import { useSystemStatus } from '@/hooks/useSystemStatus';
 import { formatBytes } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/stores/uiStore';
+import { t } from '@/i18n';
 
 /**
  * 首頁只在「有東西需要處理」時提醒；一切正常時不顯示，讓首頁保持乾淨。
@@ -20,8 +21,8 @@ export function SystemNotice({ className }: { className?: string }) {
   const [error, setError] = useState<string | null>(null);
 
   const problems: string[] = [];
-  if (backend.status === 'error') problems.push('本機後端沒有正常啟動。');
-  if (ffmpeg.status === 'done' && !ffmpeg.ffmpeg.available) problems.push('還沒安裝 FFmpeg，無法處理影音檔。');
+  if (backend.status === 'error') problems.push(t('本機後端沒有正常啟動。'));
+  if (ffmpeg.status === 'done' && !ffmpeg.ffmpeg.available) problems.push(t('還沒安裝 FFmpeg，無法處理影音檔。'));
 
   const data = models.status === 'done' ? models.data : null;
   const downloading = data ? data.packages.filter((p) => p.job) : [];
@@ -38,7 +39,7 @@ export function SystemNotice({ className }: { className?: string }) {
               <p key={p} className="font-medium">{p}</p>
             ))}
           </div>
-          <Button size="sm" onClick={() => setPage('models')}>前往模型管理</Button>
+          <Button size="sm" onClick={() => setPage('models')}>{t('前往模型管理')}</Button>
         </div>
       ) : null}
 
@@ -49,23 +50,20 @@ export function SystemNotice({ className }: { className?: string }) {
             {downloading.map((p) => (
               <div key={p.id} className="flex flex-col gap-1">
                 <p className="font-medium">
-                  {p.job?.status === 'queued' ? `${p.name}：排隊中` : `${p.name}：${p.job?.stage ?? ''}`}
+                  {p.job?.status === 'queued' ? t('{0}：排隊中', p.name) : t('{0}：{1}', p.name, p.job?.stage ?? '')}
                 </p>
-                <Progress label={`${p.name}下載進度`} value={p.job && p.job.total_bytes ? p.job.done_bytes / p.job.total_bytes : 0} />
+                <Progress label={t('{0}下載進度', p.name)} value={p.job && p.job.total_bytes ? p.job.done_bytes / p.job.total_bytes : 0} />
               </div>
             ))}
           </div>
-          <Button size="sm" variant="secondary" onClick={() => setPage('models')}>查看詳細</Button>
+          <Button size="sm" variant="secondary" onClick={() => setPage('models')}>{t('查看詳細')}</Button>
         </div>
       ) : missing.length > 0 ? (
         <div className="flex flex-wrap items-center gap-4 rounded-xl border-2 border-foreground p-4">
           <Mono animation="hint" scale={1} />
           <div className="min-w-0 flex-1 text-sm">
-            <p className="font-bold">還需要下載 AI 模型（約 {formatBytes(missingBytes)}）</p>
-            <p className="text-body-gray">
-              {missing.map((p) => p.name).join('、')}。只需下載一次，之後完全離線使用。
-              {data ? `（剩餘空間 ${formatBytes(data.free_bytes)}）` : ''}
-            </p>
+            <p className="font-bold">{t('還需要下載 AI 模型（約 {0}）', formatBytes(missingBytes))}</p>
+            <p className="text-body-gray">{t('{0}。只需下載一次，之後完全離線使用。 {1}', missing.map((p) => p.name).join(t('、')), data ? t('（剩餘空間 {0}）', formatBytes(data.free_bytes)) : '')}</p>
             {error ? <p role="alert" className="mt-1 font-medium">{error}</p> : null}
           </div>
           <div className="flex flex-wrap gap-2">
@@ -78,9 +76,9 @@ export function SystemNotice({ className }: { className?: string }) {
                   .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
               }}
             >
-              全部下載
+              {t('全部下載')}
             </Button>
-            <Button size="sm" variant="secondary" onClick={() => setPage('models')}>模型管理</Button>
+            <Button size="sm" variant="secondary" onClick={() => setPage('models')}>{t('模型管理')}</Button>
           </div>
         </div>
       ) : null}

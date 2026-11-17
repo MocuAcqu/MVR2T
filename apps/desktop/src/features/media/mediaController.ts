@@ -23,6 +23,7 @@ import {
 } from '@/services/api';
 import { fromSummary } from '@/features/mindmap/model';
 import { idleExtraction, idleSummary, idleTranscription, useSessionStore, type ImportSource } from '@/stores/sessionStore';
+import { t } from '@/i18n';
 
 const POLL_MS = 400;
 /**
@@ -57,7 +58,7 @@ const keyOf = (conn: BackendConnection) => `${conn.url}|${conn.token ?? ''}`;
 
 async function connection(): Promise<BackendConnection> {
   const conn = await getBackendConnection();
-  if (!conn) throw new ApiError(0, '本機後端尚未就緒，請稍候再試。');
+  if (!conn) throw new ApiError(0, t('本機後端尚未就緒，請稍候再試。'));
   return conn;
 }
 
@@ -105,17 +106,17 @@ export async function ensureSession(conn: BackendConnection): Promise<string> {
 /** 前端先做格式與大小檢查（後端會再檢查一次）。回傳錯誤訊息或 null。 */
 export function validateFile(file: File): string | null {
   if (!getMediaKind(file.name)) {
-    const list = MEDIA_EXTENSIONS.map((e) => e.toUpperCase()).join('、');
-    return `不支援這個檔案格式。請選擇 ${list} 其中一種。`;
+    const list = MEDIA_EXTENSIONS.map((e) => e.toUpperCase()).join(t('、'));
+    return t('不支援這個檔案格式。請選擇 {0} 其中一種。', list);
   }
-  if (file.size === 0) return '這個檔案是空的。';
-  if (file.size > MAX_MEDIA_BYTES) return `檔案太大（${formatBytes(file.size)}）。上限為 ${formatBytes(MAX_MEDIA_BYTES)}。`;
+  if (file.size === 0) return t('這個檔案是空的。');
+  if (file.size > MAX_MEDIA_BYTES) return t('檔案太大（{0}）。上限為 {1}。', formatBytes(file.size), formatBytes(MAX_MEDIA_BYTES));
   return null;
 }
 
 function messageOf(err: unknown): string {
   if (err instanceof ApiError) return err.message;
-  return '發生未預期的錯誤，請再試一次。';
+  return t('發生未預期的錯誤，請再試一次。');
 }
 
 export async function importFile(file: File): Promise<void> {
@@ -213,7 +214,7 @@ export function finishExternalImport(source: ImportSource, info: MediaInfo, tran
         ...idleTranscription,
         status: 'completed',
         progress: 1,
-        stage: '完成',
+        stage: t('完成'),
         result: {
           media_id: info.media_id,
           language: transcript.language,
@@ -248,26 +249,26 @@ async function poll(
 ): Promise<void> {
   const current = () => store()[kind].taskId === taskId;
   try {
-    const t = await getTask<unknown>(conn, sessionId, taskId);
+    const task = await getTask<unknown>(conn, sessionId, taskId);
     if (!current()) return;
-    if (t.status === 'completed' && onCompleted) await onCompleted();
+    if (task.status === 'completed' && onCompleted) await onCompleted();
     if (!current()) return;
     patchTrack(kind, {
-      status: t.status,
-      progress: t.progress,
-      stage: t.stage,
-      detail: t.detail,
-      message: t.message,
-      result: t.result,
+      status: task.status,
+      progress: task.progress,
+      stage: task.stage,
+      detail: task.detail,
+      message: task.message,
+      result: task.result,
     });
-    if (t.status === 'queued' || t.status === 'running') {
+    if (task.status === 'queued' || task.status === 'running') {
       pollTimers[kind] = setTimeout(() => void poll(kind, conn, sessionId, taskId, onCompleted), POLL_MS);
     }
   } catch (err) {
     if (!current()) return;
     const network = err instanceof ApiError && err.status === 0;
     if (network && failures < MAX_RECONNECT_ATTEMPTS) {
-      patchTrack(kind, { detail: '連線中斷，重新連線中…' });
+      patchTrack(kind, { detail: t('連線中斷，重新連線中…') });
       pollTimers[kind] = setTimeout(
         () => void poll(kind, conn, sessionId, taskId, onCompleted, failures + 1),
         RECONNECT_MS,
@@ -287,7 +288,7 @@ export async function startExtraction(): Promise<void> {
   // 例外：YouTube 影片字幕的時間依原始影片，不受影響（後端也保留）。
   const keepSubtitles = state.transcript?.source === 'subtitles';
   store().set({
-    extraction: { ...idleExtraction, status: 'starting', stage: '準備中' },
+    extraction: { ...idleExtraction, status: 'starting', stage: t('準備中') },
     ...(keepSubtitles
       ? {}
       : { transcription: idleTranscription, transcript: null, summarizing: idleSummary, summary: null, mindmap: null, summaryStale: false }),
@@ -305,7 +306,7 @@ export async function startExtraction(): Promise<void> {
 export async function cancelExtraction(): Promise<void> {
   const { sessionId, extraction } = store();
   if (!sessionId || !extraction.taskId) return;
-  store().patchExtraction({ stage: '正在取消' });
+  store().patchExtraction({ stage: t('正在取消') });
   try {
     await cancelTask(await connection(), sessionId, extraction.taskId);
   } catch {
@@ -325,7 +326,7 @@ export async function startTranscription(language: AsrLanguage | null): Promise<
   const sessionId = state.sessionId;
   stopPolling('transcription');
   store().set({
-    transcription: { ...idleTranscription, status: 'starting', stage: '準備中' },
+    transcription: { ...idleTranscription, status: 'starting', stage: t('準備中') },
     transcript: null,
     summarizing: idleSummary,
     summary: null,
@@ -348,7 +349,7 @@ export async function startTranscription(language: AsrLanguage | null): Promise<
 export async function cancelTranscription(): Promise<void> {
   const { sessionId, transcription } = store();
   if (!sessionId || !transcription.taskId) return;
-  store().patchTranscription({ stage: '正在取消' });
+  store().patchTranscription({ stage: t('正在取消') });
   try {
     await cancelTask(await connection(), sessionId, transcription.taskId);
   } catch {
@@ -367,7 +368,7 @@ export async function startSummary(types: SummaryType[]): Promise<void> {
   const mediaId = state.import.info.media_id;
   const sessionId = state.sessionId;
   stopPolling('summarizing');
-  store().set({ summarizing: { ...idleSummary, status: 'starting', stage: '準備中' }, summary: null, mindmap: null, summaryStale: false });
+  store().set({ summarizing: { ...idleSummary, status: 'starting', stage: t('準備中') }, summary: null, mindmap: null, summaryStale: false });
   try {
     const conn = await connection();
     const { task_id } = await apiStartSummary(conn, sessionId, mediaId, types);
@@ -393,7 +394,7 @@ export async function startMindmap(): Promise<void> {
   const mediaId = state.import.info.media_id;
   const sessionId = state.sessionId;
   stopPolling('summarizing');
-  store().set({ summarizing: { ...idleSummary, status: 'starting', stage: '準備中' } });
+  store().set({ summarizing: { ...idleSummary, status: 'starting', stage: t('準備中') } });
   try {
     const conn = await connection();
     const { task_id } = await apiStartMindmap(conn, sessionId, mediaId);
@@ -407,7 +408,7 @@ export async function startMindmap(): Promise<void> {
 export async function cancelSummary(): Promise<void> {
   const { sessionId, summarizing } = store();
   if (!sessionId || !summarizing.taskId) return;
-  store().patchSummarizing({ stage: '正在取消' });
+  store().patchSummarizing({ stage: t('正在取消') });
   try {
     await cancelTask(await connection(), sessionId, summarizing.taskId);
   } catch {

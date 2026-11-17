@@ -9,6 +9,7 @@ import { useYouTubeStore } from '@/features/youtube/youtubeController';
 import { formatBytes } from '@/lib/format';
 import { etaSeconds, formatEta } from './modelActions';
 import { deleteYtDlp, getBackendConnection, getYtDlp, ytDlpAction } from '@/services/api';
+import { t } from '@/i18n';
 
 const POLL_MS = 700;
 const PHASE: Record<NonNullable<YtDlpState['job']>['phase'], string> = {
@@ -19,7 +20,7 @@ const PHASE: Record<NonNullable<YtDlpState['job']>['phase'], string> = {
 
 async function conn() {
   const c = await getBackendConnection();
-  if (!c) throw new Error('本機後端尚未連線。');
+  if (!c) throw new Error(t('本機後端尚未連線。'));
   return c;
 }
 
@@ -73,27 +74,25 @@ export function YouTubeComponentCard() {
     <Card>
       <CardHeader className="gap-2">
         <div className="flex items-start justify-between gap-3">
-          <CardTitle>YouTube 下載元件</CardTitle>
+          <CardTitle>{t('YouTube 下載元件')}</CardTitle>
           {state ? (
             <Badge variant={installed ? 'solid' : 'outline'} className="shrink-0">
-              {job ? PHASE[job.phase] : installed ? (state.update_available ? '有新版本' : '已安裝') : '未安裝'}
+              {job ? t(PHASE[job.phase]) : installed ? (state.update_available ? t('有新版本') : t('已安裝')) : t('未安裝')}
             </Badge>
           ) : null}
         </div>
-        <CardDescription>
-          貼上 YouTube 網址時，只下載影片的音訊（與作者提供的字幕），之後在這台電腦上辨識與摘要。使用 yt-dlp（{state?.license ?? 'Unlicense'}）。
-        </CardDescription>
+        <CardDescription>{t('貼上 YouTube 網址時，只下載影片的音訊（與作者提供的字幕），之後在這台電腦上辨識與摘要。使用 yt-dlp（{0}）。', state?.license ?? 'Unlicense')}</CardDescription>
         <p className="text-xs text-body-gray">
-          需要網路。YouTube 經常改版，舊版本可能無法下載：無法下載時請先「檢查更新」。更新一律取官方最新版並驗證 SHA-256。
+          {t('需要網路。YouTube 經常改版，舊版本可能無法下載：無法下載時請先「檢查更新」。更新一律取官方最新版並驗證 SHA-256。')}
         </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        {!state ? <p className="text-sm text-body-gray">讀取中…</p> : null}
-        {state && !state.supported ? <p className="text-sm">這個作業系統沒有官方的 yt-dlp 執行檔。</p> : null}
+        {!state ? <p className="text-sm text-body-gray">{t('讀取中…')}</p> : null}
+        {state && !state.supported ? <p className="text-sm">{t('這個作業系統沒有官方的 yt-dlp 執行檔。')}</p> : null}
         {state && installed ? (
           <p className="text-sm">
-            目前版本 <span className="font-medium tabular-nums">{state.version}</span>
-            {state.latest_version ? <span className="text-body-gray">・最新版本 {state.latest_version}</span> : null}
+            {t('目前版本')} <span className="font-medium tabular-nums">{state.version}</span>
+            {state.latest_version ? <span className="text-body-gray">{t('・最新版本 {0}', state.latest_version)}</span> : null}
           </p>
         ) : null}
 
@@ -102,10 +101,10 @@ export function YouTubeComponentCard() {
             <Mono animation="loading" scale={1} />
             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
               <div className="flex justify-between gap-3 text-sm">
-                <span className="font-medium">{job.cancelling ? '取消中…' : PHASE[job.phase]}</span>
+                <span className="font-medium">{job.cancelling ? t('取消中…') : t(PHASE[job.phase])}</span>
                 {job.total_bytes ? <span className="tabular-nums text-body-gray">{Math.floor((job.done_bytes / job.total_bytes) * 100)}%</span> : null}
               </div>
-              <Progress label="YouTube 下載元件進度" value={job.total_bytes ? job.done_bytes / job.total_bytes : 0} indeterminate={!job.total_bytes} />
+              <Progress label={t('YouTube 下載元件進度')} value={job.total_bytes ? job.done_bytes / job.total_bytes : 0} indeterminate={!job.total_bytes} />
               {job.total_bytes ? (
                 <p className="text-xs tabular-nums text-body-gray">
                   {formatBytes(job.done_bytes)} / {formatBytes(job.total_bytes)}
@@ -123,11 +122,11 @@ export function YouTubeComponentCard() {
         ) : null}
         {error ? <p role="alert" className="text-sm font-medium">{error}</p> : null}
         {confirmDelete ? (
-          <div role="alertdialog" aria-label="確認刪除" className="flex flex-col gap-3 rounded-lg bg-chip p-4 text-sm">
-            <p>刪除後無法使用 YouTube 連結，之後可以再下載。</p>
+          <div role="alertdialog" aria-label={t('確認刪除')} className="flex flex-col gap-3 rounded-lg bg-chip p-4 text-sm">
+            <p>{t('刪除後無法使用 YouTube 連結，之後可以再下載。')}</p>
             <div className="flex gap-2">
-              <Button size="sm" onClick={() => void run(async () => deleteYtDlp(await conn()))}>刪除</Button>
-              <Button size="sm" variant="secondary" onClick={() => setConfirmDelete(false)}>取消</Button>
+              <Button size="sm" onClick={() => void run(async () => deleteYtDlp(await conn()))}>{t('刪除')}</Button>
+              <Button size="sm" variant="secondary" onClick={() => setConfirmDelete(false)}>{t('取消')}</Button>
             </div>
           </div>
         ) : null}
@@ -136,21 +135,19 @@ export function YouTubeComponentCard() {
         <CardFooter className="flex-wrap gap-2">
           {job ? (
             <Button variant="secondary" disabled={job.cancelling || job.phase !== 'downloading'} onClick={() => void run(async () => ytDlpAction(await conn(), 'cancel'))}>
-              取消
+              {t('取消')}
             </Button>
           ) : installed ? (
             <>
               {state.update_available ? (
-                <Button onClick={() => void run(async () => ytDlpAction(await conn(), 'install'))}>更新到 {state.latest_version}</Button>
+                <Button onClick={() => void run(async () => ytDlpAction(await conn(), 'install'))}>{t('更新到 {0}', state.latest_version)}</Button>
               ) : (
-                <Button variant="secondary" onClick={() => void run(async () => ytDlpAction(await conn(), 'check'))}>檢查更新</Button>
+                <Button variant="secondary" onClick={() => void run(async () => ytDlpAction(await conn(), 'check'))}>{t('檢查更新')}</Button>
               )}
-              <Button variant="ghost" className="ml-auto" onClick={() => setConfirmDelete(true)}>刪除</Button>
+              <Button variant="ghost" className="ml-auto" onClick={() => setConfirmDelete(true)}>{t('刪除')}</Button>
             </>
           ) : (
-            <Button onClick={() => void run(async () => ytDlpAction(await conn(), 'install'))}>
-              下載{state.size_bytes ? `（${formatBytes(state.size_bytes)}）` : '（約 20 MB）'}
-            </Button>
+            <Button onClick={() => void run(async () => ytDlpAction(await conn(), 'install'))}>{t('下載{0}', state.size_bytes ? t('（{0}）', formatBytes(state.size_bytes)) : t('（約 20 MB）'))}</Button>
           )}
         </CardFooter>
       ) : null}

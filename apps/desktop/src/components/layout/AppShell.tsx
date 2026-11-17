@@ -4,6 +4,7 @@ import { describeBackend, StatusDot } from '@/components/StatusDot';
 import { useSystemStatus } from '@/hooks/useSystemStatus';
 import { cn } from '@/lib/utils';
 import { useUiStore, type PageId } from '@/stores/uiStore';
+import { t } from '@/i18n';
 
 const NAV_ITEMS: { id: PageId; label: string }[] = [
   { id: 'dashboard', label: '首頁' },
@@ -36,15 +37,15 @@ export function AppShell({ children }: { children: ReactNode }) {
       <header className="sticky top-0 z-10 border-b border-chip bg-background">
         <div className="mx-auto flex h-16 w-full max-w-[1136px] items-center gap-4 px-4 sm:px-6 lg:px-8">
           {/* 吉祥物 Mono：滑鼠移過去會好奇地聞聞，點一下會 Q 彈一下 */}
-          <Mono scale={1} interactive label="Mono（吉祥物）" className="-my-1" />
+          <Mono scale={1} interactive label={t('Mono（吉祥物）')} className="-my-1" />
           <button
             onClick={() => setPage('dashboard')}
-            aria-label="MVR2T，回到首頁"
+            aria-label={t('MVR2T，回到首頁')}
             className={cn('rounded-pill text-2xl font-bold tracking-tight', focusRing)}
           >
             MVR2T
           </button>
-          <nav aria-label="主要導覽" className="flex min-w-0 flex-1 gap-2 overflow-x-auto p-1">
+          <nav aria-label={t('主要導覽')} className="flex min-w-0 flex-1 gap-2 overflow-x-auto p-1">
             {NAV_ITEMS.map((item) => (
               <button
                 key={item.id}
@@ -56,7 +57,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   page === item.id ? 'bg-foreground text-background' : 'bg-chip hover:bg-hover-gray',
                 )}
               >
-                {item.label}
+                {t(item.label)}
               </button>
             ))}
           </nav>
@@ -71,8 +72,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <footer className="bg-foreground text-muted-gray">
         <div className="mx-auto flex w-full max-w-[1136px] flex-wrap items-center justify-between gap-x-6 gap-y-1 px-4 py-4 text-sm sm:px-6 lg:px-8">
-          <p>所有處理都在這台電腦完成，檔案不會上傳。</p>
-          {app.status === 'electron' ? <p>版本 {app.info.version}</p> : null}
+          <p>{t('所有處理都在這台電腦完成，檔案不會上傳。')}</p>
+          {app.status === 'electron' ? <p>{t('版本 {0}', app.info.version)}</p> : null}
         </div>
       </footer>
     </div>

@@ -2,6 +2,7 @@ import { useEffect, type ComponentType } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
 import { useBackgroundTaskEffects } from '@/features/media/backgroundEffects';
 import { loadUiPrefs } from '@/features/settings/uiPrefs';
+import { useLang } from '@/i18n';
 import { SystemStatusProvider } from '@/hooks/useSystemStatus';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { ModelsPage } from '@/pages/ModelsPage';
@@ -20,13 +21,15 @@ const PAGES: Record<PageId, ComponentType> = {
 
 export default function App() {
   const Page = PAGES[useUiStore((s) => s.page)];
+  // 切換介面語言時重新繪製整個畫面（工作階段的資料在 store 中，不受影響）
+  const lang = useLang((s) => s.lang);
   useBackgroundTaskEffects();
   useEffect(() => {
     void loadUiPrefs();
   }, []);
   return (
     <SystemStatusProvider>
-      <AppShell>
+      <AppShell key={lang}>
         <Page />
       </AppShell>
     </SystemStatusProvider>

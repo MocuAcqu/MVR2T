@@ -4,6 +4,7 @@ import { formatDuration } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { revealTranscriptLine } from '@/features/workspace/TranscriptCard';
 import type { MindNode } from './model';
+import { t } from '@/i18n';
 
 export interface MindNodeData extends Record<string, unknown> {
   node: MindNode;
@@ -65,7 +66,7 @@ function InlineEditor({ id, text }: { id: string; text: string }) {
   return (
     <textarea
       ref={ref}
-      aria-label="節點文字"
+      aria-label={t('節點文字')}
       value={value}
       rows={1}
       maxLength={80}
@@ -112,7 +113,7 @@ export const MindNodeView = memo(function MindNodeView({ data, selected }: NodeP
       <Handle type="source" position={Position.Right} id="s-r" className={handleClass} isConnectable={false} />
 
       {node.kind === 'conclusion' ? (
-        <span className="w-fit rounded-pill bg-foreground px-2 py-px text-[11px] font-bold text-background">結論</span>
+        <span className="w-fit rounded-pill bg-foreground px-2 py-px text-[11px] font-bold text-background">{t('結論')}</span>
       ) : null}
       {editing ? <InlineEditor id={node.id} text={node.text} /> : <span>{node.text}</span>}
       {node.time && node.refs.length > 0 && node.kind !== 'central' ? (
@@ -123,7 +124,7 @@ export const MindNodeView = memo(function MindNodeView({ data, selected }: NodeP
             revealTranscriptLine(node.refs[0]);
           }}
           onDoubleClick={(e) => e.stopPropagation()}
-          title="跳到逐字稿中的這一句"
+          title={t('跳到逐字稿中的這一句')}
           className={cn(
             'nodrag w-fit rounded-pill px-2 py-px text-[11px] font-normal tabular-nums',
             dark ? 'bg-body-gray text-background' : 'bg-chip text-body-gray hover:bg-hover-gray',
@@ -142,8 +143,8 @@ export const MindNodeView = memo(function MindNodeView({ data, selected }: NodeP
             actions.toggle(node.id);
           }}
           onDoubleClick={(e) => e.stopPropagation()}
-          aria-label={hidden ? `展開 ${hidden} 個子節點` : '收合子節點'}
-          title={hidden ? `展開（${hidden}）` : '收合'}
+          aria-label={hidden ? t('展開 {0} 個子節點', hidden) : t('收合子節點')}
+          title={hidden ? t('展開（{0}）', hidden) : t('收合')}
           className={cn(
             NO_EXPORT,
             'nodrag absolute top-1/2 flex h-5 min-w-5 -translate-y-1/2 items-center justify-center rounded-pill border border-foreground bg-background px-1 text-[11px] font-bold leading-none text-foreground hover:bg-chip',

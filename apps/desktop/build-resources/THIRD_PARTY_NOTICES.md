@@ -16,7 +16,7 @@ MVR2T 在你的電腦上離線執行。以下是安裝程式內附、或第一�
 | NumPy | 數值運算 | BSD-3-Clause |
 | OpenCC | 簡體轉繁體（臺灣用語） | Apache-2.0 |
 | python-docx、lxml | Word 匯出 | MIT／BSD-3-Clause |
-| **FFmpeg**（LGPL 版，`resources/ffmpeg/`） | 讀取影音、抽取音訊 | **LGPL-3.0-or-later**（以 --enable-version3 編譯，不含 GPL 元件）。授權全文：`resources/ffmpeg/LICENSE.txt`；版本與原始碼位置：`resources/ffmpeg/SOURCE.txt`。FFmpeg 以獨立執行檔方式使用，可自行替換為其他相容版本。 |
+| **FFmpeg**（LGPL 版，`resources/ffmpeg/`；只有 Windows 版內附，macOS 請以 Homebrew 安裝） | 讀取影音、抽取音訊 | **LGPL-3.0-or-later**（以 --enable-version3 編譯，不含 GPL 元件）。授權全文：`resources/ffmpeg/LICENSE.txt`；版本與原始碼位置：`resources/ffmpeg/SOURCE.txt`。FFmpeg 以獨立執行檔方式使用，可自行替換為其他相容版本。 |
 
 ## 第一次使用時下載（模型管理）
 

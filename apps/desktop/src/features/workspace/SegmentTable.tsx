@@ -1,5 +1,6 @@
 import type { AudioSegment } from '@shared/types/api';
 import { formatTimestamp } from '@/lib/format';
+import { t } from '@/i18n';
 
 const BOUNDARY: Record<AudioSegment['boundary'], string> = {
   silence: '停頓處',
@@ -12,14 +13,14 @@ export function SegmentTable({ segments }: { segments: AudioSegment[] }) {
   return (
     <div className="max-h-96 overflow-auto rounded-lg border border-chip">
       <table className="w-full border-collapse text-sm">
-        <caption className="sr-only">音訊切段列表</caption>
+        <caption className="sr-only">{t('音訊切段列表')}</caption>
         <thead className="sticky top-0 bg-background">
           <tr className="text-left text-body-gray">
-            <th scope="col" className="px-4 py-2 font-medium">段</th>
-            <th scope="col" className="px-4 py-2 font-medium">開始</th>
-            <th scope="col" className="px-4 py-2 font-medium">結束</th>
-            <th scope="col" className="px-4 py-2 text-right font-medium">長度</th>
-            <th scope="col" className="px-4 py-2 font-medium">切點</th>
+            <th scope="col" className="px-4 py-2 font-medium">{t('段')}</th>
+            <th scope="col" className="px-4 py-2 font-medium">{t('開始')}</th>
+            <th scope="col" className="px-4 py-2 font-medium">{t('結束')}</th>
+            <th scope="col" className="px-4 py-2 text-right font-medium">{t('長度')}</th>
+            <th scope="col" className="px-4 py-2 font-medium">{t('切點')}</th>
           </tr>
         </thead>
         <tbody className="tabular-nums">
@@ -28,8 +29,8 @@ export function SegmentTable({ segments }: { segments: AudioSegment[] }) {
               <td className="px-4 py-2 font-medium">{s.index + 1}</td>
               <td className="px-4 py-2">{formatTimestamp(s.start)}</td>
               <td className="px-4 py-2">{formatTimestamp(s.end)}</td>
-              <td className="px-4 py-2 text-right">{s.duration.toFixed(1)} 秒</td>
-              <td className="px-4 py-2 text-body-gray">{BOUNDARY[s.boundary]}</td>
+              <td className="px-4 py-2 text-right">{t('{0} 秒', s.duration.toFixed(1))}</td>
+              <td className="px-4 py-2 text-body-gray">{t(BOUNDARY[s.boundary])}</td>
             </tr>
           ))}
         </tbody>

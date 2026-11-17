@@ -6,6 +6,7 @@ import { ExportFolderSetting } from '@/features/export/ExportFolderSetting';
 import { AboutCard, ComputeSettings, RecognitionSettings, StorageSettings } from '@/features/settings/SettingsCards';
 import { useGuideStore } from '@/features/guide/guideStore';
 import { cn } from '@/lib/utils';
+import { t } from '@/i18n';
 
 /** 設定（規格 §12.4）：操作引導、語言與預設模型、推論裝置與記憶體、匯出資料夾、暫存清理、關於。 */
 export function SettingsPage() {
@@ -15,15 +16,15 @@ export function SettingsPage() {
 
   return (
     <PageContainer>
-      <h1 className="text-h1">設定</h1>
+      <h1 className="text-h1">{t('設定')}</h1>
       <div className="mt-6 grid items-start gap-6 md:grid-cols-2">
         <div className="flex min-w-0 flex-col gap-6">
         <Card>
           <CardHeader className="flex-row items-center gap-4 pb-6">
             <Mono animation="hint" scale={2} />
             <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <CardTitle id={`${id}-title`}>操作引導</CardTitle>
-              <CardDescription>開啟時，每完成一步，下一個按鈕會發光，Mono 會說明接下來要做什麼。不需要時可以在這裡關閉。</CardDescription>
+              <CardTitle id={`${id}-title`}>{t('操作引導')}</CardTitle>
+              <CardDescription>{t('開啟時，每完成一步，下一個按鈕會發光，Mono 會說明接下來要做什麼。不需要時可以在這裡關閉。')}</CardDescription>
             </div>
             <button
               type="button"

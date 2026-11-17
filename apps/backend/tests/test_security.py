@@ -1,4 +1,5 @@
 """Phase 03: one-time session token + CORS for the Electron window."""
+import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
@@ -81,3 +82,14 @@ def test_dev_mode_without_token_keeps_docs():
     client = TestClient(create_app(Settings(auth_token="")))
     assert client.get("/api/health").status_code == 200
     assert client.get("/api/docs").status_code == 200
+
+
+@pytest.mark.parametrize("method", ["GET", "POST", "PUT", "DELETE"])
+def test_preflight_allows_every_method_the_app_uses(method):
+    """PUT（逐字稿編輯、設定頁）曾被 CORS 擋下（2026-11-18 Windows 驗收，本機 f663ba0）：前端用到的方法都要允許。"""
+    res = make_client().options(
+        "/api/transcript",
+        headers={"Origin": "null", "Access-Control-Request-Method": method, "Access-Control-Request-Headers": "authorization,content-type"},
+    )
+    assert res.status_code == 200, (method, res.text)
+    assert method in res.headers.get("access-control-allow-methods", "")

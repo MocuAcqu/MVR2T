@@ -16,17 +16,17 @@ describe('prefs', () => {
   });
 
   it('starts empty, saves and merges', async () => {
-    expect(await loadPrefs(file)).toEqual({ lastExportFolder: null, fixedExportFolder: null, youtubeNoticeAccepted: false, asrLanguage: 'auto' });
+    expect(await loadPrefs(file)).toEqual({ lastExportFolder: null, fixedExportFolder: null, youtubeNoticeAccepted: false, asrLanguage: 'auto', language: null });
     await savePrefs(file, { lastExportFolder: dir });
-    expect(await savePrefs(file, { fixedExportFolder: dir, youtubeNoticeAccepted: false, asrLanguage: 'auto' })).toEqual({ lastExportFolder: dir, fixedExportFolder: dir, youtubeNoticeAccepted: false, asrLanguage: 'auto' });
-    expect(await loadPrefs(file)).toEqual({ lastExportFolder: dir, fixedExportFolder: dir, youtubeNoticeAccepted: false, asrLanguage: 'auto' });
+    expect(await savePrefs(file, { fixedExportFolder: dir, youtubeNoticeAccepted: false, asrLanguage: 'auto', language: null })).toEqual({ lastExportFolder: dir, fixedExportFolder: dir, youtubeNoticeAccepted: false, asrLanguage: 'auto', language: null });
+    expect(await loadPrefs(file)).toEqual({ lastExportFolder: dir, fixedExportFolder: dir, youtubeNoticeAccepted: false, asrLanguage: 'auto', language: null });
   });
 
   it('ignores a broken file and relative or non-string paths', async () => {
     await writeFile(file, '{ not json');
-    expect(await loadPrefs(file)).toEqual({ lastExportFolder: null, fixedExportFolder: null, youtubeNoticeAccepted: false, asrLanguage: 'auto' });
+    expect(await loadPrefs(file)).toEqual({ lastExportFolder: null, fixedExportFolder: null, youtubeNoticeAccepted: false, asrLanguage: 'auto', language: null });
     await writeFile(file, JSON.stringify({ lastExportFolder: 'relative/x', fixedExportFolder: 5, transcript: 'never stored' }));
-    expect(await loadPrefs(file)).toEqual({ lastExportFolder: null, fixedExportFolder: null, youtubeNoticeAccepted: false, asrLanguage: 'auto' });
+    expect(await loadPrefs(file)).toEqual({ lastExportFolder: null, fixedExportFolder: null, youtubeNoticeAccepted: false, asrLanguage: 'auto', language: null });
   });
 
   it('remembers the YouTube notice only when it is exactly true', async () => {
@@ -41,6 +41,13 @@ describe('prefs', () => {
     expect((await loadPrefs(file)).asrLanguage).toBe('Japanese');
     await writeFile(file, JSON.stringify({ asrLanguage: 'Klingon' }));
     expect((await loadPrefs(file)).asrLanguage).toBe('auto');
+  });
+
+  it('keeps only a known interface language', async () => {
+    await savePrefs(file, { language: 'en' });
+    expect((await loadPrefs(file)).language).toBe('en');
+    await writeFile(file, JSON.stringify({ language: 'fr' }));
+    expect((await loadPrefs(file)).language).toBeNull();
   });
 
   it('checks that a folder still exists', async () => {

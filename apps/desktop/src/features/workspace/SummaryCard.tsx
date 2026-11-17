@@ -15,6 +15,7 @@ import { formatDuration, formatPercent } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { MemoryNote } from '@/features/workspace/MemoryNote';
 import { useSessionStore } from '@/stores/sessionStore';
+import { t } from '@/i18n';
 
 export const SUMMARY_TYPES: { value: SummaryType; label: string; hint: string }[] = [
   { value: 'overview', label: '全文摘要', hint: '一段話說明內容與結論' },
@@ -26,10 +27,10 @@ export const SUMMARY_TYPES: { value: SummaryType; label: string; hint: string }[
   { value: 'qa', label: '問題與結論', hint: '討論的問題與結論' },
   { value: 'mindmap', label: '心智圖', hint: '從中心主題向左右展開，顯示在下方，可以編輯與匯出' },
 ];
-const LABEL = Object.fromEntries(SUMMARY_TYPES.map((t) => [t.value, t.label])) as Record<SummaryType, string>;
+const LABEL = Object.fromEntries(SUMMARY_TYPES.map((ty) => [ty.value, ty.label])) as Record<SummaryType, string>;
 const DEFAULT_TYPES: SummaryType[] = ['overview', 'key_points', 'keywords', 'action_items', 'mindmap'];
 /** 心智圖顯示在自己的卡片（MindMapCard），不在摘要分頁中 */
-const tabTypes = (summary: Summary) => summary.types.filter((t) => t !== 'mindmap');
+const tabTypes = (summary: Summary) => summary.types.filter((ty) => ty !== 'mindmap');
 
 /** 時間標籤：點一下捲動到逐字稿中對應的句子。 */
 function TimeChip({ time, refs }: { time: TimeSpan | null; refs: number[] }) {
@@ -38,7 +39,7 @@ function TimeChip({ time, refs }: { time: TimeSpan | null; refs: number[] }) {
     <button
       type="button"
       onClick={() => revealTranscriptLine(refs[0])}
-      title="跳到逐字稿中的這一句"
+      title={t('跳到逐字稿中的這一句')}
       className="ml-2 inline-flex shrink-0 items-center rounded-pill bg-chip px-2 py-0.5 align-middle text-xs tabular-nums text-body-gray hover:bg-hover-gray focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
     >
       {formatDuration(Math.floor(time.start))}
@@ -47,7 +48,7 @@ function TimeChip({ time, refs }: { time: TimeSpan | null; refs: number[] }) {
 }
 
 function Empty() {
-  return <p className="text-sm text-body-gray">內容中沒有找到這一類的項目。</p>;
+  return <p className="text-sm text-body-gray">{t('內容中沒有找到這一類的項目。')}</p>;
 }
 
 function SummaryBody({ summary, type }: { summary: Summary; type: SummaryType }) {
@@ -95,13 +96,13 @@ function SummaryBody({ summary, type }: { summary: Summary; type: SummaryType })
     case 'topics':
       body = r.topics?.length ? (
         <ul className="grid gap-3 sm:grid-cols-2">
-          {r.topics.map((t, i) => (
+          {r.topics.map((ty, i) => (
             <li key={i} className="rounded-lg bg-chip p-4">
               <p className="font-bold">
-                {t.title}
-                <TimeChip time={t.time} refs={t.refs} />
+                {ty.title}
+                <TimeChip time={ty.time} refs={ty.refs} />
               </p>
-              <p className="mt-1 text-sm text-body-gray">{t.description}</p>
+              <p className="mt-1 text-sm text-body-gray">{ty.description}</p>
             </li>
           ))}
         </ul>
@@ -131,9 +132,7 @@ function SummaryBody({ summary, type }: { summary: Summary; type: SummaryType })
                 {a.task}
                 <TimeChip time={a.time} refs={a.refs} />
               </p>
-              <p className="text-sm text-body-gray">
-                負責：{a.owner || '未指定'}　期限：{a.due || '未提到'}
-              </p>
+              <p className="text-sm text-body-gray">{t('負責：{0}　期限：{1}', a.owner || t('未指定'), a.due || t('未提到'))}</p>
             </li>
           ))}
         </ul>
@@ -159,7 +158,7 @@ function SummaryBody({ summary, type }: { summary: Summary; type: SummaryType })
       );
       break;
   }
-  return <div role="tabpanel" aria-label={LABEL[type]}>{body}</div>;
+  return <div role="tabpanel" aria-label={t(LABEL[type])}>{body}</div>;
 }
 
 /** 摘要：勾選要產生的內容 → 本機 LLM（llama.cpp）產生，長逐字稿分段後階層式整合（PROJECT_SPEC Phase 06）。 */
@@ -173,52 +172,52 @@ export function SummaryCard() {
 
   const ready = !!transcript && transcript.segments.length > 0;
   const busy = s.status === 'starting' || s.status === 'queued' || s.status === 'running';
-  const loadingModel = busy && (s.status === 'starting' || s.stage.includes('載入'));
+  const loadingModel = busy && (s.status === 'starting' || /載入|Loading/.test(s.stage));
   const tabs: SummaryType[] = summary ? tabTypes(summary) : [];
   const activeTab = tab && tabs.includes(tab) ? tab : (tabs[0] ?? null);
 
-  const toggle = (t: SummaryType) => setTypes((cur) => (cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t]));
+  const toggle = (ty: SummaryType) => setTypes((cur) => (cur.includes(ty) ? cur.filter((x) => x !== ty) : [...cur, ty]));
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>摘要</CardTitle>
-        <CardDescription>在這台電腦上以本機語言模型整理逐字稿；只根據逐字稿內容，不會上傳，也不需要網路。</CardDescription>
+        <CardTitle>{t('摘要')}</CardTitle>
+        <CardDescription>{t('在這台電腦上以本機語言模型整理逐字稿；只根據逐字稿內容，不會上傳，也不需要網路。')}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        {!ready ? <p className="text-sm text-body-gray">請先完成「語音辨識」，再產生摘要。</p> : null}
+        {!ready ? <p className="text-sm text-body-gray">{t('請先完成「語音辨識」，再產生摘要。')}</p> : null}
         {ready ? <MemoryNote kind="llm" active={busy} /> : null}
         {summary && stale && !busy ? (
           <p role="status" className="rounded-lg border border-foreground px-4 py-3 text-sm">
-            逐字稿已修改：目前的摘要與心智圖是依修改前的內容產生的。需要時請按「產生摘要」重新產生。
+            {t('逐字稿已修改：目前的摘要與心智圖是依修改前的內容產生的。需要時請按「產生摘要」重新產生。')}
           </p>
         ) : null}
 
         <fieldset disabled={!ready || busy} className="disabled:opacity-40">
-          <legend className="mb-2 text-sm font-medium">要產生的內容</legend>
+          <legend className="mb-2 text-sm font-medium">{t('要產生的內容')}</legend>
           <div className="flex flex-wrap gap-2">
-            {SUMMARY_TYPES.map((t) => {
-              const on = types.includes(t.value);
+            {SUMMARY_TYPES.map((ty) => {
+              const on = types.includes(ty.value);
               return (
                 <button
-                  key={t.value}
+                  key={ty.value}
                   type="button"
                   role="checkbox"
                   aria-checked={on}
-                  title={t.hint}
-                  onClick={() => toggle(t.value)}
+                  title={t(ty.hint)}
+                  onClick={() => toggle(ty.value)}
                   className={cn(
                     'rounded-pill px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2',
                     on ? 'bg-foreground text-background' : 'bg-chip hover:bg-hover-gray',
                   )}
                 >
                   {on ? '✓ ' : ''}
-                  {t.label}
+                  {t(ty.label)}
                 </button>
               );
             })}
           </div>
-          <p className="mt-2 text-xs text-body-gray">勾選越多，需要的時間越長（每一種約需 1～3 分鐘，依電腦效能而定）。</p>
+          <p className="mt-2 text-xs text-body-gray">{t('勾選越多，需要的時間越長（每一種約需 1～3 分鐘，依電腦效能而定）。')}</p>
         </fieldset>
 
         {busy ? (
@@ -228,16 +227,16 @@ export function SummaryCard() {
             <div className="flex min-w-0 flex-1 flex-col gap-2" aria-live="polite">
               <div className="flex justify-between gap-4 text-sm">
                 <span className="font-medium">
-                  {s.stage || '準備中'}
+                  {s.stage || t('準備中')}
                   {s.detail ? <span className="ml-2 font-normal text-body-gray">{s.detail}</span> : null}
                 </span>
                 {loadingModel ? null : <span className="tabular-nums text-body-gray">{formatPercent(s.progress)}</span>}
               </div>
-              <Progress label="摘要進度" value={s.progress} indeterminate={loadingModel} />
+              <Progress label={t('摘要進度')} value={s.progress} indeterminate={loadingModel} />
               <p className="text-xs text-body-gray">
                 {loadingModel
-                  ? '正在把摘要模型載入記憶體（約 2.5 GB），第一次需要一些時間。'
-                  : '長錄音會先分段閱讀，再整合成完整的摘要。完成時如果你正在用其他程式，會跳出系統通知。'}
+                  ? t('正在把摘要模型載入記憶體（約 2.5 GB），第一次需要一些時間。')
+                  : t('長錄音會先分段閱讀，再整合成完整的摘要。完成時如果你正在用其他程式，會跳出系統通知。')}
               </p>
               <KeepAwakeNote />
             </div>
@@ -247,35 +246,35 @@ export function SummaryCard() {
         {s.status === 'failed' ? (
           <div className="flex items-center gap-3 rounded-lg bg-chip p-4">
             <Mono animation="error" scale={1} />
-            <p role="alert" className="text-sm font-medium">{s.message ?? '摘要失敗。'}</p>
+            <p role="alert" className="text-sm font-medium">{s.message ?? t('摘要失敗。')}</p>
           </div>
         ) : null}
-        {s.status === 'cancelled' ? <p role="status" className="text-sm text-body-gray">已取消產生摘要。</p> : null}
+        {s.status === 'cancelled' ? <p role="status" className="text-sm text-body-gray">{t('已取消產生摘要。')}</p> : null}
 
         {summary && activeTab ? (
           <div className="flex flex-col gap-4">
-            <div role="tablist" aria-label="摘要內容" className="flex flex-wrap gap-2">
-              {tabs.map((t) => (
+            <div role="tablist" aria-label={t('摘要內容')} className="flex flex-wrap gap-2">
+              {tabs.map((ty) => (
                 <button
-                  key={t}
+                  key={ty}
                   type="button"
                   role="tab"
-                  aria-selected={t === activeTab}
-                  onClick={() => setTab(t)}
+                  aria-selected={ty === activeTab}
+                  onClick={() => setTab(ty)}
                   className={cn(
                     'rounded-pill px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2',
-                    t === activeTab ? 'bg-foreground text-background' : 'bg-chip hover:bg-hover-gray',
+                    ty === activeTab ? 'bg-foreground text-background' : 'bg-chip hover:bg-hover-gray',
                   )}
                 >
-                  {LABEL[t]}
+                  {t(LABEL[ty])}
                 </button>
               ))}
             </div>
             <SummaryBody summary={summary} type={activeTab} />
             <p className="text-xs text-body-gray">
-              由本機模型產生，可能有錯誤或遺漏，重要內容請對照逐字稿確認。
-              {summary.chunks > 1 ? `逐字稿分成 ${summary.chunks} 段閱讀後整合。` : ''}處理 {formatDuration(summary.elapsed_seconds)}
-              {summary.device ? `（${summary.device === 'cpu' ? 'CPU' : summary.device === 'cuda' ? 'NVIDIA GPU' : 'Apple GPU'}）` : ''}。
+              {t('由本機模型產生，可能有錯誤或遺漏，重要內容請對照逐字稿確認。')}
+              {summary.chunks > 1 ? t('逐字稿分成 {0} 段閱讀後整合。', summary.chunks) : ''}{t('處理')} {formatDuration(summary.elapsed_seconds)}
+              {summary.device ? t('（{0}）', summary.device === 'cpu' ? 'CPU' : summary.device === 'cuda' ? 'NVIDIA GPU' : 'Apple GPU') : ''}{t('。')}
               {summary.device_note ? <span className="mt-1 block">{summary.device_note}</span> : null}
             </p>
           </div>
@@ -287,18 +286,18 @@ export function SummaryCard() {
       <CardFooter className="flex-wrap">
         {busy ? (
           <Button variant="secondary" onClick={() => void cancelSummary()} disabled={s.status === 'starting'}>
-            取消
+            {t('取消')}
           </Button>
         ) : (
           <GuideTarget step="summarize">
             <Button onClick={() => void startSummary(types)} disabled={!ready || types.length === 0}>
-              {s.status === 'completed' ? '重新產生摘要' : s.status === 'idle' ? '產生摘要' : '再試一次'}
+              {s.status === 'completed' ? t('重新產生摘要') : s.status === 'idle' ? t('產生摘要') : t('再試一次')}
             </Button>
           </GuideTarget>
         )}
         {summary && !busy ? (
           <Button variant="secondary" className="ml-auto" onClick={() => useExportUi.getState().openPanel(['summary'])}>
-            匯出
+            {t('匯出')}
           </Button>
         ) : null}
       </CardFooter>

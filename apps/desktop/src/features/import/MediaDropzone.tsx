@@ -10,9 +10,10 @@ import { useSessionStore, type ImportSource } from '@/stores/sessionStore';
 import { Mono } from '@/components/mono/Mono';
 import { GuideCoach } from '@/features/guide/GuideCoach';
 import { GuideTarget } from '@/features/guide/GuideTarget';
+import { t } from '@/i18n';
 
 const ACCEPT = MEDIA_EXTENSIONS.map((e) => `.${e}`).join(',');
-const list = (items: readonly string[]) => items.map((e) => e.toUpperCase()).join('、');
+const list = (items: readonly string[]) => items.map((e) => e.toUpperCase()).join(t('、'));
 
 function FileSummary({ file, duration }: { file: ImportSource; duration?: number }) {
   const kind = getMediaKind(file.name);
@@ -22,10 +23,7 @@ function FileSummary({ file, duration }: { file: ImportSource; duration?: number
       <Icon className="size-6 shrink-0" aria-hidden="true" />
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium" title={file.name}>{file.name}</p>
-        <p className="text-sm text-body-gray">
-          {kind === 'audio' ? '音訊' : '影片'}，{getExtension(file.name).toUpperCase()}，{formatBytes(file.size)}
-          {duration !== undefined ? `，長度 ${formatDuration(duration)}` : ''}
-        </p>
+        <p className="text-sm text-body-gray">{t('{0}，{1}，{2} {3}', kind === 'audio' ? t('音訊') : t('影片'), getExtension(file.name).toUpperCase(), formatBytes(file.size), duration !== undefined ? t('，長度 {0}', formatDuration(duration)) : '')}</p>
       </div>
     </div>
   );
@@ -76,18 +74,18 @@ export function MediaDropzone({ onOpenWorkspace }: { onOpenWorkspace: () => void
         <Mono animation={uploading ? 'loading' : 'video'} scale={2} />
         <div className="flex min-w-0 flex-1 flex-col gap-2" aria-live="polite">
           <div className="flex justify-between text-sm">
-            <span className="font-medium">{uploading ? '正在複製到工作階段' : '正在檢查檔案'}</span>
+            <span className="font-medium">{uploading ? t('正在複製到工作階段') : t('正在檢查檔案')}</span>
             {uploading ? <span className="tabular-nums text-body-gray">{formatPercent(state.progress)}</span> : null}
           </div>
           <Progress
-            label={uploading ? '複製進度' : '檢查檔案中'}
+            label={uploading ? t('複製進度') : t('檢查檔案中')}
             value={uploading ? state.progress : undefined}
             indeterminate={!uploading}
           />
         </div>
         </div>
         <div>
-          <Button variant="secondary" onClick={cancelImport}>取消</Button>
+          <Button variant="secondary" onClick={cancelImport}>{t('取消')}</Button>
         </div>
       </div>
     );
@@ -100,10 +98,10 @@ export function MediaDropzone({ onOpenWorkspace }: { onOpenWorkspace: () => void
         <FileSummary file={state.file} duration={state.info.duration} />
         <div className="flex flex-wrap gap-2">
           <GuideTarget step="open-workspace">
-            <Button onClick={onOpenWorkspace}>開啟工作區</Button>
+            <Button onClick={onOpenWorkspace}>{t('開啟工作區')}</Button>
           </GuideTarget>
-          <Button variant="secondary" onClick={pick}>更換檔案</Button>
-          <Button variant="ghost" onClick={() => void removeMedia()}>移除</Button>
+          <Button variant="secondary" onClick={pick}>{t('更換檔案')}</Button>
+          <Button variant="ghost" onClick={() => void removeMedia()}>{t('移除')}</Button>
         </div>
         <GuideCoach step="open-workspace" />
       </div>
@@ -125,11 +123,9 @@ export function MediaDropzone({ onOpenWorkspace }: { onOpenWorkspace: () => void
         <span className="flex size-12 items-center justify-center rounded-full bg-chip">
           <Upload className="size-5" aria-hidden="true" />
         </span>
-        <p className="text-lg font-medium">{dragging ? '放開以匯入' : '把影片或錄音拖到這裡'}</p>
-        <Button onClick={pick}>選擇檔案</Button>
-        <p className="max-w-xs text-xs text-body-gray">
-          影片：{list(VIDEO_EXTENSIONS)}。音訊：{list(AUDIO_EXTENSIONS)}。
-        </p>
+        <p className="text-lg font-medium">{dragging ? t('放開以匯入') : t('把影片或錄音拖到這裡')}</p>
+        <Button onClick={pick}>{t('選擇檔案')}</Button>
+        <p className="max-w-xs text-xs text-body-gray">{t('影片：{0}。音訊：{1}。', list(VIDEO_EXTENSIONS), list(AUDIO_EXTENSIONS))}</p>
       </div>
       {state.status === 'error' ? <p role="alert" className="text-sm font-medium">{state.message}</p> : null}
     </div>

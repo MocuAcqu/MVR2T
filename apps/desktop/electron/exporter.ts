@@ -9,6 +9,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { EXPORT_FORMATS, EXPORT_LABELS } from '@shared/constants/app';
 import type { ExportContent, ExportFormat, ExportItem, ExportItemResult } from '@shared/types/ipc';
+import { mt } from './i18n';
 
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const SUMMARY_TYPES = ['overview', 'key_points', 'notes', 'topics', 'keywords', 'action_items', 'qa', 'mindmap'] as const;
@@ -123,7 +124,7 @@ export async function uniquePath(folder: string, fileName: string, taken = new S
       return candidate;
     }
   }
-  throw new Error('同名檔案太多');
+  throw new Error(mt('同名檔案太多'));
 }
 
 // ---------------------------------------------------------------------------
@@ -159,10 +160,10 @@ export async function renameWithRetry(
 export function friendlyError(err: unknown): string {
   const code = errCode(err);
   if (code === 'EPERM' || code === 'EACCES') {
-    return '無法寫入檔案，可能被防毒軟體（例如勒索軟體防護）阻擋，或資料夾沒有寫入權限。請在防毒軟體中允許 MVR2T，再按「重新匯出失敗的項目」。';
+    return mt('無法寫入檔案，可能被防毒軟體（例如勒索軟體防護）阻擋，或資料夾沒有寫入權限。請在防毒軟體中允許 MVR2T，再按「重新匯出失敗的項目」。');
   }
-  if (code === 'EBUSY') return '檔案正被其他程式使用，請關閉後再按「重新匯出失敗的項目」。';
-  if (code === 'ENOSPC') return '磁碟空間不足。';
+  if (code === 'EBUSY') return mt('檔案正被其他程式使用，請關閉後再按「重新匯出失敗的項目」。');
+  if (code === 'ENOSPC') return mt('磁碟空間不足。');
   return err instanceof Error ? err.message : String(err);
 }
 
@@ -183,7 +184,7 @@ async function backendError(res: Response): Promise<string> {
   } catch {
     // ignore
   }
-  return `後端回應 ${res.status}`;
+  return mt('後端回應 {0}', res.status);
 }
 
 /** 依序匯出每個項目；單一項目失敗不影響其他項目。寫入時先寫 .partial，完成後才改名。 */
@@ -214,7 +215,7 @@ export async function runExport(req: ParsedExport, folder: string, deps: ExportD
       partial = `${target}.partial`;
       if (item.content === 'mindmap') {
         const data = item.format === 'png' ? (req.mindmapPng ? Buffer.from(req.mindmapPng, 'base64') : null) : req.mindmapSvg;
-        if (!data) throw new Error('還沒有心智圖。');
+        if (!data) throw new Error(mt('還沒有心智圖。'));
         await writeFile(partial, data);
       } else if (item.format === 'pdf') {
         const res = await fromBackend(item, 'html');

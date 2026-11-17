@@ -17,6 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { BACKEND_READY_MARKER } from '@shared/constants/app';
 import type { BackendState } from '@shared/types/ipc';
+import { mt } from './i18n';
 
 // ---------------------------------------------------------------------------
 // 1. 找出要執行的後端指令
@@ -50,7 +51,7 @@ export function resolveBackendCommand(opts: ResolveOptions): ResolveResult {
   if (opts.isPackaged) {
     // Phase 11 / 12：PyInstaller onedir 輸出會放在 resources/backend/。
     const exe = p.join(opts.resourcesPath, 'backend', opts.platform === 'win32' ? 'mvr2t-backend.exe' : 'mvr2t-backend');
-    if (!exists(exe)) return { ok: false, message: `安裝檔缺少後端程式：${exe}。請重新安裝 MVR2T。` };
+    if (!exists(exe)) return { ok: false, message: mt('安裝檔缺少後端程式：{0}。請重新安裝 MVR2T。', exe) };
     return { ok: true, cmd: { command: exe, args: [], cwd: p.dirname(exe) } };
   }
 
@@ -63,7 +64,7 @@ export function resolveBackendCommand(opts: ResolveOptions): ResolveResult {
   if (!exists(python)) {
     return {
       ok: false,
-      message: `找不到後端的 Python：${python}。請依 README 在 apps/backend 建立 .venv（Python 3.11）並安裝 requirements/dev.txt。`,
+      message: mt('找不到後端的 Python：{0}。請依 README 在 apps/backend 建立 .venv（Python 3.11）並安裝 requirements/dev.txt。', python),
     };
   }
   // `-m app.main`：Python 以 cwd 作為匯入根目錄，所以 cwd 必須是 apps/backend。
@@ -217,7 +218,7 @@ export class BackendManager {
         windowsHide: true,
       });
     } catch (err) {
-      this.setState({ phase: 'error', message: `無法啟動後端：${(err as Error).message}` });
+      this.setState({ phase: 'error', message: mt('無法啟動後端：{0}', (err as Error).message) });
       return this.getState();
     }
     this.child = child;
@@ -237,7 +238,7 @@ export class BackendManager {
         if (gen !== this.generation || this.state.phase !== 'starting') return;
         this.setState({
           phase: 'error',
-          message: `後端在 ${Math.round(this.opts.startupTimeoutMs / 1000)} 秒內沒有就緒。`,
+          message: mt('後端在 {0} 秒內沒有就緒。', Math.round(this.opts.startupTimeoutMs / 1000)),
         });
         void this.stop().then(finish);
       }, this.opts.startupTimeoutMs);
@@ -247,7 +248,7 @@ export class BackendManager {
         child.once('error', (err) => {
           if (gen !== this.generation) return;
           this.child = null;
-          this.setState({ phase: 'error', pid: null, url: null, token: null, message: `無法啟動後端：${err.message}` });
+          this.setState({ phase: 'error', pid: null, url: null, token: null, message: mt('無法啟動後端：{0}', err.message) });
           resolveExit();
           finish();
         });
@@ -263,7 +264,7 @@ export class BackendManager {
               pid: null,
               url: null,
               token: null,
-              message: `後端意外結束（${signal ? `訊號 ${signal}` : `代碼 ${code ?? '未知'}`}）。`,
+              message: mt('後端意外結束（{0}）。', signal ? mt('訊號 {0}', signal) : mt('代碼 {0}', code ?? mt('未知'))),
             });
           }
           resolveExit();

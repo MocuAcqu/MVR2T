@@ -10,6 +10,7 @@
 # - uvicorn 依設定動態載入 loop／protocol 模組。
 # - 排除用不到的大型套件（tkinter、測試、開發工具），縮小安裝檔。
 import os
+import sys
 
 from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_submodules, copy_metadata
 
@@ -68,7 +69,8 @@ exe = EXE(
     strip=False,
     upx=False,  # UPX 壓縮常被防毒軟體誤判，也會拖慢啟動
     console=True,  # 由 Electron 以 CREATE_NO_WINDOW 啟動，不會出現視窗；需要 stdin／stdout 管線
-    icon=os.path.join(BACKEND, "..", "desktop", "build", "icon.ico"),
+    # .ico 只用於 Windows；macOS 的後端是 .app 裡的命令列程式，不需要圖示（避免 PyInstaller 轉換 .ico 需要 Pillow）
+    icon=os.path.join(BACKEND, "..", "desktop", "build", "icon.ico") if sys.platform == "win32" else None,
 )
 coll = COLLECT(
     exe,

@@ -17,8 +17,12 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
 
 from app.api.router import api_router
+from app.core import i18n
 from app.core.config import APP_NAME, APP_VERSION, READY_MARKER, Settings, settings
 from app.core.security import TokenAuthMiddleware
 from app.services.tasks import TaskManager
@@ -27,6 +31,28 @@ from app.services.transcribe import default_engines
 from app.models.manager import ModelManager
 from app.models.ytdlp import YtDlpComponent
 from app.session.manager import SessionManager
+
+
+class LanguageMiddleware(BaseHTTPMiddleware):
+    """英文介面：前端帶 X-MVR2T-Lang: en 時，把給畫面看的訊息翻成英文（app/core/i18n.py）。不碰逐字稿與摘要內容。"""
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        response = await call_next(request)
+        if not i18n.wants_english(request.headers):
+            return response
+        path = request.url.path
+        if not (response.status_code >= 400 or path.startswith(i18n.TRANSLATED_PREFIXES)):
+            return response
+        if not response.headers.get("content-type", "").startswith("application/json"):
+            return response
+        body = b"".join([chunk async for chunk in response.body_iterator])  # type: ignore[attr-defined]
+        try:
+            data = json.loads(body)
+        except ValueError:
+            return Response(body, status_code=response.status_code, headers=dict(response.headers))
+        data = i18n.translate_json(data, "en")
+        headers = {k: v for k, v in response.headers.items() if k.lower() != "content-length"}
+        return JSONResponse(data, status_code=response.status_code, headers=headers)
 
 
 def create_app(cfg: Settings = settings) -> FastAPI:
@@ -57,13 +83,14 @@ def create_app(cfg: Settings = settings) -> FastAPI:
 
     # 注意順序：Starlette 最後加入的 middleware 在最外層。
     # 先加憑證驗證、再加 CORS，讓 CORS 在最外層：preflight 先被處理，401 回應也帶有 CORS 標頭。
+    app.add_middleware(LanguageMiddleware)
     if cfg.auth_required:
         app.add_middleware(TokenAuthMiddleware, token=cfg.auth_token)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cfg.allowed_origins,
         allow_methods=["GET", "POST", "PUT", "DELETE"],  # PUT：逐字稿編輯、設定頁
-        allow_headers=["Authorization", "Content-Type"],
+        allow_headers=["Authorization", "Content-Type", "X-MVR2T-Lang"],
     )
 
     app.state.settings = cfg

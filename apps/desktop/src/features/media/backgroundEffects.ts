@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import type { AppNotification } from '@shared/types/ipc';
 import { formatDuration } from '@/lib/format';
 import { useSessionStore } from '@/stores/sessionStore';
+import { t } from '@/i18n';
 
 type SessionSnapshot = ReturnType<typeof useSessionStore.getState>;
 
@@ -26,11 +27,11 @@ export function transcriptionNotification(
   if (!ACTIVE.has(prev.transcription.status)) return null;
   const file = next.import.status === 'ready' ? next.import.info.filename : '';
   if (next.transcription.status === 'completed' && next.transcript) {
-    const audio = next.transcription.result ? `，音訊 ${formatDuration(next.transcription.result.audio_seconds)}` : '';
-    return { title: '逐字稿完成', body: `${file ? `${file}：` : ''}共 ${next.transcript.segments.length} 句${audio}。` };
+    const audio = next.transcription.result ? t('，音訊 {0}', formatDuration(next.transcription.result.audio_seconds)) : '';
+    return { title: t('逐字稿完成'), body: t('{0}共 {1} 句{2}。', file ? t('{0}：', file) : '', next.transcript.segments.length, audio) };
   }
   if (next.transcription.status === 'failed') {
-    return { title: '語音辨識失敗', body: next.transcription.message ?? '請回到 MVR2T 查看原因。' };
+    return { title: t('語音辨識失敗'), body: next.transcription.message ?? t('請回到 MVR2T 查看原因。') };
   }
   return null;
 }
@@ -43,10 +44,10 @@ export function summaryNotification(
   if (!ACTIVE.has(prev.summarizing.status)) return null;
   const file = next.import.status === 'ready' ? next.import.info.filename : '';
   if (next.summarizing.status === 'completed' && next.summary) {
-    return { title: '摘要完成', body: `${file ? `${file}：` : ''}已產生 ${next.summary.types.length} 種摘要內容。` };
+    return { title: t('摘要完成'), body: t('{0}已產生 {1} 種摘要內容。', file ? t('{0}：', file) : '', next.summary.types.length) };
   }
   if (next.summarizing.status === 'failed') {
-    return { title: '摘要失敗', body: next.summarizing.message ?? '請回到 MVR2T 查看原因。' };
+    return { title: t('摘要失敗'), body: next.summarizing.message ?? t('請回到 MVR2T 查看原因。') };
   }
   return null;
 }

@@ -61,7 +61,9 @@ LLAMA_CPP = LlamaCppRelease(
         # 由使用者電腦上的 Claude Code 從 GitHub API 的 digest 取得（2026-11-14，本機 bbde9ae）。
         RuntimeAsset("win-cuda-12.4-x64", "llama-b11312-bin-win-cuda-12.4-x64.zip", 263389010, "c7e67ed12791e31e21aba6a15856bade791586e4a1cefa313ea207f441089133"),
         RuntimeAsset("win-cuda-12.4-x64:cudart", "cudart-llama-bin-win-cuda-12.4-x64.zip", 391443627, "8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6"),
-        # macOS（.tar.gz，內建 Metal）在 Phase 11 打包時補上
+        # macOS Apple Silicon（.tar.gz，內建 Metal）。數值由使用者電腦上的 Claude Code 從 GitHub API 取得（2026-11-14，Phase 10 fix1 回報）。
+        # 沒有 Mac 可測試（使用者決定 2026-11-17）：未實機驗證。Intel Mac 第一版不提供（規格 §6.3）。
+        RuntimeAsset("macos-arm64", "llama-b11312-bin-macos-arm64.tar.gz", 11820971, "3ceea603e48367ab694822f7304e6880817337f942f9672321411932c76c46f2"),
     ),
 )
 

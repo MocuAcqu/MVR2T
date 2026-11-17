@@ -22,9 +22,9 @@
 | 10 | Hardware Detection（CPU／記憶體／GPU／CUDA／Metal、運算裝置選擇、記憶體不足降級） | ✅ 已在 Windows 驗收（含 fix1；無 NVIDIA，CUDA／Metal 待實機） |
 | 11 | Windows Packaging（PyInstaller 後端、內附 LGPL FFmpeg、electron-builder 安裝程式） | ✅ 已在 Windows 驗收（含 fix1；「不依賴開發環境」延到 YouTube 之後） |
 | — | YouTube 連結（yt-dlp 只下載音訊、作者字幕、元件更新） | ✅ 已在 Windows 驗收（含本機 c247a08 與 fix1） |
-| — | 逐字稿編輯器、播放器（規格 2.1-D）＋設定頁（規格 12.4） | 🔄 待 Windows 驗收 |
-| — | 英文介面、macOS 打包設定（不測試）、最終打包 | ⏳ 下一步 |
-| 12 | macOS 打包、發布 | ⏳ |
+| — | 逐字稿編輯器、播放器（規格 2.1-D）＋設定頁（規格 12.4） | ✅ 已交付（開發版驗收中發現 CORS PUT，已修正） |
+| — | 英文介面（繁中／English）、最終打包 | 🔄 待 Windows 驗收 |
+| 12 | macOS 打包設定（Apple Silicon，未簽章） | ⚠️ 只準備設定，沒有 Mac 未驗證 |
 
 ## 環境需求
 
@@ -392,6 +392,30 @@ YouTube fix1：
 - [ ] 設定 → 暫存檔案：顯示大小，「清除暫存」不影響目前的檔案
 - [ ] 設定 → 關於：版本、資料夾；「開啟資料夾」「第三方授權」可以開啟
 
+## 英文介面驗收清單
+
+- [ ] 設定 → 介面語言「English」：整個畫面立即換成英文，正在進行的工作不受影響；重開程式後保留
+- [ ] 第一次使用（preferences.json 沒有 language）：中文 Windows 預設繁體中文
+- [ ] 英文時，後端的進度與錯誤訊息（例如抽取、辨識的步驟、模型管理、這台電腦）也是英文
+- [ ] 維持中文（刻意）：逐字稿與摘要的內容、檔名、匯出的 Word／PDF 標題
+- [ ] 切回繁體中文後一切恢復
+
+## macOS（未驗證）
+
+使用者沒有 Mac（2026-11-17）：只準備設定，**沒有實機驗證**，在 Mac 上可能需要調整。不購買簽章。
+
+- 只做 Apple Silicon（arm64）：llama.cpp 固定 `macos-arm64`（Metal）。Intel Mac 尚未提供。
+- 不內附 FFmpeg：請先 `brew install ffmpeg`（後端會到 `/opt/homebrew/bin`、`/usr/local/bin` 尋找）。
+- 組建（在 Mac 上）：
+  ```bash
+  cd apps/backend
+  python3.11 -m venv .venv && .venv/bin/pip install -r requirements/build.txt
+  .venv/bin/python -m scripts.build_backend
+  cd ../.. && npm ci && npm run dist:mac -w @mvr2t/desktop   # → apps/desktop/release/MVR2T-0.1.0-arm64.dmg
+  ```
+- 沒有簽章與公證：第一次開啟會被 Gatekeeper 擋下，請在 Finder 對 MVR2T 按右鍵 →「打開」，或到「系統設定 → 隱私權與安全性」按「強制打開」。
+- YouTube 下載元件會下載 `yt-dlp_macos`；JS 執行環境同樣使用 MVR2T 本身（ELECTRON_RUN_AS_NODE）。
+
 ## 開發注意事項
 
 - `requirements/*.txt`、`pytest.ini` 等會被 pip / pytest 以「系統編碼」讀取的檔案，**必須只含 ASCII**（註解請用英文）。繁體中文 Windows 的系統編碼是 cp950，讀到 UTF-8 中文會安裝失敗。
@@ -408,8 +432,11 @@ apps/backend/    Python + FastAPI
 shared/          前後端共用的常數與型別
 ```
 
-## 已知待辦（刻意留到後續 Phase）
+## 已知限制（專案結束時，2026-11-18）
 
+- NVIDIA CUDA 加速只有單元測試，沒有在有 NVIDIA 顯示卡的電腦上實測（使用者電腦只有內顯）
+- 英文介面：摘要內容、匯出的 Word／PDF 標題維持中文；逐字稿依影片語言
+- 沒有程式碼簽章：Windows SmartScreen 與防毒軟體（例如 Avast）第一次執行時會詢問
 - 在有 Avast 的使用者電腦上用正式版匯出 Word／PDF，驗證防毒軟體阻擋時的說明與「重新匯出失敗的項目」（Phase 08 fix2 尚未實際操作）；考慮程式碼簽章，減少防毒軟體詢問
-- Phase 12：macOS 打包（Apple Silicon、Metal 實機驗證）
+- macOS 實機驗證（Apple Silicon、Metal、Gatekeeper）與 Intel Mac
 - 程式碼簽章（減少 SmartScreen 與防毒軟體的提示）
