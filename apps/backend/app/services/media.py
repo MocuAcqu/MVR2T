@@ -264,8 +264,10 @@ def start_extraction(cfg: Settings, sessions: SessionManager, session: Session, 
         raise MediaError(409, "語音辨識進行中，請等它完成或取消後再重新抽取。")
     if any(t.kind == "summarize" for t in busy):
         raise MediaError(409, "摘要產生中，請等它完成或取消後再重新抽取。")
-    rec.transcript = None  # 音訊重新抽取後，舊的逐字稿時間就不再對應
-    rec.summary = None
+    # 音訊重新抽取後，語音辨識的逐字稿要重做；YouTube 字幕的時間依原始影片，不受影響（逐字稿與摘要都保留）
+    if not (rec.transcript and rec.transcript.get("source") == "subtitles"):
+        rec.transcript = None
+        rec.summary = None
     loc = require_ffmpeg(cfg)
     _check_free_space(session.dir, int(float(rec.info["duration"]) * WAV_BYTES_PER_SECOND * 2.2))
     return sessions.tasks.start(session.id, "extract-audio", lambda task: run_extraction(task, loc, rec, sessions.root))

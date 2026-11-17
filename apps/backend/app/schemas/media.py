@@ -25,6 +25,9 @@ class MediaInfo(BaseModel):
     video_codec: str | None
     width: int | None
     height: int | None
+    #: 匯入來源：本機檔案或 YouTube（之後的版本）；YouTube 時附上網址
+    origin: Literal["file", "youtube"] = "file"
+    source_url: str | None = None
 
 
 class ExtractAudioRequest(BaseModel):
@@ -116,6 +119,8 @@ class Transcript(BaseModel):
     models: dict[str, str | None]
     warnings: list[str]
     segments: list[TranscriptSegment]
+    #: asr = 本機語音辨識；subtitles = YouTube 影片作者提供的字幕
+    source: Literal["asr", "subtitles"] = "asr"
 
 
 # --- Phase 06：摘要 -------------------------------------------------------------

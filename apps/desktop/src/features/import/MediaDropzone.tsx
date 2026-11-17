@@ -6,7 +6,7 @@ import { Progress } from '@/components/ui/progress';
 import { cancelImport, importFile, removeMedia } from '@/features/media/mediaController';
 import { formatBytes, formatDuration, formatPercent } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { useSessionStore } from '@/stores/sessionStore';
+import { useSessionStore, type ImportSource } from '@/stores/sessionStore';
 import { Mono } from '@/components/mono/Mono';
 import { GuideCoach } from '@/features/guide/GuideCoach';
 import { GuideTarget } from '@/features/guide/GuideTarget';
@@ -14,7 +14,7 @@ import { GuideTarget } from '@/features/guide/GuideTarget';
 const ACCEPT = MEDIA_EXTENSIONS.map((e) => `.${e}`).join(',');
 const list = (items: readonly string[]) => items.map((e) => e.toUpperCase()).join('、');
 
-function FileSummary({ file, duration }: { file: File; duration?: number }) {
+function FileSummary({ file, duration }: { file: ImportSource; duration?: number }) {
   const kind = getMediaKind(file.name);
   const Icon = kind === 'audio' ? FileAudio : FileVideo;
   return (

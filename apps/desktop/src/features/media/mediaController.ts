@@ -3,7 +3,7 @@
  * 元件只呼叫這裡的函式；這裡負責呼叫 services/api 並更新 sessionStore。
  */
 import { getMediaKind, MAX_MEDIA_BYTES, MEDIA_EXTENSIONS } from '@shared/constants/media';
-import type { AsrLanguage, SummaryType } from '@shared/types/api';
+import type { AsrLanguage, MediaInfo, SummaryType, TranscribeResult, Transcript } from '@shared/types/api';
 import { formatBytes } from '@/lib/format';
 import {
   AbortedError,
@@ -22,7 +22,7 @@ import {
   type BackendConnection,
 } from '@/services/api';
 import { fromSummary } from '@/features/mindmap/model';
-import { idleExtraction, idleSummary, idleTranscription, useSessionStore } from '@/stores/sessionStore';
+import { idleExtraction, idleSummary, idleTranscription, useSessionStore, type ImportSource } from '@/stores/sessionStore';
 
 const POLL_MS = 400;
 /**
@@ -41,6 +41,17 @@ const pollTimers: Record<TrackKind, ReturnType<typeof setTimeout> | null> = {
   summarizing: null,
 };
 let sessionPromise: Promise<string> | null = null;
+/** 其他匯入方式（YouTube 下載）登記的取消函式：匯入本機檔案或移除媒體時一併取消。 */
+let externalImportCancel: (() => void) | null = null;
+
+export function setExternalImportCanceller(fn: (() => void) | null): void {
+  externalImportCancel = fn;
+}
+
+function cancelExternalImport(): void {
+  const fn = externalImportCancel;
+  if (fn) fn();
+}
 
 const keyOf = (conn: BackendConnection) => `${conn.url}|${conn.token ?? ''}`;
 
@@ -114,6 +125,7 @@ export async function importFile(file: File): Promise<void> {
     return;
   }
   cancelImport();
+  cancelExternalImport();
   stopPolling();
   const controller = new AbortController();
   uploadController = controller;
@@ -168,6 +180,7 @@ export function cancelImport(): void {
 /** 移除目前的媒體：開一個新的 Session，後端會刪除舊 Session 的所有暫存檔。 */
 export async function removeMedia(): Promise<void> {
   cancelImport();
+  cancelExternalImport();
   stopPolling();
   store().resetMedia();
   try {
@@ -177,6 +190,49 @@ export async function removeMedia(): Promise<void> {
   } catch {
     // 後端不在時無須處理：下次匯入會重新建立 Session
   }
+}
+
+/**
+ * 其他匯入方式（YouTube）開始前：停止本機檔案的上傳與所有工作的輪詢（後端建立新媒體時也會取消舊工作）。
+ * 畫面上的媒體狀態保持不變，直到下載完成才換成新的（下載失敗或取消時，原本的檔案已被後端清除 → 回到初始狀態）。
+ */
+export function beginExternalImport(): void {
+  cancelImport();
+  stopPolling();
+}
+
+/**
+ * 其他匯入方式完成：換成新的媒體，清除舊檔案的所有結果。
+ * transcript 不為 null（使用影片字幕）時，逐字稿直接完成，不必語音辨識。
+ */
+export function finishExternalImport(source: ImportSource, info: MediaInfo, transcript: Transcript | null): void {
+  stopPolling();
+  const transcription: typeof idleTranscription = transcript
+    ? {
+        ...idleTranscription,
+        status: 'completed',
+        progress: 1,
+        stage: '完成',
+        result: {
+          media_id: info.media_id,
+          language: transcript.language,
+          timing: transcript.timing,
+          segment_count: transcript.segments.length,
+          warnings: transcript.warnings,
+          elapsed_seconds: 0,
+          audio_seconds: info.duration,
+        } satisfies TranscribeResult,
+      }
+    : idleTranscription;
+  store().set({
+    import: { status: 'ready', file: source, info },
+    extraction: idleExtraction,
+    transcription,
+    transcript,
+    summarizing: idleSummary,
+    summary: null,
+    mindmap: null,
+  });
 }
 
 /** 輪詢一個背景工作直到結束；onCompleted 在成功完成時呼叫（例如取回完整逐字稿）。 */
@@ -225,14 +281,14 @@ export async function startExtraction(): Promise<void> {
   if (state.import.status !== 'ready' || !state.sessionId) return;
   const mediaId = state.import.info.media_id;
   stopPolling('extraction');
-  // 重新抽取後，舊逐字稿的時間就不再對應（後端也會清除）；摘要依附在逐字稿上
+  // 重新抽取後，舊逐字稿的時間就不再對應（後端也會清除）；摘要依附在逐字稿上。
+  // 例外：YouTube 影片字幕的時間依原始影片，不受影響（後端也保留）。
+  const keepSubtitles = state.transcript?.source === 'subtitles';
   store().set({
     extraction: { ...idleExtraction, status: 'starting', stage: '準備中' },
-    transcription: idleTranscription,
-    transcript: null,
-    summarizing: idleSummary,
-    summary: null,
-    mindmap: null,
+    ...(keepSubtitles
+      ? {}
+      : { transcription: idleTranscription, transcript: null, summarizing: idleSummary, summary: null, mindmap: null }),
   });
   try {
     const conn = await connection();
@@ -361,4 +417,5 @@ export function __resetForTests(): void {
   stopPolling();
   uploadController = null;
   sessionPromise = null;
+  externalImportCancel = null;
 }

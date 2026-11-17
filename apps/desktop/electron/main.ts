@@ -66,6 +66,7 @@ const backend = new BackendManager({
   allowedOrigins: rendererOrigins(devServerUrl),
   // 例如 Windows：%APPDATA%\\MVR2T；暫存在其下的 temp\\sessions\\
   dataDir: app.getPath('userData'),
+  jsRuntime: process.execPath,
   onState: (state) => {
     console.log(`[backend] ${state.phase}${state.pid ? ` pid=${state.pid}` : ''}${state.url ? ` ${state.url}` : ''}${state.message ? ` - ${state.message}` : ''}`);
     if (state.phase === 'starting') startup.mark('backend-spawned');
@@ -361,6 +362,11 @@ function registerIpc(): void {
   handle(IPC_CHANNELS.clearFixedExportFolder, async () => {
     await savePrefs(prefsFile(), { fixedExportFolder: null });
     return exportPrefs();
+  });
+  handle(IPC_CHANNELS.getYouTubeNotice, async () => (await loadPrefs(prefsFile())).youtubeNoticeAccepted);
+  handle(IPC_CHANNELS.acceptYouTubeNotice, async () => {
+    await savePrefs(prefsFile(), { youtubeNoticeAccepted: true });
+    return true;
   });
   handle(IPC_CHANNELS.openExportFolder, async () => {
     if (lastExportFolder) await shell.openPath(lastExportFolder);

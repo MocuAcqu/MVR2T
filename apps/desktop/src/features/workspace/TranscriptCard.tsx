@@ -82,6 +82,7 @@ export function TranscriptCard() {
   // 載入模型時無法估計進度（首次從磁碟讀取 1.5～1.8 GB，Windows 實測約 80 秒）→ 顯示不確定進度
   const loadingModel = busy && (t.status === 'starting' || t.stage.includes('載入'));
   const result = t.result;
+  const fromSubtitles = transcript?.source === 'subtitles';
   const estimatedCount = transcript ? transcript.segments.filter((s) => s.timing === 'estimated').length : 0;
 
   return (
@@ -122,7 +123,14 @@ export function TranscriptCard() {
           <>
             <div className="flex flex-wrap items-center gap-2 text-sm" role="status">
               <Badge variant="solid">{languageLabel(transcript.language)}</Badge>
-              <Badge variant={transcript.timing === 'aligned' ? 'default' : 'outline'}>{TIMING_LABEL[transcript.timing]}</Badge>
+              {fromSubtitles ? (
+                <Badge variant="outline">影片字幕</Badge>
+              ) : (
+                <Badge variant={transcript.timing === 'aligned' ? 'default' : 'outline'}>{TIMING_LABEL[transcript.timing]}</Badge>
+              )}
+              {fromSubtitles ? (
+                <span className="text-body-gray">{transcript.segments.length} 句，來自影片作者提供的字幕</span>
+              ) : (
               <span className="text-body-gray">
                 {transcript.segments.length} 句，音訊 {formatDuration(result.audio_seconds)}，處理 {formatDuration(result.elapsed_seconds)}
                 {result.timings?.asr_seconds !== undefined
@@ -131,6 +139,7 @@ export function TranscriptCard() {
                     }）`
                   : ''}
               </span>
+              )}
             </div>
             {transcript.warnings.length > 0 ? (
               <ul className="list-inside list-disc rounded-lg bg-chip p-4 text-sm">
@@ -184,7 +193,7 @@ export function TranscriptCard() {
             </select>
             <GuideTarget step="transcribe">
               <Button onClick={() => void startTranscription(language === 'auto' ? null : language)} disabled={!ready}>
-                {t.status === 'completed' ? '重新辨識' : t.status === 'idle' ? '開始語音辨識' : '再試一次'}
+                {fromSubtitles ? '改用語音辨識' : t.status === 'completed' ? '重新辨識' : t.status === 'idle' ? '開始語音辨識' : '再試一次'}
               </Button>
             </GuideTarget>
             {transcript && transcript.segments.length > 0 ? (

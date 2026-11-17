@@ -8,6 +8,9 @@ const channelLabel = (n: number | null) => (n === 1 ? '單聲道' : n === 2 ? '�
 export function MediaInfoCard({ info }: { info: MediaInfo }) {
   const rows: [string, string][] = [
     ['檔名', info.filename],
+    ...(info.origin === 'youtube'
+      ? ([['來源', 'YouTube（只下載音訊）'], ...(info.source_url ? [['網址', info.source_url]] : [])] as [string, string][])
+      : []),
     ['類型', info.kind === 'audio' ? '音訊' : '影片'],
     ['格式', info.format.toUpperCase()],
     ['大小', formatBytes(info.size)],
@@ -26,7 +29,7 @@ export function MediaInfoCard({ info }: { info: MediaInfo }) {
     <Card className="flex h-full flex-col">
       <CardHeader>
         <CardTitle>影音資訊</CardTitle>
-        <CardDescription>已複製到本次工作階段，結束後自動刪除。</CardDescription>
+        <CardDescription>{info.origin === 'youtube' ? '已下載到本次工作階段' : '已複製到本次工作階段'}，結束後自動刪除。</CardDescription>
       </CardHeader>
       <CardContent>
         <dl className="text-sm">

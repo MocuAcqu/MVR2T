@@ -25,5 +25,6 @@ MVR2T 在你的電腦上離線執行。以下是安裝程式內附、或第一�
 | Qwen3-ASR 0.6B、Qwen3-ForcedAligner 0.6B（Qwen 官方） | 語音辨識、時間戳記對齊 | Apache-2.0 |
 | Qwen3.5-4B Q4_K_M（unsloth 由官方權重量化） | 摘要與心智圖 | Apache-2.0 |
 | llama.cpp（官方 GitHub Release；CPU 版，NVIDIA 電腦可另外下載 CUDA 版與 NVIDIA CUDA 執行庫） | 執行摘要模型 | MIT（CUDA 執行庫依 NVIDIA 授權） |
+| yt-dlp（官方 GitHub Release 的單一執行檔，含 yt-dlp-ejs；使用者在「模型管理」下載與更新） | YouTube 連結：只下載音訊與作者字幕 | Unlicense（公有領域）。YouTube 內容的使用受 YouTube 服務條款與著作權規範，由使用者自行負責。 |
 
 模型與執行檔的版本、來源與 SHA-256 固定在程式中，下載後逐一驗證。

@@ -36,6 +36,8 @@ const bridge: Mvr2tBridge = {
   getExportPrefs: (): Promise<ExportPrefs> => ipcRenderer.invoke(IPC_CHANNELS.getExportPrefs),
   chooseFixedExportFolder: (): Promise<ExportPrefs> => ipcRenderer.invoke(IPC_CHANNELS.chooseFixedExportFolder),
   clearFixedExportFolder: (): Promise<ExportPrefs> => ipcRenderer.invoke(IPC_CHANNELS.clearFixedExportFolder),
+  getYouTubeNotice: (): Promise<boolean> => ipcRenderer.invoke(IPC_CHANNELS.getYouTubeNotice),
+  acceptYouTubeNotice: (): Promise<boolean> => ipcRenderer.invoke(IPC_CHANNELS.acceptYouTubeNotice),
 };
 
 contextBridge.exposeInMainWorld('mvr2t', bridge);

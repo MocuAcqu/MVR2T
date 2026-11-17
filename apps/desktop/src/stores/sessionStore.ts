@@ -15,14 +15,20 @@ import type {
  * 刻意不使用 persist middleware：媒體、逐字稿等資料不得被保存（PROJECT_SPEC §8.3），重新整理即清空。
  */
 
+/** 匯入的來源：本機檔案（File 也符合）或 YouTube 下載的音訊（名稱 = 影片標題）。 */
+export interface ImportSource {
+  name: string;
+  size: number;
+}
+
 export type ImportState =
   | { status: 'idle' }
   /** 正在把檔案內容複製到後端的 Session 暫存。 */
-  | { status: 'uploading'; file: File; progress: number }
+  | { status: 'uploading'; file: ImportSource; progress: number }
   /** 已複製完成，後端正在用 ffprobe 檢查檔案。 */
-  | { status: 'probing'; file: File }
-  | { status: 'ready'; file: File; info: MediaInfo }
-  | { status: 'error'; file: File | null; message: string };
+  | { status: 'probing'; file: ImportSource }
+  | { status: 'ready'; file: ImportSource; info: MediaInfo }
+  | { status: 'error'; file: ImportSource | null; message: string };
 
 /** 一個背景工作（抽取音訊、語音辨識…）在畫面上的狀態。 */
 export interface TaskTrack<TResult> {

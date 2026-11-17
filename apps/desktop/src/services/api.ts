@@ -20,6 +20,9 @@ import type {
   Transcript,
   Summary,
   SummaryType,
+  SubtitleChoice,
+  YouTubeVideo,
+  YtDlpState,
 } from '@shared/types/api';
 import type { AppInfo } from '@shared/types/ipc';
 
@@ -213,3 +216,32 @@ export const startMindmap = (conn: BackendConnection, sessionId: string, mediaId
 
 export const getSummary = (conn: BackendConnection, sessionId: string, mediaId: string) =>
   apiJson<Summary>(conn, `/api/summary?session_id=${encodeURIComponent(sessionId)}&media_id=${encodeURIComponent(mediaId)}`);
+
+// ---------------------------------------------------------------------------
+// YouTube 連結（yt-dlp）
+// ---------------------------------------------------------------------------
+
+export const getYtDlp = (conn: BackendConnection, signal?: AbortSignal) =>
+  apiJson<YtDlpState>(conn, '/api/youtube/component', { signal });
+
+export const ytDlpAction = (conn: BackendConnection, action: 'install' | 'check' | 'cancel') =>
+  apiJson<YtDlpState>(conn, `/api/youtube/component/${action}`, { method: 'POST' });
+
+export const deleteYtDlp = (conn: BackendConnection) => apiJson<void>(conn, '/api/youtube/component', { method: 'DELETE' });
+
+export const probeYouTube = (conn: BackendConnection, sessionId: string, url: string, signal?: AbortSignal) =>
+  apiJson<YouTubeVideo>(conn, '/api/youtube/probe', { ...json({ session_id: sessionId, url }), signal });
+
+export const startYouTubeDownload = (conn: BackendConnection, sessionId: string, video: YouTubeVideo, subtitle: SubtitleChoice | null) =>
+  apiJson<{ task_id: string }>(
+    conn,
+    '/api/youtube/download',
+    json({
+      session_id: sessionId,
+      url: video.url,
+      title: video.title,
+      duration: video.duration,
+      audio_size: video.audio_size,
+      subtitle,
+    }),
+  );

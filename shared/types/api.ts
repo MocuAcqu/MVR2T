@@ -31,6 +31,9 @@ export interface MediaInfo {
   video_codec: string | null;
   width: number | null;
   height: number | null;
+  /** 匯入來源（YouTube 時附上網址）；舊後端沒有這兩個欄位 */
+  origin?: 'file' | 'youtube';
+  source_url?: string | null;
 }
 
 /** 切段結果：start / end 是「原始檔案」時間軸上的秒數。 */
@@ -135,6 +138,8 @@ export interface Transcript {
   models: Record<string, string | null>;
   warnings: string[];
   segments: TranscriptSegment[];
+  /** asr = 本機語音辨識；subtitles = YouTube 影片作者提供的字幕 */
+  source?: 'asr' | 'subtitles';
 }
 
 /** 語音辨識工作完成時的摘要（完整逐字稿另以 GET /api/transcript 取得）。 */
@@ -351,4 +356,46 @@ export interface SystemInfo {
   hardware: HardwareInfo;
   llm: { device: ComputeDevice; n_gpu_layers: number; ctx: number; reason: string; warnings: string[] };
   asr: { device: ComputeDevice; reason: string; warnings: string[] };
+}
+
+// ---------------------------------------------------------------------------
+// YouTube 連結（使用者決定 2026-11-15）：yt-dlp 只下載音訊
+// ---------------------------------------------------------------------------
+
+export interface YtDlpState {
+  installed: boolean;
+  version: string | null;
+  installed_at: number | null;
+  supported: boolean;
+  latest_version: string | null;
+  update_available: boolean;
+  checked_at: number | null;
+  size_bytes: number | null;
+  license: string;
+  job: { phase: 'checking' | 'downloading' | 'installing'; done_bytes: number; total_bytes: number; cancelling: boolean } | null;
+  last: { ok: boolean; message: string | null } | null;
+}
+
+export interface SubtitleChoice {
+  lang: string;
+  name: string;
+}
+
+export interface YouTubeVideo {
+  video_id: string;
+  url: string;
+  title: string;
+  channel: string | null;
+  duration: number | null;
+  audio_size: number | null;
+  /** 作者上傳的字幕（不含自動產生的字幕） */
+  subtitles: SubtitleChoice[];
+}
+
+/** POST /api/youtube/download 的工作結果 */
+export interface YouTubeDownloadResult {
+  media: MediaInfo;
+  /** 是否已用影片字幕建立逐字稿 */
+  subtitles: boolean;
+  warnings: string[];
 }

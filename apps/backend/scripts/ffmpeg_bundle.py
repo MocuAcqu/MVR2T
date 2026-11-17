@@ -102,7 +102,11 @@ def prepare() -> int:
     pin = json.loads(PIN.read_text(encoding="utf-8"))
     CACHE.mkdir(parents=True, exist_ok=True)
     archive = CACHE / pin["filename"]
-    print(f"下載 {pin['filename']}（{pin['size'] / 1024**2:,.1f} MB）…", flush=True)
+    cached = archive.is_file() and archive.stat().st_size == int(pin["size"])
+    if cached:
+        print(f"使用快取：{archive}", flush=True)
+    else:
+        print(f"下載 {pin['filename']}（{pin['size'] / 1024**2:,.1f} MB）…", flush=True)
     try:
         fetch(pin["url"], archive, int(pin["size"]))
     except FetchError as e:

@@ -137,6 +137,10 @@ class TaskManager:
         with self._lock:
             return self._tasks.get(task_id)
 
+    def all_tasks(self) -> list[Task]:
+        with self._lock:
+            return list(self._tasks.values())
+
     def for_session(self, session_id: str) -> list[Task]:
         with self._lock:
             return [t for t in self._tasks.values() if t.session_id == session_id]

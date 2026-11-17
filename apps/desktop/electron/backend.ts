@@ -99,9 +99,12 @@ export function buildBackendEnv(
   token: string,
   allowedOrigins: string[],
   dataDir?: string,
+  jsRuntime?: string,
 ): NodeJS.ProcessEnv {
   return {
     ...base,
+    // YouTube 下載（yt-dlp）需要的 JavaScript 執行環境：Electron 自己的執行檔，後端以 ELECTRON_RUN_AS_NODE=1 當作 Node.js 使用
+    ...(jsRuntime ? { MVR2T_JS_RUNTIME: jsRuntime } : {}),
     // 應用程式資料目錄（規格 §7.3）：Session 暫存、之後的模型與設定都放在這裡
     ...(dataDir ? { MVR2T_DATA_DIR: dataDir } : {}),
     MVR2T_BACKEND_PORT: '0', // 由作業系統挑選空閒埠
@@ -129,6 +132,8 @@ export interface BackendManagerOptions {
   allowedOrigins: string[];
   /** Electron app.getPath('userData')；傳給後端作為 MVR2T_DATA_DIR。 */
   dataDir?: string;
+  /** Electron 的執行檔（process.execPath）；傳給後端作為 MVR2T_JS_RUNTIME（YouTube 下載用）。 */
+  jsRuntime?: string;
   onState: (state: BackendState) => void;
   /** 將後端輸出轉給 Electron 主控台（開發時方便查看）。 */
   onLog?: (line: string) => void;
@@ -157,7 +162,8 @@ export class BackendManager {
   /** 每次 start() 遞增；舊行程的事件一律忽略，避免 restart 時狀態錯亂。 */
   private generation = 0;
   private exitPromise: Promise<void> | null = null;
-  private readonly opts: Required<Omit<BackendManagerOptions, 'onLog' | 'dataDir'>> & Pick<BackendManagerOptions, 'onLog' | 'dataDir'>;
+  private readonly opts: Required<Omit<BackendManagerOptions, 'onLog' | 'dataDir' | 'jsRuntime'>> &
+    Pick<BackendManagerOptions, 'onLog' | 'dataDir' | 'jsRuntime'>;
 
   constructor(opts: BackendManagerOptions) {
     this.opts = {
@@ -205,7 +211,7 @@ export class BackendManager {
       // 參數陣列 + shell:false：路徑含空格也安全，且不會被當成 shell 指令解析。
       child = this.opts.spawn(command, args, {
         cwd,
-        env: buildBackendEnv(this.opts.env, token, this.opts.allowedOrigins, this.opts.dataDir),
+        env: buildBackendEnv(this.opts.env, token, this.opts.allowedOrigins, this.opts.dataDir, this.opts.jsRuntime),
         stdio: ['pipe', 'pipe', 'pipe'],
         shell: false,
         windowsHide: true,

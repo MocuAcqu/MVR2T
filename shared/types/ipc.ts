@@ -137,4 +137,8 @@ export interface Mvr2tBridge {
   chooseFixedExportFolder(): Promise<ExportPrefs>;
   /** 取消固定資料夾（匯出時改為每次詢問） */
   clearFixedExportFolder(): Promise<ExportPrefs>;
+  /** YouTube 下載使用說明是否已同意 */
+  getYouTubeNotice(): Promise<boolean>;
+  /** 記錄已同意 YouTube 下載使用說明 */
+  acceptYouTubeNotice(): Promise<boolean>;
 }

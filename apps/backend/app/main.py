@@ -25,6 +25,7 @@ from app.services.tasks import TaskManager
 from app.services.summary import default_llm
 from app.services.transcribe import default_engines
 from app.models.manager import ModelManager
+from app.models.ytdlp import YtDlpComponent
 from app.session.manager import SessionManager
 
 
@@ -71,6 +72,7 @@ def create_app(cfg: Settings = settings) -> FastAPI:
     app.state.tasks = task_manager
     app.state.sessions = session_manager
     app.state.model_manager = model_manager
+    app.state.ytdlp = YtDlpComponent(cfg.runtime_root)  # YouTube 下載元件（測試可替換）
     app.include_router(api_router)
     return app
 

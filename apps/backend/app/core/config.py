@@ -90,6 +90,10 @@ class Settings:
     # 安裝程式內附的 FFmpeg（Phase 11）：打包後在 resources/ffmpeg/（後端 exe 在 resources/backend/）。
     bundled_ffmpeg_dir: str = field(default_factory=lambda: os.environ.get("MVR2T_BUNDLED_FFMPEG_DIR", "") or _bundled_ffmpeg_default())
 
+    # YouTube 下載需要的 JavaScript 執行環境（Electron 傳入自己的執行檔，以 ELECTRON_RUN_AS_NODE=1 當作 Node.js）。
+    # 空字串 = 使用 PATH 上的 Node.js／Deno（開發者直接啟動後端時）。
+    js_runtime: str = field(default_factory=lambda: os.environ.get("MVR2T_JS_RUNTIME", ""))
+
     # 匯入檔案大小上限（規格 §11-9）。需與 shared/constants/media.ts 的 MAX_MEDIA_BYTES 一致。
     max_upload_bytes: int = field(
         default_factory=lambda: int(os.environ.get("MVR2T_MAX_UPLOAD_BYTES", str(10 * 1024**3)))

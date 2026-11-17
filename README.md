@@ -20,7 +20,8 @@
 | 08 | Session and Export（匯出面板：TXT／CSV／Word／PDF／字幕／JSON／Markdown／ZIP） | ✅ 已在 Windows 驗收 |
 | 09 | Model Manager（程式內下載、進度、取消與續傳、驗證、修復、刪除、版本更新） | ✅ 已在 Windows 驗收 |
 | 10 | Hardware Detection（CPU／記憶體／GPU／CUDA／Metal、運算裝置選擇、記憶體不足降級） | ✅ 已在 Windows 驗收（含 fix1；無 NVIDIA，CUDA／Metal 待實機） |
-| 11 | Windows Packaging（PyInstaller 後端、內附 LGPL FFmpeg、electron-builder 安裝程式） | 🔄 待 Windows 驗收 |
+| 11 | Windows Packaging（PyInstaller 後端、內附 LGPL FFmpeg、electron-builder 安裝程式） | ✅ 已在 Windows 驗收（含 fix1；「不依賴開發環境」延到 YouTube 之後） |
+| — | YouTube 連結（yt-dlp 只下載音訊、作者字幕、元件更新） | 🔄 待 Windows 驗收 |
 | 12 | macOS 打包、發布 | ⏳ |
 
 ## 環境需求
@@ -352,6 +353,22 @@ Phase 11 fix1：
 - [ ] 解除安裝登錄項目有 InstallLocation；安裝後與解除安裝後都沒有 `%LOCALAPPDATA%\mvr2t-updater`（約 350 MB 的安裝檔副本）
 - [ ] `scripts.build_backend` 的 self-test 直接驗證內附 FFmpeg（bundled）；中文在終端機不是亂碼
 - [ ] `%APPDATA%\MVR2T\logs\startup.log` 記錄每次啟動各階段的時間
+
+## YouTube 連結驗收清單
+
+使用者決定（2026-11-15）：內建 yt-dlp、只下載音訊；JS 執行環境用 Electron 內建的 Node；yt-dlp 例外於「依賴至少 2 週」規則（程式內更新到官方最新版）；
+只支援單一公開影片；可選擇直接使用影片作者提供的字幕。
+
+- [ ] 「模型管理 → YouTube 下載元件」：下載（約 20 MB）→ 已安裝，顯示版本；「檢查更新」顯示已是最新版；刪除後首頁提示要先下載
+- [ ] 首頁第一次使用顯示使用說明，勾選後「同意並繼續」；重新開啟程式不再顯示
+- [ ] 貼上自己的（或創用 CC）影片網址 →「讀取影片」顯示標題、頻道、長度、音訊大小與作者字幕
+- [ ] 「下載音訊」（語音辨識）：進度、可取消；完成後「開啟工作區」→ 影音資訊的來源是 YouTube → 抽取 → 語音辨識 → 摘要 → 匯出都正常
+- [ ] 「使用影片作者提供的字幕」：完成後逐字稿直接出現（標示「影片字幕」，簡體字幕轉為繁體）；可以直接產生摘要；抽取音訊後逐字稿仍保留；
+      「改用語音辨識」會以語音辨識取代
+- [ ] 播放清單網址、非 YouTube 網址：顯示「只支援單一影片」；私人影片、直播顯示清楚的原因
+- [ ] 離線時讀取影片：顯示「無法連線到 YouTube」；本機檔案的功能不受影響
+- [ ] 下載中改匯入本機檔案：YouTube 下載自動取消
+- [ ] 正式版（安裝後）也能下載（Electron 當作 Node.js 執行 YouTube 的驗證程式）
 
 ## 開發注意事項
 

@@ -1,6 +1,6 @@
 # 開發紀錄（給接手的 Claude / Claude Code）
 
-最後更新：2026-11-14。Phase 10（含 fix1，本機 dbece16）已在 Windows 驗收；CUDA／Metal 路線待實機驗證。Phase 11（Windows 打包）已在 Windows 驗收（本機 515ba85、4833b7f、91d099e）；fix1 已交付。下一個功能：YouTube 連結（待使用者決定方案）。
+最後更新：2026-11-14。Phase 10（含 fix1，本機 dbece16）已在 Windows 驗收；CUDA／Metal 路線待實機驗證。Phase 11（含 fix1，本機 4f21f5d）已在 Windows 驗收；YouTube 連結已交付，待 Windows 驗收；之後做 Phase 11 步驟 7.1（不依賴開發環境）。
 
 ## 目前進度
 
@@ -115,6 +115,52 @@
 - 沙盒的 init 不會立即回收殭屍行程，`kill -0` 對殭屍也成功；判斷行程是否存活請看 `/proc/<pid>/stat` 狀態不是 `Z`。
 - 在沙盒跑 Electron：`xvfb-run -a`，並加 `--no-sandbox`（root）。
 
+## YouTube 連結（2026-11-16）
+
+使用者決定（2026-11-15）：
+- 方案 A：內建 yt-dlp，**只下載音訊** → 現有流程（抽音訊 → 語音辨識 → 摘要）。只有下載需要連網。
+- JS 執行環境（2025-11 起 YouTube 需要）：Electron 內建 Node（ELECTRON_RUN_AS_NODE）。
+- yt-dlp **例外於「依賴版本至少 2 週」規則**：程式內「檢查更新／更新」取官方最新版（驗證 SHA-256）。其他依賴仍維持 2 週規則。
+- 範圍：只支援單一公開影片；影片有作者上傳的字幕時，可選擇直接使用字幕或仍用語音辨識。
+- 第一次使用顯示 YouTube 條款說明，使用者確認只用於自己擁有或已授權的影片；音訊只放在 Session 暫存。
+
+### 元件（app/models/ytdlp.py）
+- 裝在 `<userData>/runtime/yt-dlp/`（yt-dlp.exe ＋ install.json）。不放在安裝程式中，在「模型管理」按需下載。
+- 安裝／更新：GitHub `releases/latest` → 本平台的單一執行檔（yt-dlp.exe／yt-dlp_macos／yt-dlp_linux）＋ 同一 release 的 SHA2-256SUMS；
+  GitHub 的 asset digest 存在時也必須一致。下載用共用的 fetch（續傳／重試）→ 驗證 → 取代。雜湊不符時保留原版本。
+- 官方單一執行檔已內含 yt-dlp-ejs（YouTube 的 JS 解題程式），不需要 --remote-components。
+- API：GET/DELETE `/api/youtube/component`、POST `/api/youtube/component/{install|check|cancel}`；正在下載影片時不能刪除。
+
+### 讀取與下載（app/services/youtube.py）
+- 網址在後端重新檢查，**只把重建的 `https://www.youtube.com/watch?v=<ID>` 交給 yt-dlp**（不接受任意網站、去掉播放清單參數）。
+- 共用參數：`--ignore-config --no-playlist --cache-dir <runtime/yt-dlp/cache> --js-runtimes node:<Electron 執行檔>`，環境變數
+  `ELECTRON_RUN_AS_NODE=1`（Electron 由 MVR2T_JS_RUNTIME 傳入 process.execPath；Electron 44 = Node 24，yt-dlp 需要 Node 22 以上；
+  yt-dlp 以 `--permission` 執行 Node，沙盒驗證 Electron 支援）。下載時另加 `--ffmpeg-location`（內附的 FFmpeg）。
+- probe：`--dump-single-json --skip-download`（逾時 2 分鐘）→ 標題、頻道、長度、音訊大小（m4a 優先）、作者字幕（排除自動字幕與聊天室）；
+  直播／尚未開始／播放清單 → 422。
+- 下載（背景工作 kind=youtube）：`-f bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio`、`--progress-template` 自訂進度行；
+  選字幕時 `--write-subs --sub-langs <lang> --sub-format vtt`。取消：PyInstaller 單一檔案會有子行程 → Windows `taskkill /T /F`、其他 killpg。
+  失敗或取消時刪除半成品。開始前先清除 Session 的舊媒體（clear_media 會取消這個 Session 的工作，所以要在建立新工作之前）。
+- 字幕 → 逐字稿：WebVTT 去標籤、合併重複；語言代碼轉成辨識使用的名稱（zh → Chinese…）；中文轉繁體；`source: "subtitles"`、
+  `timing: "aligned"`、words 為空。重新抽取音訊時**保留**字幕逐字稿與摘要（時間依原始影片）。
+- yt-dlp 錯誤訊息轉成繁體中文（私人、會員、年齡限制、機器人驗證、直播、地區、網路、改版 → 請更新元件）。
+- 媒體資訊多 `origin: youtube`、`source_url`（影音資訊卡顯示來源與網址）。
+
+### 前端
+- 首頁 YouTube 區塊（features/import/YouTubeUrlInput.tsx ＋ features/youtube/youtubeController.ts）：元件未安裝 → 前往模型管理；
+  第一次使用 → 使用說明（同意記在 preferences.json 的 youtubeNoticeAccepted）；讀取影片 → 選擇語音辨識或作者字幕 → 下載（進度、取消）
+  → 與本機檔案相同的「開啟工作區」。匯入本機檔案或移除媒體時自動取消 YouTube 下載。
+- sessionStore 的匯入來源由 File 改為 `{ name, size }`（ImportSource）。
+- 逐字稿卡片：字幕來源顯示「影片字幕」，按鈕改為「改用語音辨識」。
+- 模型管理：YouTube 下載元件卡片（版本、檢查更新、更新、取消、刪除）。
+
+### 驗證
+- 後端 206 passed（新增 25 項：網址、VTT、錯誤訊息、元件安裝／更新／雜湊不符／刪除、probe、下載＋字幕、取消、抽取後保留字幕）。
+- 前端 185 passed（新增：controller 8 項、prefs、backend env）。
+- Electron E2E（假的 yt-dlp）：使用說明 → 讀取影片 → 字幕 → 下載 → 工作區 → 抽取後字幕仍在；後端確實收到
+  `--js-runtimes node:<electron>` 與 ELECTRON_RUN_AS_NODE=1。沙盒連不到 YouTube，**真實下載待 Windows 驗收**。
+- 沙盒確認：yt-dlp 2026.10.26 以 Electron 44 當作 Node 偵測為 `node-24.22.2`；Electron 支援 `--permission` 與 stdin 腳本。
+
 ## Phase 11 Windows Packaging（2026-11-14）
 
 使用者決定：FFmpeg 內附在安裝程式中；只為目前使用者安裝；第一版不簽章。macOS 打包移到 Phase 12。
@@ -151,6 +197,12 @@
 - `electron-builder --dir`（Linux）：resources 內有 backend／ffmpeg／notices；在 Xvfb 啟動正式版 → 啟動 `resources/backend/mvr2t-backend`、
   health／session／models／ffmpeg 正常；ffmpeg 來源 bundled；關閉視窗後後端行程消失。
 - Windows NSIS 安裝檔只能在 Windows 產生與測試（安裝、SmartScreen、離線、解除安裝）→ 交由 Claude Code＋使用者驗收。
+
+### fix1 Windows 驗收（2026-11-16，本機 4f21f5d，無本機修正）
+- 安裝在 `Programs\MVR2T`、InstallLocation 正確、updater 副本與 default_app.asar 都已清除；self-test bundled、中文正常。
+- startup.log：後端 exe 載入與匯入第一次 5.5 秒、第二次 1.6 秒；畫面約 2.2–2.7 秒。先前的 18 秒主要是 Avast 第一次掃描未簽章程式
+  （log 量不到 Electron 主程式啟動前的時間）。Avast 對安裝檔與第一次執行的 MVR2T.exe 送實驗室分析，結果安全 → 日後考慮簽章。
+- ffmpeg_bundle 使用快取時仍顯示「下載…」→ 改為「使用快取」（YouTube 版一併修正）。
 
 ### Windows 驗收（2026-11-15，i5-1235U、無 NVIDIA、Avast）
 - 後端 557 MB（5,265 個檔案，torch 2.14.1+cpu），PyInstaller 343 秒，spec 不需修改；self-test 全部 ok。

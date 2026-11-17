@@ -9,7 +9,7 @@ export function ImportCard() {
     <Card featured>
       <CardHeader>
         <CardTitle className="text-h2">新增影音</CardTitle>
-        <CardDescription>匯入本機檔案，或貼上 YouTube 網址。</CardDescription>
+        <CardDescription>匯入本機檔案，或貼上 YouTube 網址（只下載音訊）。</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
         <MediaDropzone onOpenWorkspace={() => setPage('workspace')} />

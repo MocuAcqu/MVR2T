@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { HardwareStatusCard } from '@/features/models/HardwareStatusCard';
 import { ModelPackageCard } from '@/features/models/ModelPackageCard';
 import { UnusedModelsCard } from '@/features/models/UnusedModelsCard';
+import { YouTubeComponentCard } from '@/features/models/YouTubeComponentCard';
 import { downloadAll } from '@/features/models/modelActions';
 import { useSystemStatus } from '@/hooks/useSystemStatus';
 import { formatBytes } from '@/lib/format';
@@ -47,7 +48,7 @@ export function ModelsPage() {
         <p className="mt-6 text-sm text-body-gray">{models.status === 'loading' ? '讀取中…' : '等待本機後端連線。'}</p>
       ) : null}
       {/* 兩個獨立的欄，各自往下排，不會因為另一欄的卡片比較高而留下空白（2026-11-14 使用者建議）：
-          左欄：語音辨識＋這台電腦；右欄：摘要與心智圖（＋GPU 加速）＋不再使用的檔案 */}
+          左欄：語音辨識＋這台電腦；右欄：摘要與心智圖（＋GPU 加速）＋YouTube 下載元件＋不再使用的檔案 */}
       <div className="mt-6 grid items-start gap-6 md:grid-cols-2">
         <div className="flex min-w-0 flex-col gap-6">
           {data?.packages.filter((p) => p.id === 'asr').map((p) => <ModelPackageCard key={p.id} pkg={p} onState={applyModels} />)}
@@ -55,6 +56,7 @@ export function ModelsPage() {
         </div>
         <div className="flex min-w-0 flex-col gap-6">
           {data?.packages.filter((p) => p.id !== 'asr').map((p) => <ModelPackageCard key={p.id} pkg={p} onState={applyModels} />)}
+          {data ? <YouTubeComponentCard /> : null}
           {data ? <UnusedModelsCard items={data.unused} onState={applyModels} /> : null}
         </div>
       </div>

@@ -8,9 +8,11 @@ import path from 'node:path';
 export interface Prefs {
   lastExportFolder: string | null;
   fixedExportFolder: string | null;
+  /** 使用者已閱讀並同意 YouTube 下載的使用說明（只用於自己擁有或已獲授權的影片） */
+  youtubeNoticeAccepted: boolean;
 }
 
-const EMPTY: Prefs = { lastExportFolder: null, fixedExportFolder: null };
+const EMPTY: Prefs = { lastExportFolder: null, fixedExportFolder: null, youtubeNoticeAccepted: false };
 
 const validPath = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 && v.length < 1024 && path.isAbsolute(v) ? v : null);
 
@@ -18,7 +20,11 @@ const validPath = (v: unknown): string | null => (typeof v === 'string' && v.len
 export async function loadPrefs(file: string): Promise<Prefs> {
   try {
     const raw = JSON.parse(await readFile(file, 'utf8')) as Record<string, unknown>;
-    return { lastExportFolder: validPath(raw.lastExportFolder), fixedExportFolder: validPath(raw.fixedExportFolder) };
+    return {
+      lastExportFolder: validPath(raw.lastExportFolder),
+      fixedExportFolder: validPath(raw.fixedExportFolder),
+      youtubeNoticeAccepted: raw.youtubeNoticeAccepted === true,
+    };
   } catch {
     return { ...EMPTY };
   }

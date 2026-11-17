@@ -40,6 +40,9 @@ export const IPC_CHANNELS = {
   getExportPrefs: 'prefs:get-export',
   chooseFixedExportFolder: 'prefs:choose-export-folder',
   clearFixedExportFolder: 'prefs:clear-export-folder',
+  /** YouTube 下載使用說明：是否已同意（userData/preferences.json） */
+  getYouTubeNotice: 'prefs:get-youtube-notice',
+  acceptYouTubeNotice: 'prefs:accept-youtube-notice',
   /** Main → Renderer 推送後端狀態變化。 */
   backendStateChanged: 'backend:state-changed',
 } as const;

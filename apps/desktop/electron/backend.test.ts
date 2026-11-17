@@ -88,6 +88,8 @@ describe('createSessionToken / buildBackendEnv', () => {
       'C:\\Users\\U\\AppData\\Roaming\\MVR2T',
     );
     expect(buildBackendEnv({}, 't', ['null']).MVR2T_DATA_DIR).toBeUndefined();
+    expect(buildBackendEnv({}, 't', ['null'], undefined, 'C:\\MVR2T\\MVR2T.exe').MVR2T_JS_RUNTIME).toBe('C:\\MVR2T\\MVR2T.exe');
+    expect(buildBackendEnv({}, 't', ['null']).MVR2T_JS_RUNTIME).toBeUndefined();
   });
 
   it('overrides security-relevant variables from the parent env', () => {
