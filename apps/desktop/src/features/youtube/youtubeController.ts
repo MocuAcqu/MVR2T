@@ -19,6 +19,7 @@ import {
 } from '@/services/api';
 import { beginExternalImport, ensureSession, finishExternalImport, setExternalImportCanceller } from '@/features/media/mediaController';
 import { useSessionStore } from '@/stores/sessionStore';
+import { useUiStore } from '@/stores/uiStore';
 
 const POLL_MS = 400;
 const RECONNECT_MS = 2000;
@@ -183,6 +184,8 @@ async function poll(conn: BackendConnection, sessionId: string, taskId: string, 
       }
       if (!current()) return;
       finishExternalImport({ name: media.filename, size: media.size }, media, transcript);
+      // 用影片字幕時逐字稿已完成：直接到工作區的逐字稿（語音辨識時仍由使用者按「開啟工作區」）
+      if (transcript) useUiStore.getState().goTo('workspace', 'transcript');
       ys().set({ phase: 'idle', url: '', video: null, taskId: null, progress: 1, message: t.result.warnings[0] ?? null });
     } else if (t.status === 'cancelled') {
       ys().set({ phase: 'ready', taskId: null, message: '已取消下載。' });

@@ -13,10 +13,10 @@ import json
 import os
 import shutil
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from contextlib import nullcontext
 from pathlib import Path
-from typing import ContextManager
+from typing import Any, ContextManager
 
 from app.models.fetch import FetchCancelled, FetchError, fetch
 from app.models.registry import ModelFile, ModelSpec
@@ -53,6 +53,24 @@ def installed_revision(spec: ModelSpec, models_root: Path) -> str | None:
         return None
     rev = marker.get("revision")
     return rev if isinstance(rev, str) else None
+
+
+def file_size(path: Path) -> int | None:
+    """檔案大小；不存在時 None。
+
+    下載／安裝在背景執行緒進行，畫面同時輪詢狀態：先 is_file() 再 stat() 之間檔案可能剛好被移走（暫存 → 正式資料夾），
+    會丟出 FileNotFoundError（2026-11-17 Windows 測試偶發）。一律用這個函式讀取大小。
+    """
+    try:
+        st = path.stat()
+    except OSError:
+        return None
+    return st.st_size if not path.is_dir() else None
+
+
+def staged_bytes(staging: Path, files: Iterable[Any]) -> int:
+    """暫存資料夾中已下載的位元組數（每個檔案最多算到它應有的大小）。"""
+    return sum(min(file_size(staging / f.name) or 0, f.size) for f in files)
 
 
 def dir_size(path: Path) -> int:
@@ -104,7 +122,7 @@ def is_installed(spec: ModelSpec, models_root: Path) -> bool:
         return False
     if marker.get("revision") != spec.revision or marker.get("repo") != spec.repo:
         return False
-    return all((d / f.name).is_file() and (d / f.name).stat().st_size == f.size for f in spec.files)
+    return all(file_size(d / f.name) == f.size for f in spec.files)
 
 
 def verify_installed(spec: ModelSpec, models_root: Path, on_bytes: Callable[[int], None] | None = None) -> list[str]:
@@ -131,7 +149,7 @@ def install(
         return final
     staging = staging_dir(spec, models_root)
     staging.mkdir(parents=True, exist_ok=True)
-    have = sum(min((staging / f.name).stat().st_size, f.size) for f in spec.files if (staging / f.name).is_file())
+    have = staged_bytes(staging, spec.files)
     free = shutil.disk_usage(staging).free
     if free < spec.size_bytes - have + 300 * 1024**2:
         need = (spec.size_bytes - have) / 1024**3

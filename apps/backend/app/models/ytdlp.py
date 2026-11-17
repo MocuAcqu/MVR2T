@@ -126,6 +126,9 @@ class YtDlpComponent:
         self._phase: Phase = "idle"
         self._done = 0
         self._total = 0
+        self._speed = 0.0  # bytes/s（下載時；Windows 實測 23 MB 約 159 秒，要讓使用者看到速度與剩餘時間）
+        self._last_t = 0.0
+        self._last_done = 0
         self._cancel = threading.Event()
         self._latest: Release | None = None
         self._checked_at: float | None = None
@@ -168,7 +171,13 @@ class YtDlpComponent:
                 "license": LICENSE,
                 "job": None
                 if self._phase == "idle"
-                else {"phase": self._phase, "done_bytes": self._done, "total_bytes": self._total, "cancelling": self._cancel.is_set()},
+                else {
+                    "phase": self._phase,
+                    "done_bytes": self._done,
+                    "total_bytes": self._total,
+                    "speed": round(self._speed),
+                    "cancelling": self._cancel.is_set(),
+                },
                 "last": None if self._ok is None else {"ok": self._ok, "message": self._message},
             }
 
@@ -179,6 +188,7 @@ class YtDlpComponent:
             if self._phase != "idle":
                 raise YtDlpError("YouTube 下載元件正在處理中。")
             self._phase, self._done, self._total = phase, 0, 0
+            self._speed, self._last_t, self._last_done = 0.0, 0.0, 0
             self._cancel.clear()
             self._ok = self._message = None
 
@@ -260,6 +270,13 @@ class YtDlpComponent:
         def on_bytes(n: int) -> None:
             with self._lock:
                 self._done = max(0, self._done + n)
+                now = time.monotonic()
+                if not self._last_t:
+                    self._last_t, self._last_done = now, self._done
+                elif now - self._last_t >= 1.0:
+                    rate = (self._done - self._last_done) / (now - self._last_t)
+                    self._speed = rate if self._speed == 0 else 0.7 * self._speed + 0.3 * rate
+                    self._last_t, self._last_done = now, self._done
 
         fetch(rel.url, part, rel.size, on_bytes, self._cancel.is_set)
         with self._lock:

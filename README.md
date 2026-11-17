@@ -21,7 +21,7 @@
 | 09 | Model Manager（程式內下載、進度、取消與續傳、驗證、修復、刪除、版本更新） | ✅ 已在 Windows 驗收 |
 | 10 | Hardware Detection（CPU／記憶體／GPU／CUDA／Metal、運算裝置選擇、記憶體不足降級） | ✅ 已在 Windows 驗收（含 fix1；無 NVIDIA，CUDA／Metal 待實機） |
 | 11 | Windows Packaging（PyInstaller 後端、內附 LGPL FFmpeg、electron-builder 安裝程式） | ✅ 已在 Windows 驗收（含 fix1；「不依賴開發環境」延到 YouTube 之後） |
-| — | YouTube 連結（yt-dlp 只下載音訊、作者字幕、元件更新） | 🔄 待 Windows 驗收 |
+| — | YouTube 連結（yt-dlp 只下載音訊、作者字幕、元件更新） | ✅ 已在 Windows 驗收（含本機 c247a08）；fix1 待驗收 |
 | 12 | macOS 打包、發布 | ⏳ |
 
 ## 環境需求
@@ -333,6 +333,8 @@ npm run dist:win -w @mvr2t/desktop                                     # → app
 - 第三方授權：`resources/THIRD_PARTY_NOTICES.md`（FFmpeg 另附 LICENSE.txt 與原始碼位置 SOURCE.txt）。
 - 安裝位置：`%LOCALAPPDATA%\Programs\MVR2T`；模型與設定：`%APPDATA%\MVR2T`（解除安裝時**保留**，要完全移除請手動刪除）。
 - 安裝檔較大（PyTorch CPU 版約占一半）；AI 模型不包含在安裝檔內，第一次使用時在「模型管理」下載。
+- 打包很吃記憶體（PyInstaller self-test 載入 PyTorch、electron-builder 壓縮約 1.2 GB）：記憶體較少的電腦請先關閉其他程式，
+  並一次只做一個步驟（打包後端 → 產生安裝檔 → 安裝測試），不要同時開著 `npm run dev` 或正式版。
 - 沒有簽章：第一次執行安裝檔時 Windows SmartScreen 會顯示「Windows 已保護您的電腦」，按「其他資訊 → 仍要執行」。
 
 ## Phase 11 驗收清單（打包）
@@ -369,6 +371,12 @@ Phase 11 fix1：
 - [ ] 離線時讀取影片：顯示「無法連線到 YouTube」；本機檔案的功能不受影響
 - [ ] 下載中改匯入本機檔案：YouTube 下載自動取消
 - [ ] 正式版（安裝後）也能下載（Electron 當作 Node.js 執行 YouTube 的驗證程式）
+
+YouTube fix1：
+- [ ] 有 Avast HTTPS 掃描的電腦：讀取影片、下載音訊與字幕都正常（Windows 憑證存放區，c247a08）
+- [ ] 下載元件時顯示速度與剩餘時間
+- [ ] 用影片字幕匯入完成後，自動切到工作區並捲動到逐字稿
+- [ ] 可用記憶體偏少時，逐字稿與摘要卡片在開始前顯示提醒（語音辨識約需 3 GB、摘要約需 3.3 GB）
 
 ## 開發注意事項
 

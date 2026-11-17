@@ -25,7 +25,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   // Braces matter: newer Chromium returns a Promise from scrollTo(), and returning it from an
   // effect makes React treat it as the cleanup function ("destroy is not a function" crash).
+  // 例外：切換頁面時指定了要捲動到的區塊（uiStore.focus），由該頁面自己捲動
   useEffect(() => {
+    if (useUiStore.getState().focus) return;
     window.scrollTo(0, 0);
   }, [page]);
 

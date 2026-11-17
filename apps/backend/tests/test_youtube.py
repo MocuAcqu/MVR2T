@@ -289,3 +289,48 @@ def test_download_rejects_bad_urls_and_subtitle_languages(api):
     assert r.status_code == 422
     r = client.post("/api/youtube/download", json={"session_id": sid, "url": "https://youtu.be/jNQXAC9IVRw", "subtitle": {"lang": "../x", "name": "x"}})
     assert r.status_code == 422
+
+
+
+def _installed_component(tmp_path: Path) -> YtDlpComponent:
+    comp = YtDlpComponent(tmp_path / "runtime")
+    comp.dir.mkdir(parents=True)
+    comp.exe.write_bytes(b"x")
+    (comp.dir / ytdlp.INFO_FILE).write_text(json.dumps({"version": "v"}), encoding="utf-8")
+    return comp
+
+
+def test_windows_uses_the_system_certificate_store(tmp_path, monkeypatch):
+    """Avast 的 HTTPS 掃描把根憑證只裝在 Windows 存放區（2026-11-17 Windows 驗收，本機 c247a08）。"""
+    import ssl
+
+    der = b"\x30\x03\x02\x01\x01"  # DER_cert_to_PEM_cert only base64-encodes; content does not matter here
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(
+        ssl,
+        "enum_certificates",
+        lambda store: [
+            (der, "x509_asn", True),
+            (der, "x509_asn", {"1.3.6.1.5.5.7.3.1"}),  # server authentication
+            (der, "x509_asn", {"1.3.6.1.5.5.7.3.3"}),  # code signing only
+            (b"x", "pkcs_7_asn", True),
+        ],
+        raising=False,
+    )
+    comp = _installed_component(tmp_path)
+    args, env = yt.base_args(Settings(auth_token="", data_dir=tmp_path), comp, None)
+    assert args[args.index("--compat-options") + 1] == "no-certifi"
+    bundle = Path(env["CURL_CA_BUNDLE"])
+    assert bundle == comp.dir / "windows-roots.pem"
+    assert bundle.read_text(encoding="ascii").count("BEGIN CERTIFICATE") == 2  # server-auth roots only
+
+
+def test_other_platforms_keep_the_bundled_certificates(tmp_path, monkeypatch):
+    import os
+
+    monkeypatch.setattr(sys, "platform", "linux")
+    args, env = yt.base_args(Settings(auth_token="", data_dir=tmp_path), _installed_component(tmp_path), None)
+    assert "--compat-options" not in args
+    assert env.get("CURL_CA_BUNDLE") == os.environ.get("CURL_CA_BUNDLE")
+    assert not (tmp_path / "runtime" / "yt-dlp" / "windows-roots.pem").exists()
+

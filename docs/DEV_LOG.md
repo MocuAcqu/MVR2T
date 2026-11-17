@@ -1,6 +1,6 @@
 # 開發紀錄（給接手的 Claude / Claude Code）
 
-最後更新：2026-11-14。Phase 10（含 fix1，本機 dbece16）已在 Windows 驗收；CUDA／Metal 路線待實機驗證。Phase 11（含 fix1，本機 4f21f5d）已在 Windows 驗收；YouTube 連結已交付，待 Windows 驗收；之後做 Phase 11 步驟 7.1（不依賴開發環境）。
+最後更新：2026-11-14。Phase 10（含 fix1，本機 dbece16）已在 Windows 驗收；CUDA／Metal 路線待實機驗證。Phase 11（含 fix1、步驟 7.1）與 YouTube 連結（本機 5d4abb4＋c247a08）都已在 Windows 驗收；YouTube fix1 已交付，待驗收。
 
 ## 目前進度
 
@@ -160,6 +160,26 @@
 - Electron E2E（假的 yt-dlp）：使用說明 → 讀取影片 → 字幕 → 下載 → 工作區 → 抽取後字幕仍在；後端確實收到
   `--js-runtimes node:<electron>` 與 ELECTRON_RUN_AS_NODE=1。沙盒連不到 YouTube，**真實下載待 Windows 驗收**。
 - 沙盒確認：yt-dlp 2026.10.26 以 Electron 44 當作 Node 偵測為 `node-24.22.2`；Electron 支援 `--permission` 與 stdin 腳本。
+
+### Windows 驗收（2026-11-17，本機 5d4abb4＋修正 c247a08）
+- 實測（使用者自己的影片，660 秒）：元件 yt-dlp 2026.10.26（23.6 MB）下載 159 秒（偏慢）；probe 正確（標題、長度、字幕 en）；
+  m4a 10.7 MB 下載 73.7 秒；作者字幕逐字稿正確；`[debug] JS runtimes: node-24.22.2`、`[jsc:node] Solving JS challenges using node`，
+  沒有 JS／n challenge／signature 警告；播放清單 422；斷網 502「無法連線到 YouTube」。UI 6 項、正式版、Phase 11 步驟 7.1（.venv 改名）都通過。
+- **本機修正 c247a08（已原樣同步，blob 5a384dd）**：Avast 的 HTTPS 掃描根憑證只在 Windows 存放區，yt-dlp 內建 certifi 沒有 →
+  CERTIFICATE_VERIFY_FAILED（probe）與 curl_cffi `curl: (60)`（字幕）。Windows：`--compat-options no-certifi`（urllib／requests 改用系統存放區，
+  仍驗證）＋把 ROOT 中可用於伺服器驗證的憑證寫成 `<元件>/windows-roots.pem`，以 CURL_CA_BUNDLE 交給 curl_cffi（每次重寫）。
+- macOS（Phase 12 再驗證）：yt-dlp_macos 的 no-certifi 會改用 OpenSSL 預設路徑，可能讀不到鑰匙圈 → 維持 certifi；
+  若 Mac 上也有防毒軟體 HTTPS 掃描，再用 `security find-certificate -a -p` 匯出系統根憑證，比照 Windows 以 CURL_CA_BUNDLE／SSL_CERT_FILE 處理。
+- 使用者回報：完整 pytest 偶發一次 `FileNotFoundError`（pathlib stat），重跑通過。
+- 測試機 19.7 GB、平常只剩 2–3 GB 可用，驗收期間當機黑屏兩次（fix1 期間、dist:win 之後）。
+
+### fix1
+- 偶發 FileNotFoundError：模型下載／安裝在背景執行緒把檔案從暫存移到正式資料夾，狀態輪詢先 is_file() 再 stat() → 中間被移走。
+  新增 `store.file_size()`／`staged_bytes()`（OSError → 視為不存在），用在 is_installed、_missing_bytes、續傳計算。
+- 元件下載顯示速度與剩餘時間（snapshot 的 job.speed）。
+- 用作者字幕匯入完成 → 自動切到工作區並捲動到逐字稿（uiStore.goTo(page, focus)；AppShell 的換頁回頂端略過有 focus 的換頁）。
+- 可用記憶體提醒：逐字稿與摘要卡片在開始前讀取 /api/system/info 的 asr／llm 提醒（每 30 秒更新；進行中不輪詢）。
+- README：打包記憶體建議（關閉其他程式、一次一個步驟）。
 
 ## Phase 11 Windows Packaging（2026-11-14）
 

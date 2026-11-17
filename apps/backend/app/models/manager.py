@@ -43,6 +43,7 @@ from app.models.store import (
     install,
     installed_revision,
     is_installed,
+    staged_bytes,
     staging_dir,
     verify_installed,
 )
@@ -192,7 +193,7 @@ class ModelManager:
             if is_installed(m, self.models_root):
                 continue
             staged = staging_dir(m, self.models_root)
-            have = sum(min((staged / f.name).stat().st_size, f.size) for f in m.files if (staged / f.name).is_file())
+            have = staged_bytes(staged, m.files)
             total += m.size_bytes - have
         if p.runtime and not self._runtime_installed(p):
             total += runtime_size(plat=self._plat(p))
@@ -479,7 +480,7 @@ class ModelManager:
         # 先前下載到一半的部分
         for m in todo:
             staged = staging_dir(m, self.models_root)
-            job.done += sum(min((staged / f.name).stat().st_size, f.size) for f in m.files if (staged / f.name).is_file())
+            job.done += staged_bytes(staged, m.files)
 
         def stage(s: str, name: str) -> None:
             job.stage = {"downloading": "下載中", "verifying": "驗證檔案", "installing": "安裝中"}.get(s, s)

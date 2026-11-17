@@ -20,6 +20,7 @@ vi.mock('@/services/api', async (importOriginal) => {
 import { ApiError } from '@/services/api';
 import { __resetForTests, importFile, startExtraction } from '@/features/media/mediaController';
 import { idleExtraction, idleSummary, idleTranscription, useSessionStore } from '@/stores/sessionStore';
+import { useUiStore } from '@/stores/uiStore';
 import {
   __resetYouTubeForTests,
   acceptYouTubeNotice,
@@ -61,6 +62,7 @@ beforeEach(() => {
   vi.useRealTimers();
   __resetForTests();
   __resetYouTubeForTests();
+  useUiStore.setState({ page: 'dashboard', focus: null });
   useSessionStore.setState({
     sessionId: null,
     backendKey: null,
@@ -133,6 +135,8 @@ describe('downloadVideo', () => {
     expect(s.transcript).toBe(transcript);
     expect(s.transcription).toMatchObject({ status: 'completed', result: { segment_count: 1, audio_seconds: 19 } });
     expect(useYouTubeStore.getState()).toMatchObject({ phase: 'idle', url: '', video: null });
+    // the transcript is ready: jump straight to it in the workspace
+    expect(useUiStore.getState()).toMatchObject({ page: 'workspace', focus: 'transcript' });
 
     // extracting audio afterwards keeps the subtitle transcript
     api.getTask.mockReset();
@@ -149,6 +153,7 @@ describe('downloadVideo', () => {
     expect(useSessionStore.getState().transcript).toBeNull();
     expect(useSessionStore.getState().transcription.status).toBe('idle');
     expect(api.getTranscript).not.toHaveBeenCalled();
+    expect(useUiStore.getState().page).toBe('dashboard'); // the user opens the workspace when ready
   });
 
   it('a failed download keeps the video so the user can retry', async () => {

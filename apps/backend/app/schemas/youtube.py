@@ -10,6 +10,7 @@ class YtDlpJob(BaseModel):
     phase: Literal["checking", "downloading", "installing"]
     done_bytes: int
     total_bytes: int
+    speed: int = 0
     cancelling: bool
 
 

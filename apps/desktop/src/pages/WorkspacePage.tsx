@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Mono } from '@/components/mono/Mono';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,18 @@ import { useUiStore } from '@/stores/uiStore';
 /** Media workspace: media info, audio extraction (Phase 04), transcript (Phase 05), summary (Phase 06), mind map (Phase 07). */
 export function WorkspacePage() {
   const imp = useSessionStore((s) => s.import);
+  const focus = useUiStore((s) => s.focus);
+  const transcriptRef = useRef<HTMLDivElement>(null);
+  // 用影片字幕匯入完成後直接跳到逐字稿（2026-11-17 使用者建議）
+  useEffect(() => {
+    if (focus !== 'transcript' || imp.status !== 'ready') return;
+    // 等版面排好（AppShell 的「換頁回到頂端」會略過有 focus 的換頁）
+    const timer = window.setTimeout(() => {
+      transcriptRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      useUiStore.getState().clearFocus();
+    }, 100);
+    return () => window.clearTimeout(timer);
+  }, [focus, imp.status]);
   const setPage = useUiStore((s) => s.setPage);
   const openExport = useExportUi((s) => s.openPanel);
 
@@ -67,7 +80,7 @@ export function WorkspacePage() {
         <MediaInfoCard info={imp.info} />
         <ExtractionCard />
       </div>
-      <div className="mt-6">
+      <div className="mt-6 scroll-mt-24" ref={transcriptRef}>
         <TranscriptCard />
       </div>
       <div className="mt-6">

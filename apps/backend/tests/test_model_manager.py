@@ -460,3 +460,15 @@ def test_gpu_acceleration_is_an_optional_package_only_when_the_hardware_supports
     m.download_all()
     assert all(j.package != "llm_gpu" for j in [m._current, *m._queue] if j)  # not part of "download all"
     wait_idle(m)
+
+
+def test_file_sizes_tolerate_files_moved_by_the_installer(tmp_path):
+    """下載中輪詢狀態：is_file() 與 stat() 之間檔案被移走不能丟出 FileNotFoundError（2026-11-17 Windows 偶發）。"""
+    from types import SimpleNamespace
+
+    from app.models.store import file_size, staged_bytes
+
+    (tmp_path / "a.bin").write_bytes(b"12345")
+    files = [SimpleNamespace(name="a.bin", size=3), SimpleNamespace(name="gone.bin", size=10)]
+    assert staged_bytes(tmp_path, files) == 3
+    assert file_size(tmp_path / "gone.bin") is None and file_size(tmp_path) is None

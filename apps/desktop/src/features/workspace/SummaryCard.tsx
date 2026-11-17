@@ -13,6 +13,7 @@ import { cancelSummary, startSummary } from '@/features/media/mediaController';
 import { revealTranscriptLine } from '@/features/workspace/TranscriptCard';
 import { formatDuration, formatPercent } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { MemoryNote } from '@/features/workspace/MemoryNote';
 import { useSessionStore } from '@/stores/sessionStore';
 
 export const SUMMARY_TYPES: { value: SummaryType; label: string; hint: string }[] = [
@@ -185,6 +186,7 @@ export function SummaryCard() {
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {!ready ? <p className="text-sm text-body-gray">請先完成「語音辨識」，再產生摘要。</p> : null}
+        {ready ? <MemoryNote kind="llm" active={busy} /> : null}
 
         <fieldset disabled={!ready || busy} className="disabled:opacity-40">
           <legend className="mb-2 text-sm font-medium">要產生的內容</legend>

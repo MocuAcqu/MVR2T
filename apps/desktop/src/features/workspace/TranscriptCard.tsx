@@ -11,6 +11,7 @@ import { cancelTranscription, startTranscription } from '@/features/media/mediaC
 import { GuideCoach } from '@/features/guide/GuideCoach';
 import { GuideTarget } from '@/features/guide/GuideTarget';
 import { formatDuration, formatPercent, formatTimestamp } from '@/lib/format';
+import { MemoryNote } from '@/features/workspace/MemoryNote';
 import { useSessionStore } from '@/stores/sessionStore';
 
 const LANGUAGES: { value: AsrLanguage | 'auto'; label: string }[] = [
@@ -95,6 +96,7 @@ export function TranscriptCard() {
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {!ready && !transcript ? <p className="text-sm text-body-gray">請先完成「抽取音訊」，再開始語音辨識。</p> : null}
+        {ready && !(t.status === 'completed' && transcript) ? <MemoryNote kind="asr" active={busy} /> : null}
 
         {busy ? (
           <div className="flex items-end gap-4">

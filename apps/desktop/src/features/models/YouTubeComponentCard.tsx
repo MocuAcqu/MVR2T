@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Progress } from '@/components/ui/progress';
 import { useYouTubeStore } from '@/features/youtube/youtubeController';
 import { formatBytes } from '@/lib/format';
+import { etaSeconds, formatEta } from './modelActions';
 import { deleteYtDlp, getBackendConnection, getYtDlp, ytDlpAction } from '@/services/api';
 
 const POLL_MS = 700;
@@ -106,7 +107,12 @@ export function YouTubeComponentCard() {
               </div>
               <Progress label="YouTube 下載元件進度" value={job.total_bytes ? job.done_bytes / job.total_bytes : 0} indeterminate={!job.total_bytes} />
               {job.total_bytes ? (
-                <p className="text-xs tabular-nums text-body-gray">{formatBytes(job.done_bytes)} / {formatBytes(job.total_bytes)}</p>
+                <p className="text-xs tabular-nums text-body-gray">
+                  {formatBytes(job.done_bytes)} / {formatBytes(job.total_bytes)}
+                  {job.phase === 'downloading' && job.speed > 0
+                    ? `・${formatBytes(job.speed)}/s・${formatEta(etaSeconds(job.done_bytes, job.total_bytes, job.speed))}`
+                    : ''}
+                </p>
               ) : null}
             </div>
           </div>

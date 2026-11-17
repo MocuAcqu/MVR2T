@@ -372,7 +372,14 @@ export interface YtDlpState {
   checked_at: number | null;
   size_bytes: number | null;
   license: string;
-  job: { phase: 'checking' | 'downloading' | 'installing'; done_bytes: number; total_bytes: number; cancelling: boolean } | null;
+  job: {
+    phase: 'checking' | 'downloading' | 'installing';
+    done_bytes: number;
+    total_bytes: number;
+    /** bytes/s（下載時） */
+    speed: number;
+    cancelling: boolean;
+  } | null;
   last: { ok: boolean; message: string | null } | null;
 }
 
