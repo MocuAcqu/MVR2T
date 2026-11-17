@@ -121,6 +121,26 @@ class Transcript(BaseModel):
     segments: list[TranscriptSegment]
     #: asr = 本機語音辨識；subtitles = YouTube 影片作者提供的字幕
     source: Literal["asr", "subtitles"] = "asr"
+    #: 使用者在逐字稿編輯器修改過（規格 §2.1-D）
+    edited: bool = False
+
+
+class TranscriptEditSegment(BaseModel):
+    #: 原本的句子編號（摘要與心智圖以編號連結到逐字稿，所以不重新編號；合併時保留第一句的編號）
+    id: int = Field(ge=0)
+    start: float = Field(ge=0)
+    end: float = Field(ge=0)
+    text: str = Field(max_length=5000)
+    timing: Literal["aligned", "estimated"] = "aligned"
+    words: list[TranscriptWord] = Field(default_factory=list, max_length=5000)
+
+
+class TranscriptUpdate(BaseModel):
+    """逐字稿編輯器（規格 §2.1-D）：編輯文字、刪除、合併後的完整句子清單。"""
+
+    session_id: str
+    media_id: str
+    segments: list[TranscriptEditSegment] = Field(max_length=100_000)
 
 
 # --- Phase 06：摘要 -------------------------------------------------------------

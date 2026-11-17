@@ -74,11 +74,13 @@ interface SessionState {
   summary: Summary | null;
   /** 可編輯的心智圖（由摘要的心智圖建立，之後的編輯只在記憶體中，§8.3） */
   mindmap: MindNode | null;
+  /** 摘要產生後逐字稿又被編輯過：摘要與心智圖是依修改前的內容產生的 */
+  summaryStale: boolean;
   set: (
     patch: Partial<
       Pick<
         SessionState,
-        'sessionId' | 'backendKey' | 'import' | 'extraction' | 'transcription' | 'transcript' | 'summarizing' | 'summary' | 'mindmap'
+        'sessionId' | 'backendKey' | 'import' | 'extraction' | 'transcription' | 'transcript' | 'summarizing' | 'summary' | 'mindmap' | 'summaryStale'
       >
     >,
   ) => void;
@@ -98,6 +100,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   summarizing: idleSummary,
   summary: null,
   mindmap: null,
+  summaryStale: false,
   set: (patch) => set(patch),
   patchExtraction: (patch) => set((s) => ({ extraction: { ...s.extraction, ...patch } })),
   patchTranscription: (patch) => set((s) => ({ transcription: { ...s.transcription, ...patch } })),
@@ -111,5 +114,6 @@ export const useSessionStore = create<SessionState>((set) => ({
       summarizing: idleSummary,
       summary: null,
       mindmap: null,
+      summaryStale: false,
     }),
 }));

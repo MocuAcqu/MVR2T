@@ -21,6 +21,9 @@ import type {
   Summary,
   SummaryType,
   SubtitleChoice,
+  BackendSettings,
+  StorageInfo,
+  TranscriptSegment,
   YouTubeVideo,
   YtDlpState,
 } from '@shared/types/api';
@@ -245,3 +248,35 @@ export const startYouTubeDownload = (conn: BackendConnection, sessionId: string,
       subtitle,
     }),
   );
+
+// ---------------------------------------------------------------------------
+// 逐字稿編輯器、工作區播放器（規格 §2.1-D）、設定頁（§12.4）
+// ---------------------------------------------------------------------------
+
+export const updateTranscript = (conn: BackendConnection, sessionId: string, mediaId: string, segments: TranscriptSegment[]) =>
+  apiJson<Transcript>(conn, '/api/transcript', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: sessionId, media_id: mediaId, segments }),
+  });
+
+/** 播放器用的網址：<video>／<audio> 不能帶 Authorization 標頭，所以憑證放在網址上（只有這個路徑接受）。 */
+export function mediaFileUrl(conn: BackendConnection, sessionId: string, mediaId: string, kind: 'original' | 'audio' = 'original'): string {
+  const q = new URLSearchParams({ session_id: sessionId, media_id: mediaId, kind });
+  if (conn.token) q.set('token', conn.token);
+  return `${conn.url}/api/media/file?${q.toString()}`;
+}
+
+export const getBackendSettings = (conn: BackendConnection) => apiJson<BackendSettings>(conn, '/api/settings');
+
+export const putBackendSettings = (conn: BackendConnection, value: BackendSettings) =>
+  apiJson<BackendSettings>(conn, '/api/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(value),
+  });
+
+export const getStorageInfo = (conn: BackendConnection) => apiJson<StorageInfo>(conn, '/api/settings/storage');
+
+export const cleanupStorage = (conn: BackendConnection) =>
+  apiJson<{ freed_bytes: number }>(conn, '/api/settings/cleanup', { method: 'POST' });

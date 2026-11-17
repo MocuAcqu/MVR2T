@@ -50,7 +50,10 @@ def default_engines(cfg: Settings) -> EngineSpec:
     aligner_dir = (
         str(QWEN3_FORCED_ALIGNER_0_6B.local_dir(root)) if is_installed(QWEN3_FORCED_ALIGNER_0_6B, root) else None
     )
-    return EngineSpec(str(QWEN3_ASR_0_6B.local_dir(root)), aligner_dir, cfg.asr_dtype, cfg.torch_threads, cfg.asr_batch)
+    from app.core.user_settings import load
+
+    batch = 1 if load(cfg.data_dir).memory == "low" else cfg.asr_batch  # 設定頁「省記憶體」：一次只辨識一段
+    return EngineSpec(str(QWEN3_ASR_0_6B.local_dir(root)), aligner_dir, cfg.asr_dtype, cfg.torch_threads, batch)
 
 
 def _load_manifest(rec: MediaRecord) -> dict[str, Any]:
@@ -205,3 +208,48 @@ def start_transcription(
             MODEL_LOCK.release()
 
     return sessions.tasks.start(session.id, "transcribe", job)
+
+
+def update_transcript(sessions: SessionManager, session: Session, media_id: str, segments: list[dict[str, Any]]) -> dict[str, Any]:
+    """逐字稿編輯器：以編輯後的句子取代（檢查時間與順序）。辨識進行中不能編輯。
+
+    句子保留原本的編號（摘要與心智圖的時間連結用編號找句子）：刪除的編號消失、合併的句子保留第一句的編號，編號必須遞增。"""
+    rec = session.media
+    if rec is None or rec.id != media_id or rec.transcript is None:
+        raise MediaError(404, "還沒有這個媒體的逐字稿。")
+    busy = [t for t in sessions.tasks.for_session(session.id) if t.status in ("queued", "running")]
+    if any(t.kind == "transcribe" for t in busy):
+        raise MediaError(409, "語音辨識進行中，請等它完成後再編輯。")
+    duration = float(rec.transcript.get("duration") or rec.info.get("duration") or 0)
+    limit = duration + 1.0 if duration > 0 else float("inf")
+    clean: list[dict[str, Any]] = []
+    last_start = -1.0
+    last_id = -1
+    for s in segments:
+        start, end = float(s["start"]), float(s["end"])
+        if end < start or end > limit:
+            raise MediaError(422, "句子的時間不正確。")
+        if start < last_start:
+            raise MediaError(422, "句子的順序不正確。")
+        last_start = start
+        sid = int(s["id"])
+        if sid <= last_id:
+            raise MediaError(422, "句子的編號不正確。")
+        last_id = sid
+        text = str(s["text"]).strip()
+        if not text:
+            continue  # 文字刪光等於刪除這一句
+        clean.append(
+            {
+                "id": sid,
+                "start": round(start, 3),
+                "end": round(end, 3),
+                "text": text,
+                "timing": s.get("timing") if s.get("timing") in ("aligned", "estimated") else "aligned",
+                "words": [w for w in s.get("words") or [] if isinstance(w, dict)],
+            }
+        )
+    transcript = {**rec.transcript, "segments": clean, "edited": True}
+    (rec.dir / "transcript.json").write_text(json.dumps(transcript, ensure_ascii=False), encoding="utf-8")
+    rec.transcript = transcript
+    return transcript

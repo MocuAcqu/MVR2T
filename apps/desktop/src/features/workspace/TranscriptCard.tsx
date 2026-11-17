@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import type { AsrLanguage, Transcript } from '@shared/types/api';
 import { Mono } from '@/components/mono/Mono';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,10 @@ import { GuideCoach } from '@/features/guide/GuideCoach';
 import { GuideTarget } from '@/features/guide/GuideTarget';
 import { formatDuration, formatPercent, formatTimestamp } from '@/lib/format';
 import { MemoryNote } from '@/features/workspace/MemoryNote';
+import { TranscriptEditor } from '@/features/workspace/TranscriptEditor';
+import { seekTo, segmentIndexAt, usePlayerStore } from '@/features/player/playerStore';
+import { cn } from '@/lib/utils';
+import { useUiPrefs } from '@/features/settings/uiPrefs';
 import { useSessionStore } from '@/stores/sessionStore';
 
 const LANGUAGES: { value: AsrLanguage | 'auto'; label: string }[] = [
@@ -38,9 +42,14 @@ const TIMING_LABEL: Record<Transcript['timing'], string> = {
 /** 逐字稿句子的 DOM id：摘要的時間點會捲動到這裡（見 SummaryCard）。 */
 export const transcriptLineId = (id: number) => `transcript-line-${id}`;
 
-/** 捲動到逐字稿中的某一句並短暫標示。 */
+/** 捲動到逐字稿中的某一句並短暫標示，播放器也跳到那裡（不自動播放）。
+ *  句子被合併或刪除後，改到編號在它之前最近的一句（合併的句子保留第一句的編號）。 */
 export function revealTranscriptLine(id: number): void {
-  const el = document.getElementById(transcriptLineId(id));
+  const segments = useSessionStore.getState().transcript?.segments ?? [];
+  const target = [...segments].reverse().find((s) => s.id <= id) ?? segments[0];
+  if (!target) return;
+  seekTo(target.start, false);
+  const el = document.getElementById(transcriptLineId(target.id));
   if (!el) return;
   el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   el.classList.add('bg-chip');
@@ -48,21 +57,35 @@ export function revealTranscriptLine(id: number): void {
 }
 
 function TranscriptList({ transcript }: { transcript: Transcript }) {
+  const ready = usePlayerStore((s) => s.ready);
+  const playing = usePlayerStore((s) => s.playing);
+  const time = usePlayerStore((s) => s.time);
+  const current = playing ? segmentIndexAt(transcript.segments, time) : -1;
   return (
     <ol className="max-h-[32rem] overflow-auto rounded-lg border border-chip" aria-label="逐字稿">
-      {transcript.segments.map((s) => (
+      {transcript.segments.map((s, i) => (
         <li
           key={s.id}
           id={transcriptLineId(s.id)}
-          className="flex scroll-mt-4 gap-4 border-t border-chip px-4 py-3 transition-colors first:border-t-0"
+          aria-current={i === current ? 'true' : undefined}
+          className={cn(
+            'flex scroll-mt-4 gap-4 border-t border-chip px-4 py-3 transition-colors first:border-t-0',
+            i === current && 'bg-chip',
+          )}
         >
-          <span
-            className="w-28 shrink-0 pt-0.5 text-xs tabular-nums text-body-gray"
-            title={s.timing === 'estimated' ? '依字數估計的時間' : `${formatTimestamp(s.start)} → ${formatTimestamp(s.end)}`}
+          <button
+            type="button"
+            disabled={!ready}
+            onClick={() => seekTo(s.start)}
+            className="w-28 shrink-0 self-start rounded-md pt-0.5 text-left text-xs tabular-nums text-body-gray enabled:hover:text-foreground enabled:hover:underline"
+            title={
+              (ready ? '從這裡播放・' : '') +
+              (s.timing === 'estimated' ? '依字數估計的時間' : `${formatTimestamp(s.start)} → ${formatTimestamp(s.end)}`)
+            }
           >
             {formatTimestamp(s.start)}
             {s.timing === 'estimated' ? ' *' : ''}
-          </span>
+          </button>
           <p className="min-w-0 flex-1 leading-relaxed">{s.text}</p>
         </li>
       ))}
@@ -76,7 +99,11 @@ export function TranscriptCard() {
   const extraction = useSessionStore((s) => s.extraction);
   const t = useSessionStore((s) => s.transcription);
   const transcript = useSessionStore((s) => s.transcript);
-  const [language, setLanguage] = useState<AsrLanguage | 'auto'>('auto');
+  const defaultLanguage = useUiPrefs((p) => p.asrLanguage);
+  const [language, setLanguage] = useState<AsrLanguage | 'auto'>(defaultLanguage);
+  const [editing, setEditing] = useState(false);
+  // 設定頁改了預設語言：還沒開始辨識時跟著改
+  useEffect(() => setLanguage(defaultLanguage), [defaultLanguage]);
 
   const ready = extraction.status === 'completed';
   const busy = t.status === 'starting' || t.status === 'queued' || t.status === 'running';
@@ -125,6 +152,7 @@ export function TranscriptCard() {
           <>
             <div className="flex flex-wrap items-center gap-2 text-sm" role="status">
               <Badge variant="solid">{languageLabel(transcript.language)}</Badge>
+              {transcript.edited ? <Badge variant="outline">已編輯</Badge> : null}
               {fromSubtitles ? (
                 <Badge variant="outline">影片字幕</Badge>
               ) : (
@@ -150,7 +178,9 @@ export function TranscriptCard() {
                 ))}
               </ul>
             ) : null}
-            {transcript.segments.length > 0 ? (
+            {editing ? (
+              <TranscriptEditor transcript={transcript} onDone={() => setEditing(false)} />
+            ) : transcript.segments.length > 0 ? (
               <TranscriptList transcript={transcript} />
             ) : (
               <p className="text-sm text-body-gray">沒有辨識到語音內容。</p>
@@ -174,7 +204,7 @@ export function TranscriptCard() {
         {t.status === 'cancelled' ? <p role="status" className="text-sm text-body-gray">已取消語音辨識。</p> : null}
         <GuideCoach step="transcribe" />
       </CardContent>
-      <CardFooter className="flex-wrap">
+      <CardFooter className={cn('flex-wrap', editing && 'hidden')}>
         {busy ? (
           <Button variant="secondary" onClick={() => void cancelTranscription()} disabled={t.status === 'starting'}>
             取消
@@ -198,10 +228,15 @@ export function TranscriptCard() {
                 {fromSubtitles ? '改用語音辨識' : t.status === 'completed' ? '重新辨識' : t.status === 'idle' ? '開始語音辨識' : '再試一次'}
               </Button>
             </GuideTarget>
-            {transcript && transcript.segments.length > 0 ? (
-              <Button variant="secondary" className="ml-auto" onClick={() => useExportUi.getState().openPanel(['transcript'])}>
-                匯出
-              </Button>
+            {transcript && transcript.segments.length > 0 && t.status === 'completed' ? (
+              <div className="ml-auto flex gap-2">
+                <Button variant="secondary" onClick={() => setEditing(true)}>
+                  編輯逐字稿
+                </Button>
+                <Button variant="secondary" onClick={() => useExportUi.getState().openPanel(['transcript'])}>
+                  匯出
+                </Button>
+              </div>
             ) : null}
           </>
         )}

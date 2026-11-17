@@ -167,6 +167,7 @@ export function SummaryCard() {
   const transcript = useSessionStore((s) => s.transcript);
   const s = useSessionStore((st) => st.summarizing);
   const summary = useSessionStore((st) => st.summary);
+  const stale = useSessionStore((st) => st.summaryStale);
   const [types, setTypes] = useState<SummaryType[]>(DEFAULT_TYPES);
   const [tab, setTab] = useState<SummaryType | null>(null);
 
@@ -187,6 +188,11 @@ export function SummaryCard() {
       <CardContent className="flex flex-col gap-4">
         {!ready ? <p className="text-sm text-body-gray">請先完成「語音辨識」，再產生摘要。</p> : null}
         {ready ? <MemoryNote kind="llm" active={busy} /> : null}
+        {summary && stale && !busy ? (
+          <p role="status" className="rounded-lg border border-foreground px-4 py-3 text-sm">
+            逐字稿已修改：目前的摘要與心智圖是依修改前的內容產生的。需要時請按「產生摘要」重新產生。
+          </p>
+        ) : null}
 
         <fieldset disabled={!ready || busy} className="disabled:opacity-40">
           <legend className="mb-2 text-sm font-medium">要產生的內容</legend>

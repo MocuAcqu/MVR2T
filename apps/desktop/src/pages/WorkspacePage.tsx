@@ -8,6 +8,7 @@ import { useExportUi } from '@/features/export/exportStore';
 import { removeMedia } from '@/features/media/mediaController';
 import { ExtractionCard } from '@/features/workspace/ExtractionCard';
 import { MindMapCard } from '@/features/mindmap/MindMapCard';
+import { PlayerCard } from '@/features/player/PlayerCard';
 import { MediaInfoCard } from '@/features/workspace/MediaInfoCard';
 import { SummaryCard } from '@/features/workspace/SummaryCard';
 import { TranscriptCard } from '@/features/workspace/TranscriptCard';
@@ -79,6 +80,9 @@ export function WorkspacePage() {
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <MediaInfoCard info={imp.info} />
         <ExtractionCard />
+      </div>
+      <div className="mt-6">
+        <PlayerCard info={imp.info} />
       </div>
       <div className="mt-6 scroll-mt-24" ref={transcriptRef}>
         <TranscriptCard />

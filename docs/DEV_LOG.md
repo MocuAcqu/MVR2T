@@ -1,6 +1,6 @@
 # 開發紀錄（給接手的 Claude / Claude Code）
 
-最後更新：2026-11-14。Phase 10（含 fix1，本機 dbece16）已在 Windows 驗收；CUDA／Metal 路線待實機驗證。Phase 11（含 fix1、步驟 7.1）與 YouTube 連結（本機 5d4abb4＋c247a08）都已在 Windows 驗收；YouTube fix1 已交付，待驗收。
+最後更新：2026-11-14。Phase 10（含 fix1，本機 dbece16）已在 Windows 驗收；CUDA／Metal 路線待實機驗證。Phase 11（含 fix1、步驟 7.1）與 YouTube 連結（含 fix1，本機 867bc52）都已在 Windows 驗收。逐字稿編輯器＋設定頁已交付（待驗收）；接著：英文介面、macOS 打包設定（不測試）、最終打包，然後結束專案。
 
 ## 目前進度
 
@@ -115,6 +115,39 @@
 - 沙盒的 init 不會立即回收殭屍行程，`kill -0` 對殭屍也成功；判斷行程是否存活請看 `/proc/<pid>/stat` 狀態不是 `Z`。
 - 在沙盒跑 Electron：`xvfb-run -a`，並加 `--no-sandbox`（root）。
 
+## 收尾計畫（使用者決定 2026-11-17）
+
+完成逐字稿編輯器（規格 2.1-D）與設定頁（12.4）、最終打包後結束專案。沒有 Mac → Phase 12 只準備設定、不測試；不購買程式碼簽章。
+設定頁的決定：語言 = 多語介面（繁中／英文）；推論裝置 = 自動／一律 CPU；記憶體 = 標準／省記憶體；
+逐字稿編輯後：匯出用編輯後內容，已有摘要時提示可重新產生（不自動清除）。
+
+## 逐字稿編輯器、播放器、設定頁（2026-11-17）
+
+### 逐字稿編輯器（規格 2.1-D）
+- `PUT /api/transcript`：完整句子清單取代（只存在本次 Session）。**保留原本的句子編號**（摘要與心智圖以編號連結）：刪除的編號消失、
+  合併保留第一句的編號；編號與開始時間必須遞增、結束 ≥ 開始、不超過媒體長度＋1 秒；文字清空 = 刪除；`edited: true`。辨識進行中不能編輯。
+- 前端（TranscriptEditor）：文字（停 0.7 秒自動儲存）、與下一句合併（開始取第一句、結束取第二句；中文直接接、英文補空白）、刪除、復原（50 步）。
+  改文字的句子清掉逐字時間（words）。儲存後若已有摘要 → summaryStale，摘要卡片提示可重新產生。
+- 摘要／心智圖的時間連結：句子被合併或刪除時，改到編號在它之前最近的一句；同時把播放器移到那裡（不自動播放）。
+
+### 播放器（規格 12.4「播放器」、2.1-D「依時間戳記定位原始影音」）
+- `GET /api/media/file?session_id&media_id&kind=original|audio`：FileResponse（Range，可拖曳）。<video>／<audio> 不能帶 Authorization →
+  **只有這個路徑**接受網址上的 `?token=`（core/security.py QUERY_TOKEN_PATHS）。CSP media-src 加入 http://127.0.0.1:*。
+- PlayerCard：影片顯示畫面、音訊顯示播放列；Chromium 不能播放的格式 → 抽取音訊後改播 audio.wav。逐字稿的時間是按鈕（從那句播放），
+  播放中的句子標示（playerStore + 二分搜尋）。
+
+### 設定頁（規格 12.4）
+- 後端 `<userData>/settings.json`（core/user_settings.py）：device auto|cpu、memory standard|low；`GET/PUT /api/settings`。
+  plan_llm(force_cpu) 不用 CUDA／Metal；省記憶體 → 摘要 ctx 4096、語音辨識 batch 1。/api/system/info 也套用（「這台電腦」顯示實際裝置）。
+- `GET /api/settings/storage`、`POST /api/settings/cleanup`：目前工作階段（不清除）、其他工作階段留下的資料夾、yt-dlp 快取。
+- Main 的 preferences.json 新增 asrLanguage（預設辨識語言）；IPC getUiPrefs／setUiPrefs、openAppLocation(data|notices)。
+- 「預設模型」目前每項功能只有一個驗證過的模型 → 顯示（下載與刪除在模型管理）。「語言（英文介面）」在下一次交付。
+
+### 驗證
+- 後端 +11（編輯、時間檢查、播放器 Range／token、設定、暫存清理、force_cpu／省記憶體），前端 +7（編輯操作、播放位置、儲存與提示）。
+- Electron E2E（假 yt-dlp 字幕）：播放器 206 Range、點時間跳到 1.5 秒播放；編輯 → 合併 → 復原 → 刪除 → 完成（4 次 PUT）；
+  設定頁 CPU／省記憶體寫入 settings.json、預設語言寫入 preferences.json。
+
 ## YouTube 連結（2026-11-16）
 
 使用者決定（2026-11-15）：
@@ -180,6 +213,8 @@
 - 用作者字幕匯入完成 → 自動切到工作區並捲動到逐字稿（uiStore.goTo(page, focus)；AppShell 的換頁回頂端略過有 focus 的換頁）。
 - 可用記憶體提醒：逐字稿與摘要卡片在開始前讀取 /api/system/info 的 asr／llm 提醒（每 30 秒更新；進行中不輪詢）。
 - README：打包記憶體建議（關閉其他程式、一次一個步驟）。
+- Windows 驗收（2026-11-17，本機 867bc52，無本機修正）：前端 185、後端 208 passed／9 skipped，連跑 2 次沒有再出現 FileNotFoundError；
+  元件下載顯示速度與剩餘時間、字幕匯入後自動跳到逐字稿、記憶體提醒都正常；使用者滿意版面與文字。
 
 ## Phase 11 Windows Packaging（2026-11-14）
 

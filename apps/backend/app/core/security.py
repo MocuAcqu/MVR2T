@@ -14,6 +14,8 @@ from starlette.types import ASGIApp
 
 AUTH_HEADER = "authorization"
 AUTH_SCHEME = "bearer"
+#: <video>／<audio> 無法帶 Authorization 標頭：只有播放器的路徑接受網址上的 ?token=（只在 127.0.0.1，憑證每次啟動都不同）
+QUERY_TOKEN_PATHS = frozenset({"/api/media/file"})
 
 
 def token_matches(header_value: str | None, expected: str) -> bool:
@@ -39,4 +41,7 @@ class TokenAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if request.method == "OPTIONS" or token_matches(request.headers.get(AUTH_HEADER), self._token):
             return await call_next(request)
+        if request.method == "GET" and request.url.path in QUERY_TOKEN_PATHS:
+            if token_matches(f"Bearer {request.query_params.get('token', '')}", self._token):
+                return await call_next(request)
         return JSONResponse({"detail": "Missing or invalid session token"}, status_code=401)

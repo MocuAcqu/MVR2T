@@ -1,6 +1,7 @@
-import type { ComponentType } from 'react';
+import { useEffect, type ComponentType } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
 import { useBackgroundTaskEffects } from '@/features/media/backgroundEffects';
+import { loadUiPrefs } from '@/features/settings/uiPrefs';
 import { SystemStatusProvider } from '@/hooks/useSystemStatus';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { ModelsPage } from '@/pages/ModelsPage';
@@ -20,6 +21,9 @@ const PAGES: Record<PageId, ComponentType> = {
 export default function App() {
   const Page = PAGES[useUiStore((s) => s.page)];
   useBackgroundTaskEffects();
+  useEffect(() => {
+    void loadUiPrefs();
+  }, []);
   return (
     <SystemStatusProvider>
       <AppShell>

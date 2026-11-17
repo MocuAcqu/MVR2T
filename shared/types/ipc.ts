@@ -141,4 +141,14 @@ export interface Mvr2tBridge {
   getYouTubeNotice(): Promise<boolean>;
   /** 記錄已同意 YouTube 下載使用說明 */
   acceptYouTubeNotice(): Promise<boolean>;
+  /** 設定頁的介面偏好 */
+  getUiPrefs(): Promise<UiPrefs>;
+  setUiPrefs(patch: Partial<UiPrefs>): Promise<UiPrefs>;
+  /** 開啟資料夾或授權說明：data = 程式資料夾（模型、設定）；notices = 第三方授權 */
+  openAppLocation(which: 'data' | 'notices'): Promise<boolean>;
+}
+
+/** 設定頁（規格 §12.4）的介面偏好（存在 Main 的 preferences.json） */
+export interface UiPrefs {
+  asrLanguage: 'auto' | 'Chinese' | 'English' | 'Cantonese' | 'Japanese' | 'Korean';
 }

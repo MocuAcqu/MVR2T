@@ -88,6 +88,17 @@ class SessionManager:
             self._sessions[sid] = s
         return s
 
+    def active_dirs(self) -> list[Path]:
+        with self._lock:
+            return [s.dir for s in self._sessions.values()]
+
+    def inactive_dirs(self) -> list[Path]:
+        """sessions_root 下不屬於任何進行中工作階段的資料夾（設定頁的「清除暫存」）。"""
+        if not self.root.exists():
+            return []
+        active = {d.resolve() for d in self.active_dirs()}
+        return [c for c in self.root.iterdir() if c.is_dir() and c.resolve() not in active]
+
     def get(self, session_id: str) -> Session | None:
         with self._lock:
             return self._sessions.get(session_id)

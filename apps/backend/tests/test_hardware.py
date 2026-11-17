@@ -290,3 +290,23 @@ def test_cuda_runtime_installs_with_its_cuda_libraries_next_to_the_exe(tmp_path,
         assert rt.cuda_version(plat) == (12, 4)
     finally:
         server.httpd.shutdown()
+
+
+def test_settings_can_force_cpu_and_save_memory(tmp_path, exes):
+    """設定頁（規格 §12.4）：推論裝置「一律使用 CPU」、記憶體「省記憶體」。"""
+    from types import SimpleNamespace
+
+    from app.core import user_settings
+
+    m = big_model(tmp_path)
+    plan = make_plan(nvidia_profile(), tmp_path, m, vram_free=11 * GiB, force_cpu=True)
+    assert (plan.device, plan.n_gpu_layers, plan.executable) == ("cpu", 0, str(exes[0])) and "一律使用 CPU" in plan.reason
+    plan = make_plan(profile(metal=True, plat="darwin"), tmp_path, m, force_cpu=True)
+    assert plan.device == "cpu" and plan.n_gpu_layers == 0
+
+    cfg = SimpleNamespace(data_dir=tmp_path / "data", llm_ctx=8192)
+    assert rs.llm_options(cfg) == {"ctx": 8192, "force_cpu": False}
+    user_settings.save(cfg.data_dir, user_settings.UserSettings(device="cpu", memory="low"))
+    assert rs.llm_options(cfg) == {"ctx": 4096, "force_cpu": True}
+    (cfg.data_dir / "settings.json").write_text('{"device": "gpu!", "memory": 5}', encoding="utf-8")
+    assert user_settings.load(cfg.data_dir) == user_settings.UserSettings()

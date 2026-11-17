@@ -87,6 +87,7 @@ def plan_llm(
     vram_free: int | None = None,
     check_memory: bool = True,
     model_bytes: int | None = None,
+    force_cpu: bool = False,
 ) -> LlmPlan:
     """選擇摘要的執行方式。check_memory=False 時只回報建議、不丟出記憶體不足（給「這台電腦」頁面顯示用）。"""
     cpu_exe = find_llama_server(runtime_root, plat=variant_platform(CPU))
@@ -96,6 +97,11 @@ def plan_llm(
     layers = (block_count(model_path) if model_path.is_file() else None) or 32
     ctxs = [c for c in (ctx, MIN_CTX) if c >= MIN_CTX] if ctx > MIN_CTX else [max(ctx, 512)]
     warnings: list[str] = []
+
+    if force_cpu:  # 設定頁「推論裝置：一律使用 CPU」
+        c = _fit_ctx(profile, model_bytes, kv, ctxs, warnings, check_memory)
+        exe = str(cpu_exe) if cpu_exe else None
+        return LlmPlan("cpu", exe, 0, c, "CPU（設定為一律使用 CPU）", warnings, exe)
 
     # --- GPU：NVIDIA CUDA ---
     cuda_plat = variant_platform(CUDA)
@@ -156,6 +162,14 @@ def _fit_ctx(profile: HardwareProfile, model_bytes: int, kv: int, ctxs: list[int
     # 模型以 mmap 載入，記憶體稍微不夠時仍能執行（作業系統會換頁），只是比較慢
     warnings.append(f"可用記憶體偏少（{avail / GiB:.1f} GB，建議 {need / GiB:.1f} GB 以上），摘要可能會比較慢；建議先關閉其他程式。")
     return ctxs[-1]
+
+
+def llm_options(cfg: Any) -> dict[str, Any]:
+    """設定頁的選擇 → plan_llm 的參數（省記憶體：context 4096；一律 CPU：不用 GPU）。"""
+    from app.core.user_settings import load
+
+    us = load(cfg.data_dir)
+    return {"ctx": MIN_CTX if us.memory == "low" else cfg.llm_ctx, "force_cpu": us.device == "cpu"}
 
 
 @dataclass

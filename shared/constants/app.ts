@@ -43,6 +43,11 @@ export const IPC_CHANNELS = {
   /** YouTube 下載使用說明：是否已同意（userData/preferences.json） */
   getYouTubeNotice: 'prefs:get-youtube-notice',
   acceptYouTubeNotice: 'prefs:accept-youtube-notice',
+  /** 設定頁（規格 §12.4）的介面偏好：預設辨識語言 */
+  getUiPrefs: 'prefs:get-ui',
+  setUiPrefs: 'prefs:set-ui',
+  /** 設定頁「關於」：開啟資料夾或授權說明（renderer 不能指定路徑） */
+  openAppLocation: 'app:open-location',
   /** Main → Renderer 推送後端狀態變化。 */
   backendStateChanged: 'backend:state-changed',
 } as const;

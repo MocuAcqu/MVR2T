@@ -10,9 +10,17 @@ export interface Prefs {
   fixedExportFolder: string | null;
   /** 使用者已閱讀並同意 YouTube 下載的使用說明（只用於自己擁有或已獲授權的影片） */
   youtubeNoticeAccepted: boolean;
+  /** 設定頁（規格 §12.4）：語音辨識的預設語言 */
+  asrLanguage: AsrLanguagePref;
 }
 
-const EMPTY: Prefs = { lastExportFolder: null, fixedExportFolder: null, youtubeNoticeAccepted: false };
+export const ASR_LANGUAGE_PREFS = ['auto', 'Chinese', 'English', 'Cantonese', 'Japanese', 'Korean'] as const;
+export type AsrLanguagePref = (typeof ASR_LANGUAGE_PREFS)[number];
+
+const EMPTY: Prefs = { lastExportFolder: null, fixedExportFolder: null, youtubeNoticeAccepted: false, asrLanguage: 'auto' };
+
+const validAsrLanguage = (v: unknown): AsrLanguagePref =>
+  (ASR_LANGUAGE_PREFS as readonly unknown[]).includes(v) ? (v as AsrLanguagePref) : 'auto';
 
 const validPath = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 && v.length < 1024 && path.isAbsolute(v) ? v : null);
 
@@ -24,6 +32,7 @@ export async function loadPrefs(file: string): Promise<Prefs> {
       lastExportFolder: validPath(raw.lastExportFolder),
       fixedExportFolder: validPath(raw.fixedExportFolder),
       youtubeNoticeAccepted: raw.youtubeNoticeAccepted === true,
+      asrLanguage: validAsrLanguage(raw.asrLanguage),
     };
   } catch {
     return { ...EMPTY };

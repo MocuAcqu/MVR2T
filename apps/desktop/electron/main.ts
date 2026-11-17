@@ -21,7 +21,7 @@ import { APP_NAME, IPC_CHANNELS } from '@shared/constants/app';
 import type { AppInfo, BackendState, ExportFilesResult, ExportPrefs, SaveFileResult } from '@shared/types/ipc';
 import { BackendManager, resolveBackendCommand } from './backend';
 import { parseExportRequest, runExport } from './exporter';
-import { isDirectory, loadPrefs, savePrefs } from './prefs';
+import { ASR_LANGUAGE_PREFS, isDirectory, loadPrefs, savePrefs, type AsrLanguagePref } from './prefs';
 import { StartupTimer } from './startup-timing';
 import { isAppUrl, isSafeExternalUrl, parseNotification, parseSaveRequest, rendererOrigins } from './security';
 
@@ -108,7 +108,7 @@ function installDevCsp(): void {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
-    "media-src 'self' blob:",
+    "media-src 'self' blob: http://127.0.0.1:*",
     `connect-src 'self' ws://${host} http://127.0.0.1:*`,
     "object-src 'none'",
     "base-uri 'none'",
@@ -367,6 +367,25 @@ function registerIpc(): void {
   handle(IPC_CHANNELS.acceptYouTubeNotice, async () => {
     await savePrefs(prefsFile(), { youtubeNoticeAccepted: true });
     return true;
+  });
+  handle(IPC_CHANNELS.getUiPrefs, async () => ({ asrLanguage: (await loadPrefs(prefsFile())).asrLanguage }));
+  handle(IPC_CHANNELS.setUiPrefs, async (patch: unknown) => {
+    const raw = (patch ?? {}) as Record<string, unknown>;
+    const next = (ASR_LANGUAGE_PREFS as readonly unknown[]).includes(raw.asrLanguage)
+      ? await savePrefs(prefsFile(), { asrLanguage: raw.asrLanguage as AsrLanguagePref })
+      : await loadPrefs(prefsFile());
+    return { asrLanguage: next.asrLanguage };
+  });
+  handle(IPC_CHANNELS.openAppLocation, async (which: unknown) => {
+    if (which === 'data') return (await shell.openPath(app.getPath('userData'))) === '';
+    if (which === 'notices') {
+      // 正式版：resources/THIRD_PARTY_NOTICES.md；開發版：apps/desktop/build-resources/
+      const file = app.isPackaged
+        ? path.join(process.resourcesPath, 'THIRD_PARTY_NOTICES.md')
+        : path.join(__dirname, '../build-resources/THIRD_PARTY_NOTICES.md');
+      return (await shell.openPath(file)) === '';
+    }
+    return false;
   });
   handle(IPC_CHANNELS.openExportFolder, async () => {
     if (lastExportFolder) await shell.openPath(lastExportFolder);

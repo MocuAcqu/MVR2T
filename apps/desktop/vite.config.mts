@@ -14,7 +14,7 @@ const PROD_CSP = [
   "style-src 'self'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
-  "media-src 'self' blob:",
+  "media-src 'self' blob: http://127.0.0.1:*", // 工作區播放器：本機後端提供的原始影音（帶一次性憑證）
   'connect-src http://127.0.0.1:*',
   "object-src 'none'",
   "base-uri 'none'",

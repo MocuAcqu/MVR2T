@@ -11,6 +11,7 @@ import type {
   ExportFilesRequest,
   ExportFilesResult,
   ExportPrefs,
+  UiPrefs,
   Mvr2tBridge,
   SaveFileRequest,
   SaveFileResult,
@@ -38,6 +39,9 @@ const bridge: Mvr2tBridge = {
   clearFixedExportFolder: (): Promise<ExportPrefs> => ipcRenderer.invoke(IPC_CHANNELS.clearFixedExportFolder),
   getYouTubeNotice: (): Promise<boolean> => ipcRenderer.invoke(IPC_CHANNELS.getYouTubeNotice),
   acceptYouTubeNotice: (): Promise<boolean> => ipcRenderer.invoke(IPC_CHANNELS.acceptYouTubeNotice),
+  getUiPrefs: (): Promise<UiPrefs> => ipcRenderer.invoke(IPC_CHANNELS.getUiPrefs),
+  setUiPrefs: (patch: Partial<UiPrefs>): Promise<UiPrefs> => ipcRenderer.invoke(IPC_CHANNELS.setUiPrefs, patch),
+  openAppLocation: (which: 'data' | 'notices'): Promise<boolean> => ipcRenderer.invoke(IPC_CHANNELS.openAppLocation, which),
 };
 
 contextBridge.exposeInMainWorld('mvr2t', bridge);

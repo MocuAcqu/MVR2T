@@ -140,6 +140,22 @@ export interface Transcript {
   segments: TranscriptSegment[];
   /** asr = 本機語音辨識；subtitles = YouTube 影片作者提供的字幕 */
   source?: 'asr' | 'subtitles';
+  /** 使用者在逐字稿編輯器修改過 */
+  edited?: boolean;
+}
+
+/** 設定頁（規格 §12.4）：後端的推論設定 */
+export interface BackendSettings {
+  device: 'auto' | 'cpu';
+  memory: 'standard' | 'low';
+}
+
+export interface StorageInfo {
+  data_dir: string;
+  models_dir: string;
+  current_session_bytes: number;
+  stale_bytes: number;
+  cache_bytes: number;
 }
 
 /** 語音辨識工作完成時的摘要（完整逐字稿另以 GET /api/transcript 取得）。 */

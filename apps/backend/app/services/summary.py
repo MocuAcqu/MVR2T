@@ -18,7 +18,7 @@ from typing import Any
 
 from app.core.config import Settings
 from app.core.hardware import detect
-from app.core.runtime_select import InsufficientMemory, LlmPlan, plan_llm
+from app.core.runtime_select import InsufficientMemory, LlmPlan, llm_options, plan_llm
 from app.engines.llm.server import LlamaServer, LlmCancelled, LlmError, ServerOptions
 from app.engines.llm.summarize import ALL_TYPES, Budget, Line, SummaryType, summarize
 from app.models.registry import LLM_MODEL, gguf_path
@@ -84,7 +84,7 @@ class FallbackLlm:
 def default_llm(cfg: Settings) -> FallbackLlm:
     model = gguf_path(LLM_MODEL, cfg.models_root)
     try:
-        plan = plan_llm(detect(), cfg.runtime_root, model, ctx=cfg.llm_ctx)
+        plan = plan_llm(detect(), cfg.runtime_root, model, **llm_options(cfg))
     except InsufficientMemory as e:
         raise MediaError(507, str(e)) from None
     if plan.executable is None:

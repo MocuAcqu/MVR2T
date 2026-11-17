@@ -6,7 +6,7 @@ from fastapi import APIRouter, Query, Request
 from app.api.deps import app_settings
 from app.engines.media import ffmpeg as ff
 from app.core.hardware import detect
-from app.core.runtime_select import plan_asr, plan_llm
+from app.core.runtime_select import llm_options, plan_asr, plan_llm
 from app.models.registry import LLM_MODEL, gguf_path
 from app.schemas.media import FfmpegStatus, SystemInfo
 
@@ -28,5 +28,5 @@ def system_info(request: Request, refresh: bool = Query(False)) -> SystemInfo:
     """硬體資訊與目前的運算裝置。refresh=true 重新偵測顯示卡（例如剛更新驅動程式）。不連網。"""
     cfg = app_settings(request)
     hw = detect(refresh=refresh)
-    llm = plan_llm(hw, cfg.runtime_root, gguf_path(LLM_MODEL, cfg.models_root), ctx=cfg.llm_ctx, check_memory=False)
+    llm = plan_llm(hw, cfg.runtime_root, gguf_path(LLM_MODEL, cfg.models_root), check_memory=False, **llm_options(cfg))
     return SystemInfo(hardware=hw.to_dict(), llm=llm.to_dict(), asr=plan_asr(hw).to_dict())  # type: ignore[arg-type]

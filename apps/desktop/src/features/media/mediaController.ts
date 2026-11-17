@@ -138,6 +138,7 @@ export async function importFile(file: File): Promise<void> {
     transcript: null,
     summarizing: idleSummary,
     summary: null,
+    summaryStale: false,
     mindmap: null,
   });
 
@@ -231,6 +232,7 @@ export function finishExternalImport(source: ImportSource, info: MediaInfo, tran
     transcript,
     summarizing: idleSummary,
     summary: null,
+    summaryStale: false,
     mindmap: null,
   });
 }
@@ -288,7 +290,7 @@ export async function startExtraction(): Promise<void> {
     extraction: { ...idleExtraction, status: 'starting', stage: '準備中' },
     ...(keepSubtitles
       ? {}
-      : { transcription: idleTranscription, transcript: null, summarizing: idleSummary, summary: null, mindmap: null }),
+      : { transcription: idleTranscription, transcript: null, summarizing: idleSummary, summary: null, mindmap: null, summaryStale: false }),
   });
   try {
     const conn = await connection();
@@ -327,6 +329,7 @@ export async function startTranscription(language: AsrLanguage | null): Promise<
     transcript: null,
     summarizing: idleSummary,
     summary: null,
+    summaryStale: false,
     mindmap: null,
   });
   try {
@@ -364,7 +367,7 @@ export async function startSummary(types: SummaryType[]): Promise<void> {
   const mediaId = state.import.info.media_id;
   const sessionId = state.sessionId;
   stopPolling('summarizing');
-  store().set({ summarizing: { ...idleSummary, status: 'starting', stage: '準備中' }, summary: null, mindmap: null });
+  store().set({ summarizing: { ...idleSummary, status: 'starting', stage: '準備中' }, summary: null, mindmap: null, summaryStale: false });
   try {
     const conn = await connection();
     const { task_id } = await apiStartSummary(conn, sessionId, mediaId, types);
