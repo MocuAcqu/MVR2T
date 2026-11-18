@@ -1,6 +1,7 @@
 {
   "name": "local-ai-media-studio",
   "private": true,
+  "license": "MIT",
   "version": "0.1.0",
   "description": "MVR2T - Local Media Studio: local-first AI media-to-text desktop app",
   "engines": {

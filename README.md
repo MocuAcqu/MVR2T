@@ -2,7 +2,25 @@
 
 > Your Media. Your Video. Your Record.
 
-本機、離線優先的 AI 影音轉文字與知識整理桌面應用程式。完整規格請見 [`PROJECT_SPEC.md`](./PROJECT_SPEC.md)。
+本機、離線優先的 AI 影音轉文字與知識整理桌面應用程式：把影片與錄音轉成逐字稿、摘要與心智圖。
+AI 模型下載一次後完全在你的電腦上執行，檔案不會上傳。介面支援繁體中文與 English。
+
+## 下載與安裝（使用者）
+
+**[到 Releases 下載最新版 →](../../releases/latest)**（`MVR2T-Setup-<版本>-x64.exe`，Windows 10／11 64 位元）
+
+- 系統需求：記憶體 8 GB 以上（建議 16 GB）、磁碟可用空間約 10 GB；第一次使用需要網路下載 AI 模型（約 6 GB）。
+- 安裝檔沒有數位簽章：Windows 顯示「Windows 已保護您的電腦」時，按「其他資訊」→「仍要執行」。
+- 開啟後到「模型管理」下載模型；之後除了 YouTube 功能都可以離線使用。
+- YouTube 功能請只用於你自己擁有或已獲授權的影片。
+- English: download the installer from [Releases](../../releases/latest); switch the interface in Settings → Interface language.
+
+授權：MVR2T 的程式碼以 [MIT License](./LICENSE) 釋出；內附或下載的第三方軟體與模型依各自授權，見
+[`THIRD_PARTY_NOTICES.md`](./apps/desktop/build-resources/THIRD_PARTY_NOTICES.md)。
+
+---
+
+以下是開發者說明。完整規格請見 [`PROJECT_SPEC.md`](./PROJECT_SPEC.md)，開發紀錄見 [`docs/DEV_LOG.md`](./docs/DEV_LOG.md)。
 
 ## 目前進度
 
@@ -23,7 +41,7 @@
 | 11 | Windows Packaging（PyInstaller 後端、內附 LGPL FFmpeg、electron-builder 安裝程式） | ✅ 已在 Windows 驗收（含 fix1；「不依賴開發環境」延到 YouTube 之後） |
 | — | YouTube 連結（yt-dlp 只下載音訊、作者字幕、元件更新） | ✅ 已在 Windows 驗收（含本機 c247a08 與 fix1） |
 | — | 逐字稿編輯器、播放器（規格 2.1-D）＋設定頁（規格 12.4） | ✅ 已交付（開發版驗收中發現 CORS PUT，已修正） |
-| — | 英文介面（繁中／English）、最終打包 | 🔄 待 Windows 驗收 |
+| — | 英文介面（繁中／English）、最終打包 | ✅ 已在 Windows 驗收（本機 5072cac），v0.1.0 |
 | 12 | macOS 打包設定（Apple Silicon，未簽章） | ⚠️ 只準備設定，沒有 Mac 未驗證 |
 
 ## 環境需求
@@ -335,8 +353,9 @@ npm run dist:win -w @mvr2t/desktop                                     # → app
 - 第三方授權：`resources/THIRD_PARTY_NOTICES.md`（FFmpeg 另附 LICENSE.txt 與原始碼位置 SOURCE.txt）。
 - 安裝位置：`%LOCALAPPDATA%\Programs\MVR2T`；模型與設定：`%APPDATA%\MVR2T`（解除安裝時**保留**，要完全移除請手動刪除）。
 - 安裝檔較大（PyTorch CPU 版約占一半）；AI 模型不包含在安裝檔內，第一次使用時在「模型管理」下載。
-- 打包很吃記憶體（PyInstaller self-test 載入 PyTorch、electron-builder 壓縮約 1.2 GB）：記憶體較少的電腦請先關閉其他程式，
+- 打包很吃記憶體（PyInstaller self-test 載入 PyTorch、electron-builder 壓縮約 1.2 GB）：**打包前關閉瀏覽器等程式，只在可用記憶體 8 GB 以上時進行**，
   並一次只做一個步驟（打包後端 → 產生安裝檔 → 安裝測試），不要同時開著 `npm run dev` 或正式版。
+  （使用者電腦 19.7 GB，打包剛結束時可用記憶體曾降到 0.5 GB，驗收期間黑屏重開機三次。）
 - 沒有簽章：第一次執行安裝檔時 Windows SmartScreen 會顯示「Windows 已保護您的電腦」，按「其他資訊 → 仍要執行」。
 
 ## Phase 11 驗收清單（打包）
@@ -432,7 +451,12 @@ apps/backend/    Python + FastAPI
 shared/          前後端共用的常數與型別
 ```
 
-## 已知限制（專案結束時，2026-11-18）
+## 已知限制（專案結束時，2026-11-18，v0.1.0）
+
+之後可以考慮：
+- 前端測試環境是 node、沒有 DOM：播放器 ref、切換語言重新讀取這類問題只能靠實際操作發現 → 加入 jsdom／React Testing Library 的回歸測試
+- 「完成編輯」時短暫顯示「已儲存」；點逐字稿的句子文字也能跳到該時段播放
+- MKV／MOV 無法播放時改播音訊：尚未實測
 
 - NVIDIA CUDA 加速只有單元測試，沒有在有 NVIDIA 顯示卡的電腦上實測（使用者電腦只有內顯）
 - 英文介面：摘要內容、匯出的 Word／PDF 標題維持中文；逐字稿依影片語言

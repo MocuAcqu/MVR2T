@@ -1,6 +1,6 @@
 # 開發紀錄（給接手的 Claude / Claude Code）
 
-最後更新：2026-11-14。Phase 10（含 fix1，本機 dbece16）已在 Windows 驗收；CUDA／Metal 路線待實機驗證。Phase 11（含 fix1、步驟 7.1）與 YouTube 連結（含 fix1，本機 867bc52）都已在 Windows 驗收。逐字稿編輯器＋設定頁（含本機 CORS 修正）、英文介面、macOS 打包設定（未驗證）已交付；最後一步：Windows 最終打包與驗收，然後結束專案。
+最後更新：2026-11-14。Phase 10（含 fix1，本機 dbece16）已在 Windows 驗收；CUDA／Metal 路線待實機驗證。Phase 11（含 fix1、步驟 7.1）與 YouTube 連結（含 fix1，本機 867bc52）都已在 Windows 驗收。**專案結案（2026-11-18，v0.1.0，本機 5072cac）**：Windows 正式版驗收通過，安裝檔 348 MB（使用者另存於 Downloads\MVR2T-0.1.0\）。macOS 只有設定、未驗證。
 
 ## 目前進度
 
@@ -116,6 +116,19 @@
 - 在沙盒跑 Electron：`xvfb-run -a`，並加 `--no-sandbox`（root）。
 
 ## 最後一批：英文介面、macOS 設定、最終打包（2026-11-18）
+
+### Windows 驗收與結案（2026-11-18，本機 cbe0945 ＋ 修正 5072cac，標籤 v0.1.0）
+- 測試：前端 197、後端 228 passed／9 skipped。後端 557 MB、self-test 全部 ok（bundled FFmpeg）；安裝檔 365,007,832 bytes。
+  `win.extraResources` 的 FFmpeg 正確放在 resources\ffmpeg\。正式版：匯入 → 抽取 → 辨識 → 摘要 → 心智圖 → Word／PDF、播放器、編輯、
+  英文介面、YouTube 作者字幕都正常；關閉後沒有殘留行程。startup.log：第二次啟動後端就緒 1.7 秒、視窗 2.2 秒。
+- 本機修正 5072cac（已同步）：
+  1. PlayerCard 的 callback ref 每次繪製都是新函式 → React 先以 null 呼叫舊的 → registerPlayer(null) 把 ready 設 false，
+     loadedmetadata 不再觸發 → 時間戳記與「播放」無法點選（抽取音訊等重新繪製時）。改用 useCallback(…, [])。
+  2. SystemStatusProvider 在 `<AppShell key={lang}>` 之外，切換語言不會重新讀取模型清單與 FFmpeg 狀態（啟動時也可能早於讀到語言偏好）
+     → useModels／useFfmpegStatus 的 key 加上語言。
+- 教訓：前端測試環境沒有 DOM，callback ref 與 Provider 重新掛載這類問題測不到；沙盒 E2E 也沒有走到「抽取音訊後再點時間」。
+- 使用者建議（未做）：「完成編輯」時短暫顯示「已儲存」；點句子文字也能跳到該時段播放；以 DOM 測試補回歸測試。
+- 穩定性：打包剛結束時可用記憶體曾降到 0.5 GB，第三次黑屏重開機 → README 寫明打包前關閉瀏覽器、可用記憶體 8 GB 以上再進行。
 
 ### 英文介面（設定 → 介面語言：繁體中文／English）
 - 前端 `src/i18n`：原文（繁體中文）就是 key，`t('匯入影音')`；`{0}` 代入參數；EN 表查不到顯示原文。語言存在 Main 的 preferences.json
