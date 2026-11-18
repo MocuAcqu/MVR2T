@@ -4,7 +4,7 @@
 
 ### 下載
 - **`MVR2T-Setup-0.1.0-x64.exe`**（約 348 MB）— Windows 10／11（64 位元）
-- SHA-256：`{{SHA256}}`
+- SHA-256：`e43a8c2852494b18d977f838d2f56e21daab1ac4cb30918ee227f7f72e597bda`
   （驗證：PowerShell 執行 `Get-FileHash .\MVR2T-Setup-0.1.0-x64.exe -Algorithm SHA256`）
 
 ### 系統需求
