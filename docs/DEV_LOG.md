@@ -115,6 +115,17 @@
 - 沙盒的 init 不會立即回收殭屍行程，`kill -0` 對殭屍也成功；判斷行程是否存活請看 `/proc/<pid>/stat` 狀態不是 `Z`。
 - 在沙盒跑 Electron：`xvfb-run -a`，並加 `--no-sandbox`（root）。
 
+## GitHub 公開與 README 改版（2026-11-19）
+
+- 公開：https://github.com/MocuAcqu/MVR2T （MIT），v0.1.0 Release 附安裝檔（SHA-256 e43a8c28…7bda，GitHub asset digest 一致）。
+  本機 fc9fe7f（原樣）、2510bf8（SHA-256）、6a4c685（LICENSE 只留標準 MIT 全文：多一段第三方說明時 GitHub 判為 Other）已同步；
+  分支改名 main。教訓：第三方授權說明放 README／NOTICE，不要寫進 LICENSE。
+- `npm ci` 之後 Electron 執行檔不見（npm 11 allowScripts 不執行安裝腳本）→ DEVELOPMENT.md 寫明要 `npm run electron:install`。
+- README 改為產品介紹：Mono（由 sprite 產生的 SVG：docs/images/mono.svg、mono-poses.svg）、徽章、功能、截圖、安裝、常見問題、English。
+  截圖在沙盒以正式流程產生：Piper TTS 合成約 80 秒的「產品週會」示範錄音 → 匯入 → 抽取 → 語音辨識 → 摘要 → 心智圖（docs/images/*.png，
+  每張 60–160 KB）。CJK 檔名用 DataTransfer drop 匯入（Playwright setInputFiles 在 Electron 無法傳非 ASCII 路徑）。
+- 原 README 的開發內容移到 docs/DEVELOPMENT.md，進度與各階段驗收清單移到 docs/PROGRESS.md。
+
 ## 最後一批：英文介面、macOS 設定、最終打包（2026-11-18）
 
 ### Windows 驗收與結案（2026-11-18，本機 cbe0945 ＋ 修正 5072cac，標籤 v0.1.0）

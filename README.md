@@ -1,466 +1,149 @@
-# MVR2T - Local Media Studio
-
-> Your Media. Your Video. Your Record.
-
-本機、離線優先的 AI 影音轉文字與知識整理桌面應用程式：把影片與錄音轉成逐字稿、摘要與心智圖。
-AI 模型下載一次後完全在你的電腦上執行，檔案不會上傳。介面支援繁體中文與 English。
-
-## 下載與安裝（使用者）
+<div align="center">
 
-**[到 Releases 下載最新版 →](../../releases/latest)**（`MVR2T-Setup-<版本>-x64.exe`，Windows 10／11 64 位元）
-
-- 系統需求：記憶體 8 GB 以上（建議 16 GB）、磁碟可用空間約 10 GB；第一次使用需要網路下載 AI 模型（約 6 GB）。
-- 安裝檔沒有數位簽章：Windows 顯示「Windows 已保護您的電腦」時，按「其他資訊」→「仍要執行」。
-- 開啟後到「模型管理」下載模型；之後除了 YouTube 功能都可以離線使用。
-- YouTube 功能請只用於你自己擁有或已獲授權的影片。
-- English: download the installer from [Releases](../../releases/latest); switch the interface in Settings → Interface language.
-
-授權：MVR2T 的程式碼以 [MIT License](./LICENSE) 釋出；內附或下載的第三方軟體與模型依各自授權，見
-[`THIRD_PARTY_NOTICES.md`](./apps/desktop/build-resources/THIRD_PARTY_NOTICES.md)。
-
----
-
-以下是開發者說明。完整規格請見 [`PROJECT_SPEC.md`](./PROJECT_SPEC.md)，開發紀錄見 [`docs/DEV_LOG.md`](./docs/DEV_LOG.md)。
+<img src="docs/images/mono.svg" width="144" alt="MVR2T 的吉祥物 Mono：一隻像麻糬的白色像素兔子">
 
-## 目前進度
-
-| Phase | 內容 | 狀態 |
-|---|---|---|
-| 01 | Project Initialization | ✅ 已在 Windows 驗收 |
-| 02 | UI Design System | ✅ 已在 Windows 驗收 |
-| 03 | Electron and Backend Integration | ✅ 已在 Windows 驗收 |
-| 04 | Media Processing（FFmpeg、匯入、抽取音訊、切段） | ✅ 已在 Windows 驗收 |
-| 05 | ASR Integration（Qwen3-ASR + 時間戳記對齊） | ✅ 已在 Windows 實測 |
-| — | 介面更新（吉祥物 Mono、首頁標題、操作引導） | ✅ 已在 Windows 驗收 |
-| — | 優化（完成通知、防睡眠、首頁精簡、引導） | ✅ 已在 Windows 驗收 |
-| 06 | LLM Integration（llama.cpp + Qwen3.5-4B 摘要） | ✅ 已在 Windows 驗收 |
-| 07 | Mind Map（React Flow 心智圖：編輯、拖曳、匯出 PNG／SVG） | ✅ 已在 Windows 驗收 |
-| 08 | Session and Export（匯出面板：TXT／CSV／Word／PDF／字幕／JSON／Markdown／ZIP） | ✅ 已在 Windows 驗收 |
-| 09 | Model Manager（程式內下載、進度、取消與續傳、驗證、修復、刪除、版本更新） | ✅ 已在 Windows 驗收 |
-| 10 | Hardware Detection（CPU／記憶體／GPU／CUDA／Metal、運算裝置選擇、記憶體不足降級） | ✅ 已在 Windows 驗收（含 fix1；無 NVIDIA，CUDA／Metal 待實機） |
-| 11 | Windows Packaging（PyInstaller 後端、內附 LGPL FFmpeg、electron-builder 安裝程式） | ✅ 已在 Windows 驗收（含 fix1；「不依賴開發環境」延到 YouTube 之後） |
-| — | YouTube 連結（yt-dlp 只下載音訊、作者字幕、元件更新） | ✅ 已在 Windows 驗收（含本機 c247a08 與 fix1） |
-| — | 逐字稿編輯器、播放器（規格 2.1-D）＋設定頁（規格 12.4） | ✅ 已交付（開發版驗收中發現 CORS PUT，已修正） |
-| — | 英文介面（繁中／English）、最終打包 | ✅ 已在 Windows 驗收（本機 5072cac），v0.1.0 |
-| 12 | macOS 打包設定（Apple Silicon，未簽章） | ⚠️ 只準備設定，沒有 Mac 未驗證 |
-
-## 環境需求
-
-- Node.js 20 以上（建議 22 LTS）
-- Python 3.11（後端以 3.11 作為開發與測試基準）
-- FFmpeg（Phase 04 起；含 ffprobe）
-  - Windows：`winget install Gyan.FFmpeg`，裝完**重開終端機與 VS Code** 才會吃到新的 PATH
-  - macOS：`brew install ffmpeg`
-  - 程式尋找順序：設定指定的資料夾 → 程式資料夾 `runtime\ffmpeg` → 系統 PATH → winget 安裝位置
-- Windows 10/11 或 macOS
-
-## 第一次設定
-
-**1. 後端虛擬環境**（只需做一次；之後由 Electron 自動啟動後端）
-
-Windows（PowerShell）：
-
-```powershell
-cd apps\backend
-py -3.11 -m venv .venv          # 若 py -0 找不到 3.11，請先安裝：winget install Python.Python.3.11
-.venv\Scripts\Activate.ps1
-python --version                # 應顯示 Python 3.11.x
-pip install -r requirements/dev.txt   # Phase 05 起含 PyTorch（CPU 版）與 Transformers，第一次約需數分鐘
-```
-
-macOS（Terminal）：
-
-```bash
-cd apps/backend
-python3.11 -m venv .venv        # 若找不到指令，請先安裝：brew install python@3.11
-source .venv/bin/activate
-pip install -r requirements/dev.txt
-```
-
-**2. 下載 AI 模型**（只需一次，共約 6.2 GB，之後完全離線）
-
-Phase 09 起直接在程式中下載：首頁會提示「還需要下載 AI 模型」，按「全部下載」，或到「模型管理」逐一下載、驗證、刪除。
-以下指令留給開發與疑難排解使用（與程式使用相同的位置與驗證方式）：
-
-```powershell
-cd apps\backend
-.\.venv\Scripts\python.exe -m scripts.download_models          # 全部：語音辨識、時間戳記對齊、摘要模型與 llama.cpp
-.\.venv\Scripts\python.exe -m scripts.download_models --llm    # 只下載摘要模型（2.6 GB）與 llama.cpp 執行檔（Phase 06）
-.\.venv\Scripts\python.exe -m scripts.download_models --list   # 查看安裝狀態與位置
-.\.venv\Scripts\python.exe -m scripts.download_models --verify # 重新檢查檔案完整性（SHA-256）
-```
-
-模型放在 `%APPDATA%\MVR2T\models\`（macOS：`~/Library/Application Support/MVR2T/models/`），
-版本與雜湊固定在 `apps/backend/app/models/registry.py`。下載中斷可重新執行，會從中斷處繼續。
-llama.cpp 執行檔（`llama-server`）放在 `%APPDATA%\MVR2T\runtime\llama\`，版本與 SHA-256 固定在
-`apps/backend/app/models/runtime.py`（官方 GitHub Release 的 Windows CPU 版，不需要 C++ 編譯器）。
-
-**3. 前端套件**（在專案根目錄）
-
-```bash
-npm ci        # 依 package-lock.json 安裝確切版本
-```
-
-第一次執行 `npm run dev` 時會下載 Electron 執行檔（約 100 MB）。
-新增 npm 套件時請用 `npx npm@11 install -E -w @mvr2t/desktop <套件>@<版本>`（npm 10 有已知錯誤，見 DEV_LOG）。
-
-## 日常開發
-
-```bash
-npm run dev        # 啟動 Vite + Electron；Electron 會自動啟動與關閉後端
-npm start          # 以正式版方式執行（打包後的 file:// 頁面 + 正式版 CSP）
-npm test           # 前端與 Electron 單元測試（vitest）
-npm run typecheck
-```
-
-後端測試（PowerShell；Windows PowerShell 5.1 不支援 `&&`，請用 `;`）：
-
-```powershell
-cd apps\backend; .\.venv\Scripts\python.exe -m pytest; cd ..\..
-```
-
-Phase 03 起**只需要一個終端機**。後端由 Electron 以 `apps/backend/.venv` 的 Python 啟動：
-
-- 連接埠由作業系統動態分配（不再固定 8765），只監聽 127.0.0.1。
-- 每次啟動都會產生一次性連線憑證；沒有憑證的請求一律回 401，其他本機網頁無法呼叫後端。
-- 關閉視窗 → 後端優雅結束；Electron 當機或被強制結束 → 後端偵測到 stdin 關閉後自行結束，不會殘留。
-- 後端無法啟動或意外結束時，首頁「這台電腦」卡片會顯示原因與「重新啟動後端」按鈕。
-
-進階：單獨除錯後端時仍可手動執行 `python -m app.main`（固定 8765、不驗證憑證、開放 http://127.0.0.1:8765/api/docs），
-再以環境變數 `MVR2T_BACKEND_URL=http://127.0.0.1:8765` 啟動 `npm run dev`，Electron 就會改連這個後端而不自行啟動。
-`MVR2T_PYTHON` 可指定其他 Python 執行檔。
-
-## Phase 02 驗收清單
-
-- [ ] 首頁顯示產品標語、「新增影音」卡片、AI 模型與這台電腦兩張狀態卡、使用方式四步驟
-- [ ] 英文為 Inter、中文為 Noto Sans TC（**拔掉網路後字型仍正常**）
-- [ ] 拖曳或選擇 MP4 / MP3 等檔案後，顯示檔名、格式、大小；選 PDF 等不支援格式會出現錯誤訊息
-- [ ] 按「開啟工作區」可看到已匯入檔案；重新整理（Ctrl+R）後檔案資訊消失
-- [ ] YouTube 輸入框：貼上有效網址顯示「網址格式正確」，亂打文字顯示錯誤
-- [ ] 視窗縮到最小（960 x 640）與拉到最大，版面都正常、沒有橫向捲軸
-- [ ] 鍵盤 Tab 可以依序走過所有按鈕與輸入框，且看得到黑色焦點環
-- [ ] 導覽列切換「首頁 / 工作區 / 模型管理 / 設定」不會出現白畫面
-- [ ] 開發模式導覽列有「設計規範」頁，各元件風格一致
-
-## Phase 03 驗收清單
-
-> Windows 上 `.venv\Scripts\python.exe` 是「啟動器」，它會再啟動真正的 Python，
-> 所以後端執行時會看到**兩個** `python.exe`（父子關係），這是正常的。
-> 可用 PowerShell 查看：
-> `Get-CimInstance Win32_Process -Filter "Name='python.exe'" | Select-Object ProcessId,ParentProcessId,CommandLine`
-
-- [x] 只執行 `npm run dev`（不手動啟動後端），幾秒內右上角顯示「後端已連線」
-- [x] 上面的 PowerShell 指令列出兩個命令列含 `-m app.main` 的 `python.exe`
-- [x] 關閉視窗後，兩個 `python.exe` 在幾秒內都消失，且 `npm run dev` **不再顯示** `npm error`
-- [x] 在終端機按 Ctrl+C 結束後，兩個 `python.exe` 都消失（Windows 上 Ctrl+C 會強制結束 Electron，後端靠 stdin 偵測自行結束）
-- [x] Electron 被強制結束後，兩個 `python.exe` 也會自行結束（以 Ctrl+C 情境驗證）
-- [ ] （延後）手動結束 `python.exe` 後畫面顯示「後端意外結束」，按「重新啟動後端」可恢復
-- [x] `npm start`（正式版模式）同樣顯示「後端已連線」
-- [x] `npm test`、`npm run typecheck`、`pytest` 全數通過
-
-設計規範見 [`docs/DESIGN_SYSTEM.md`](./docs/DESIGN_SYSTEM.md)，開發進度與交接資訊見 [`docs/DEV_LOG.md`](./docs/DEV_LOG.md)。
-
-## Phase 04 驗收清單
-
-先確認 FFmpeg 已安裝：`ffmpeg -version`、`ffprobe -version` 都有輸出。
-
-- [x] 首頁「這台電腦」卡片的 FFmpeg 列顯示「已安裝 x.x」
-- [x] 匯入一個 MP4（**檔名含中文與空格**）：出現「正在複製到工作階段」進度條，完成後顯示格式、大小與**長度**
-- [x] 匯入時按「取消」可以中止（大檔案比較容易測）
-- [ ] 匯入一個改了副檔名的假檔（例如把 .txt 改名成 .mp4）：顯示「檔案可能已損壞」
-- [x] 工作區按「抽取音訊」：進度條與「x / y 秒」更新，完成後列出各段的開始 / 結束時間與切點
-- [x] 抽取中按「取消」會停止，顯示「已取消」，卡片內可「再試一次」或「換一個檔案」
-- [ ] `%APPDATA%\MVR2T\temp\sessions\` 裡只有一個資料夾；重新整理（Ctrl+R）後換成新的資料夾；關閉程式後清空
-- [x] `npm test`、`npm run typecheck`、後端 pytest 全數通過（pytest 需已安裝 FFmpeg，否則 FFmpeg 相關測試會顯示 skipped）
-
-## Phase 05 驗收清單
-
-先完成「第一次設定」的第 2 步（下載模型）。
-
-- [ ] 首頁「AI 模型」卡片：Qwen3-ASR 0.6B 與 Qwen3-ForcedAligner 0.6B 顯示「已安裝」，Qwen3-4B 顯示「Phase 6 推出」
-- [ ] 匯入一段**中文**錄音或影片 → 工作區「抽取音訊」→「開始語音辨識」：顯示步驟與進度，完成後列出逐字稿
-- [ ] 逐字稿是**繁體中文**（台灣用語），每句前面有時間戳記，標記「精確時間」
-- [ ] 抽查幾句：時間戳記與原始影音中說那句話的時間相符（可用其他播放器跳到該時間比對）
-- [ ] 匯入一段**英文**錄音，語言自動偵測為「英文」
-- [ ] 辨識中按「取消」：幾秒內停止，顯示「已取消語音辨識」
-- [ ] 辨識一段 **10 分鐘以上**的錄音，程式不會當掉；完成後工作管理員中沒有殘留的 `python.exe`（辨識用的工作程序會自動結束）
-- [ ] 執行 `python -m scripts.benchmark_asr <一段錄音>`，把結果貼回 Cowork（決定 float32 / bfloat16 預設值）
-- [ ] `npm test`、`npm run typecheck`、後端 pytest 全數通過（真實模型測試需要測試語音，Windows 上會顯示 4 skipped，屬正常）
-
-進階設定（環境變數，啟動 `npm run dev` 前設定）：
-- `MVR2T_ASR_DTYPE=bfloat16`：記憶體約減半；在支援 BF16 的 CPU 上也較快（以 benchmark 結果為準）
-- `MVR2T_TORCH_THREADS=4`：限制語音辨識使用的 CPU 執行緒數
-- `MVR2T_ASR_BATCH=4`：語音辨識一次處理幾段（預設 1 = 逐段）。核心少的電腦可能較快，但記憶體多約 1 GB；記憶體不足時會自動改回逐段
-- `MVR2T_MODELS_DIR=D:\MVR2T\models`：把模型放在其他位置（例如 D 槽）；下載腳本與程式都會使用這個位置
-
-## 介面更新驗收清單（Mono、首頁標題、操作引導）
-
-- [ ] 首頁標題「Your ▢」的黑底字每 2 秒在 Media → Video → Record 間切換，下方像素音波會動；補充說明是「把影片與錄音轉成逐字稿、摘要和心智圖」
-- [ ] 左上角 MVR2T 旁有 Mono：滑鼠移過去會折耳、張大眼、鼻子聞聞；點一下會 Q 彈一下
-- [ ] 匯入檔案時 Mono 在進度條旁跳；匯入完成後「開啟工作區」發光、旁邊有箭頭，下方出現 Mono 對話框
-- [ ] 工作區：「影音資訊」和「音訊抽取與切段」兩張卡片等高；「抽取音訊」發光並有對話框
-- [ ] 抽取中 Mono 戴耳機、耳朵跟著擺；完成後換「開始語音辨識」發光
-- [ ] 辨識載入模型時 Mono 原地跳；辨識中 Mono 捧著小螢幕（播放三角形清楚可見）；完成後 Mono 舉手歡呼並顯示完成說明
-- [ ] 對話框按「知道了」只關這一則；按「不再提示」後不再出現，到「設定 → 操作引導」可重新開啟（重開 App 後設定仍保留）
-- [ ] Windows「動畫效果」關閉時（設定 → 協助工具 → 視覺效果），Mono 與標題不再動，標題顯示成三行
-- [ ] 開發模式「設計規範」頁最下方可看到所有 Mono 動畫
-
-## 優化驗收清單（通知、睡眠、首頁、引導）
-
-- [ ] 首頁只剩標題、新增影音與使用方式；「AI 模型」「這台電腦」兩張卡片在「模型管理」頁
-- [ ] 模型或 FFmpeg 缺少、或後端沒啟動時，首頁出現提醒與「前往模型管理」按鈕；一切正常時不出現
-- [ ] 開始語音辨識後切到其他程式：完成時右下角跳出「逐字稿完成」通知、工作列圖示閃爍；點通知回到 MVR2T
-- [ ] 辨識時留在 MVR2T 畫面：完成時不跳系統通知（Mono 會在畫面上歡呼）
-- [ ] 辨識中不要動電腦，讓螢幕自動關閉（不要闔上筆電）幾分鐘後再喚醒：辨識仍在進行或已完成，內容沒有消失；
-      終端機有 `[power] keep awake: on` 與 `[backend] [power] system-required request on`，結束後兩者都變成 off
-- [ ] 辨識進行中，在系統管理員 PowerShell 執行 `powercfg /requests`：SYSTEM 區段有 python.exe「MVR2T：正在處理影音…」
-- [ ] 闔上筆電的測試請用 `npm start`（正式版）；開發模式要測時先執行 `$env:MVR2T_DEV_NO_HMR=1` 再 `npm run dev`
-      （否則 Vite 會在喚醒後重新載入整頁，畫面被清空；正式版不會）
-- [ ] 引導對話框不再有「知道了／不再提示」；到「設定 → 操作引導」可以關閉或開啟（如果先前按過「不再提示」，請在這裡重新開啟）
-
-程式圖示：改 `apps/desktop/scripts/generate_icons.py` 後執行 `python apps/desktop/scripts/generate_icons.py`（不需要額外套件）。
-
-要改 Mono 的造型：改 `apps/desktop/scripts/generate_mono_sprite.py` 後執行 `python apps/desktop/scripts/generate_mono_sprite.py`。
-
-## Phase 06 驗收清單（摘要）
-
-先完成「第一次設定」第 2 步的 `download_models --llm`。
-
-- [ ] 「模型管理」頁：Qwen3.5-4B Q4_K_M 與 llama.cpp 都顯示「已安裝」
-- [ ] 一段**中文**錄音完成語音辨識後，工作區「摘要」卡片可勾選 7 種內容（預設勾選全文摘要、重點整理、關鍵字、行動事項）
-- [ ] 按「產生摘要」：先顯示「正在載入摘要模型」，接著「正在產生摘要 ○○」與進度；完成後以分頁顯示各種內容，全部是**繁體中文**
-- [ ] 重點、行動事項等項目旁的時間，點一下會捲動到逐字稿中對應的句子並短暫標示
-- [ ] 摘要內容與錄音相符，沒有錄音中不存在的人名、數字、日期（請特別看行動事項的負責人與期限）
-- [ ] 一段 **20 分鐘以上**的錄音：顯示「正在閱讀逐字稿 第 N / M 段」，完成後摘要涵蓋前後段的內容；程式不會當掉
-- [ ] 產生中按「取消」：幾秒內停止；工作管理員中沒有殘留的 `llama-server.exe`
-- [ ] 摘要完成後工作管理員中也沒有 `llama-server.exe`（模型用完即關閉，記憶體歸還）
-- [ ] 摘要進行中無法開始語音辨識或重新抽取音訊（顯示「另一個 AI 工作…」）
-- [ ] 切到其他程式時，摘要完成會跳出「摘要完成」通知
-- [ ] `npm test`、`npm run typecheck`、後端 pytest 全數通過；`tests/test_llm_real.py` 在已下載模型時會實際執行（沙盒約 40 分鐘，含心智圖；設定 `MVR2T_SKIP_LLM_REAL=1` 可略過）
-
-進階設定（環境變數）：
-- `MVR2T_LLM_CTX=4096`：記憶體不足時降低 context（預設 8192；長逐字稿會切成較多段）
-- `MVR2T_LLM_THREADS=8`：限制摘要使用的 CPU 執行緒數（預設由 llama.cpp 自動決定）
-- `MVR2T_LLAMA_SERVER=<路徑>`：改用指定的 llama-server 執行檔（例如自行編譯的版本）
-
-## Phase 07 驗收清單（心智圖）
-
-- [ ] 「摘要」卡片多了「心智圖」選項（預設勾選）；產生時會出現「正在產生心智圖」
-- [ ] 摘要完成後，下方「心智圖」卡片顯示：黑底的中心主題在中間，主要分支平均分在左右兩側，往外依序是子主題、細節；決定事項或待辦標有黑色「結論」標籤；全部是**繁體中文**
-- [ ] 節點上的時間點一下，會捲動到逐字稿中對應的句子
-- [ ] 拖曳節點：子節點一起移動；把左邊的主要分支拖到中心右邊，放開後會換到右側
-- [ ] 雙擊節點（或選取後按 F2）可以改文字，Enter 確定、Esc 取消；不能存成空白
-- [ ] 選取節點後：Tab 新增子節點、Enter 新增同層、Delete 刪除；工具列的按鈕也可以；中心主題不能刪除
-- [ ] 節點外側的「−」收合子節點，收合後顯示隱藏的數量；「全部收合／全部展開」正常
-- [ ] Ctrl+Z 復原、Ctrl+Shift+Z（或 Ctrl+Y）重做；「重新排列」清除拖曳位置
-- [ ] 「放大」讓心智圖佔滿視窗，Esc 或「縮小」回來
-- [ ] 「匯出 PNG」「匯出 SVG」跳出另存新檔視窗（預設在「文件」、檔名「<檔名>-心智圖」）；開啟檔案：白底、內容完整、中文正常、含時間標籤、沒有收合按鈕
-- [ ] 「重新產生心智圖」先詢問確認；只重新產生心智圖，其他摘要內容不變
-- [ ] 換一個檔案或重新語音辨識後，心智圖清空
-
-## Phase 08 驗收清單（匯出）
-
-先在 `apps\backend` 執行 `.\.venv\Scripts\python.exe -m pip install -r requirements\dev.txt`（新增 python-docx）。
-
-- [ ] 工作區右上角有「匯出」按鈕；打開後列出切段清單、切段音檔、逐字稿、摘要、心智圖，還沒完成的項目是灰色並說明原因
-- [ ] 勾選格式後按「匯出 N 個檔案」→ 選資料夾 → 列出每個檔案的結果；「開啟資料夾」會開啟檔案總管
-- [ ] 檔名是「<媒體檔名>-<內容>.<格式>」；再匯出一次，新檔案是「… (2)」，舊檔案沒有被覆蓋
-- [ ] CSV（切段清單、逐字稿、摘要）用 **Excel 直接雙擊開啟**：中文正常、沒有亂碼，含逗號或引號的句子在同一格
-- [ ] Word（切段清單、逐字稿、摘要）用 Word 開啟：中文字型正常（微軟正黑體）；摘要最後有心智圖圖片，是**編輯後**的樣子
-- [ ] PDF（切段清單、逐字稿、摘要）：中文正常、A4 版面；摘要的心智圖在新的一頁；在另一台電腦或手機開啟字型也正常
-- [ ] SRT／VTT：用播放器（例如 VLC）載入字幕，時間與影音對得上
-- [ ] 切段音檔 ZIP：解壓後每段 WAV 可播放，附 segments.csv
-- [ ] Markdown／TXT 摘要：心智圖以條列方式附在最後，結論標示【結論】
-- [ ] 匯出後按「換一個檔案」或重新整理，已匯出的檔案仍在資料夾中
-- [ ] 長錄音（20 分鐘以上）匯出全部格式：記錄所需時間；程式不會卡住
-
-Phase 08 fix1：
-- [ ] Word 的**標題**也是微軟正黑體（不再是 MS Gothic）
-- [ ] 匯出面板的「摘要」下方可以勾選要匯出的摘要類型（預設全選）；全部取消時無法匯出並提示
-- [ ] 切段、逐字稿、摘要、心智圖卡片下方有「匯出」：打開同一個面板，只預先勾選那張卡片的內容
-- [ ] 第二次匯出時，資料夾對話框從上次選的資料夾開始
-- [ ] 「設定 → 匯出資料夾」指定資料夾後，匯出不再詢問、直接存到那裡；面板中勾「這次改選其他資料夾」仍會詢問；
-      資料夾不存在（例如拔掉隨身碟）時改為詢問；「改為每次詢問」可取消
-
-Phase 08 fix2（防毒軟體阻擋）：
-- [ ] 防毒軟體（例如 Avast 勒索軟體防護）阻擋寫入時，結果顯示「可能被防毒軟體阻擋…請允許 MVR2T」，而不是 EPERM
-- [ ] 在防毒軟體中允許後，按「重新匯出失敗的項目」：只重新匯出失敗的檔案、存到同一個資料夾、不再詢問；成功的項目保留在清單中
-
-## Phase 09 驗收清單（模型管理）
-
-建議先把現有的模型資料夾 `%APPDATA%\MVR2T\models` 與 `runtime` **改名備份**（例如 `models.bak`），模擬第一次使用；驗收後可改回來。
-
-- [ ] 首頁顯示「還需要下載 AI 模型（約 6.2 GB）」與「全部下載」；按下後首頁顯示兩個項目的進度（第二個排隊中）
-- [ ] 「模型管理」：語音辨識（Qwen3-ASR＋時間戳記對齊）與摘要與心智圖（Qwen3.5-4B＋llama.cpp）兩張卡片，
-      各列出模型、大小、授權、版本與建議硬體；下載中顯示目前檔案、百分比、已下載／總量、速度、剩餘時間
-- [ ] 下載中按「取消下載」：幾秒內停止，狀態「下載未完成」；再按「繼續下載」從中斷處繼續（不是從 0 開始）
-- [ ] 下載中關閉程式，重新開啟後同樣可以繼續下載
-- [ ] 下載中電腦不會因閒置而睡眠（`powercfg /requests` 的 SYSTEM 區段有 python.exe）
-- [ ] 下載完成後狀態為「已安裝」，可以語音辨識與產生摘要
-- [ ] **拔掉網路（或關閉 Wi-Fi）**後重新啟動程式：模型仍是「已安裝」，語音辨識、摘要、心智圖都能使用，不會嘗試下載
-- [ ] 「驗證完整性」：顯示進度，完成後「所有檔案都完整」（大檔需要幾分鐘）
-- [ ] 刪除：先詢問確認；語音辨識或摘要進行中時不能刪除（顯示說明）；刪除後狀態「未安裝」，資料夾已移除
-- [ ] 沒有網路時按下載：顯示「無法連線到下載伺服器…」，而不是英文錯誤
-- [ ] 「不再使用的檔案」：如果之前（Phase 06 比較時）下載過 Qwen3-4B 等模型，會列在這裡並可刪除
-- [ ] （選做）用記事本修改模型資料夾中的 `config.json` 一個字元 →「驗證完整性」顯示損壞 →「修復」只重新下載那個小檔
-
-Phase 09 fix1：
-- [ ] 首頁的「還需要下載 AI 模型」提示在最上方（標題之上）
-- [ ] 下載或語音辨識時，`powercfg /requests` 的原因文字是「MVR2T：正在處理（AI 工作或模型下載）」
-- [ ] `tests/test_model_manager.py` 在這台電腦（Avast）上連續執行都通過
-
-## Phase 10 驗收清單（硬體偵測）
-
-- [ ] 「模型管理 → 這台電腦」顯示處理器名稱與執行緒數、記憶體（總量與目前可用）、顯示卡名稱（與 VRAM）、CUDA 是否可用與原因
-- [ ] 沒有 NVIDIA 顯示卡的電腦：CUDA「不可用（沒有偵測到 NVIDIA 顯示卡）」；運算裝置「語音辨識：CPU、摘要：CPU」，
-      並說明 Intel／AMD 顯示卡第一版不使用加速；模型管理**不會**出現「摘要 GPU 加速」
-- [ ] 「重新偵測」可以重新讀取（例如剛更新驅動程式）
-- [ ] 產生摘要後，摘要下方顯示「處理 … （CPU）」
-- [ ] 記憶體不足的降級：開很多程式讓可用記憶體低於約 3.6 GB 時，「這台電腦」顯示改用較短 context 或「可用記憶體偏少」的提醒；
-      摘要仍能完成（比較慢）
-- [ ] `GET /api/system/info` 回報硬體與目前的運算裝置（規格 §10）
-- [ ] （有 NVIDIA 顯示卡的電腦）CUDA「可用」；模型管理出現「摘要 GPU 加速（NVIDIA）」，下載後摘要顯示「NVIDIA GPU」，速度明顯變快；
-      其他程式佔用大量 VRAM 時改放部分層或自動改用 CPU
-- [ ] （Apple Silicon Mac，Phase 12）運算裝置「摘要：Apple GPU（Metal）」
-
-Phase 10 fix1：
-- [ ] 作業系統顯示「Windows 11（組建 26200）x64」
-- [ ] 顯示卡不再列出遠端桌面的虛擬顯示器（例如 DeskIn Virtual Display Adapter）
-- [ ] 「模型管理」兩欄各自往下排：左欄語音辨識＋這台電腦，右欄摘要與心智圖＋不再使用的檔案，沒有空白
-- [ ] CUDA「不可用」前是空心圓（不是虛線圈）；說明文字「目前版本尚不支援 Intel／AMD 顯示卡加速」
-
-## Phase 11：打包 Windows 安裝程式
-
-使用者決定（2026-11-14）：FFmpeg 內附在安裝程式中（LGPL 版）、只為目前使用者安裝（不需系統管理員）、第一版不簽章。
-
-在專案根目錄依序執行（需要網路；第 2、3 步只有更新版本時才需要）：
-
-```powershell
-cd apps/backend
-.\.venv\Scripts\python.exe -m pip install -r requirements/build.txt   # PyInstaller（只有打包時需要）
-.\.venv\Scripts\python.exe -m scripts.ffmpeg_bundle --resolve         # 固定 FFmpeg 版本 → packaging/ffmpeg.json（要 commit）
-.\.venv\Scripts\python.exe -m scripts.ffmpeg_bundle                   # 下載、驗證 SHA-256 → apps/desktop/build-resources/ffmpeg/
-.\.venv\Scripts\python.exe -m scripts.build_backend                   # PyInstaller → apps/backend/dist/mvr2t-backend/，並執行 --self-test
-cd ../..
-npm run dist:win -w @mvr2t/desktop                                     # → apps/desktop/release/MVR2T-Setup-<版本>-x64.exe
-```
-
-- `npm ci` 不會下載 Electron 執行檔（Electron 44 沒有 postinstall）；`dist:win` 會先執行 `npm run electron:install`（已有快取時不必下載）。
-
-- 後端打包成 `mvr2t-backend.exe`（onedir），放在 `resources/backend/`；不依賴開發者電腦上的 Python。
-  `mvr2t-backend.exe --self-test` 會檢查：API、簡轉繁、Word 匯出、PyTorch、Transformers、ASR 處理器（模型已下載時）、硬體偵測、FFmpeg。
-- FFmpeg（BtbN 的 win64 **LGPL** 靜態版，n7.1 系列，LGPL-3.0-or-later）放在 `resources/ffmpeg/`，後端的尋找順序：設定 → 內附 → 下載 → PATH → winget。
-- 第三方授權：`resources/THIRD_PARTY_NOTICES.md`（FFmpeg 另附 LICENSE.txt 與原始碼位置 SOURCE.txt）。
-- 安裝位置：`%LOCALAPPDATA%\Programs\MVR2T`；模型與設定：`%APPDATA%\MVR2T`（解除安裝時**保留**，要完全移除請手動刪除）。
-- 安裝檔較大（PyTorch CPU 版約占一半）；AI 模型不包含在安裝檔內，第一次使用時在「模型管理」下載。
-- 打包很吃記憶體（PyInstaller self-test 載入 PyTorch、electron-builder 壓縮約 1.2 GB）：**打包前關閉瀏覽器等程式，只在可用記憶體 8 GB 以上時進行**，
-  並一次只做一個步驟（打包後端 → 產生安裝檔 → 安裝測試），不要同時開著 `npm run dev` 或正式版。
-  （使用者電腦 19.7 GB，打包剛結束時可用記憶體曾降到 0.5 GB，驗收期間黑屏重開機三次。）
-- 沒有簽章：第一次執行安裝檔時 Windows SmartScreen 會顯示「Windows 已保護您的電腦」，按「其他資訊 → 仍要執行」。
-
-## Phase 11 驗收清單（打包）
-
-- [ ] `scripts.build_backend` 完成，`--self-test` 全部 ok（含 ffmpeg：bundled）
-- [ ] `npm run dist:win` 產生 `MVR2T-Setup-0.1.0-x64.exe`
-- [ ] 安裝不需要系統管理員權限；開始功能表與桌面有「MVR2T」捷徑；SmartScreen 提示可以「仍要執行」
-- [ ] 正式版啟動後首頁正常、「模型管理」看得到已下載的模型（同一個 `%APPDATA%\MVR2T`）
-- [ ] 安裝後的 `resources\backend\mvr2t-backend.exe --self-test` 中 ffmpeg 為 `bundled`；匯入影片 → 語音辨識 → 摘要 → 心智圖 → 匯出 Word／PDF 都正常
-- [ ] **不依賴開發環境**：暫時把專案資料夾的 `.venv` 改名、關閉 `npm run dev`，正式版仍可完整使用
-- [ ] **離線**：中斷網路後重新開啟，語音辨識與摘要仍可完成
-- [ ] 關閉視窗後工作管理員沒有殘留的 `mvr2t-backend.exe`、`llama-server.exe`
-- [ ] 解除安裝（設定 → 應用程式）後程式資料夾移除，`%APPDATA%\MVR2T\models` 仍保留；重新安裝不必重新下載模型
-- [ ] （另一台電腦，選做）沒有安裝 Python／Node 的電腦也能安裝與執行
-
-Phase 11 fix1：
-- [ ] 安裝資料夾是 `%LOCALAPPDATA%\Programs\MVR2T`（不是 `@mvr2tdesktop`）；`resources\` 沒有 `default_app.asar`
-- [ ] 解除安裝登錄項目有 InstallLocation；安裝後與解除安裝後都沒有 `%LOCALAPPDATA%\mvr2t-updater`（約 350 MB 的安裝檔副本）
-- [ ] `scripts.build_backend` 的 self-test 直接驗證內附 FFmpeg（bundled）；中文在終端機不是亂碼
-- [ ] `%APPDATA%\MVR2T\logs\startup.log` 記錄每次啟動各階段的時間
-
-## YouTube 連結驗收清單
-
-使用者決定（2026-11-15）：內建 yt-dlp、只下載音訊；JS 執行環境用 Electron 內建的 Node；yt-dlp 例外於「依賴至少 2 週」規則（程式內更新到官方最新版）；
-只支援單一公開影片；可選擇直接使用影片作者提供的字幕。
-
-- [ ] 「模型管理 → YouTube 下載元件」：下載（約 20 MB）→ 已安裝，顯示版本；「檢查更新」顯示已是最新版；刪除後首頁提示要先下載
-- [ ] 首頁第一次使用顯示使用說明，勾選後「同意並繼續」；重新開啟程式不再顯示
-- [ ] 貼上自己的（或創用 CC）影片網址 →「讀取影片」顯示標題、頻道、長度、音訊大小與作者字幕
-- [ ] 「下載音訊」（語音辨識）：進度、可取消；完成後「開啟工作區」→ 影音資訊的來源是 YouTube → 抽取 → 語音辨識 → 摘要 → 匯出都正常
-- [ ] 「使用影片作者提供的字幕」：完成後逐字稿直接出現（標示「影片字幕」，簡體字幕轉為繁體）；可以直接產生摘要；抽取音訊後逐字稿仍保留；
-      「改用語音辨識」會以語音辨識取代
-- [ ] 播放清單網址、非 YouTube 網址：顯示「只支援單一影片」；私人影片、直播顯示清楚的原因
-- [ ] 離線時讀取影片：顯示「無法連線到 YouTube」；本機檔案的功能不受影響
-- [ ] 下載中改匯入本機檔案：YouTube 下載自動取消
-- [ ] 正式版（安裝後）也能下載（Electron 當作 Node.js 執行 YouTube 的驗證程式）
-
-YouTube fix1：
-- [ ] 有 Avast HTTPS 掃描的電腦：讀取影片、下載音訊與字幕都正常（Windows 憑證存放區，c247a08）
-- [ ] 下載元件時顯示速度與剩餘時間
-- [ ] 用影片字幕匯入完成後，自動切到工作區並捲動到逐字稿
-- [ ] 可用記憶體偏少時，逐字稿與摘要卡片在開始前顯示提醒（語音辨識約需 3 GB、摘要約需 3.3 GB）
-
-## 逐字稿編輯器與設定頁驗收清單
-
-- [ ] 工作區新增「播放器」：影片顯示畫面、音訊顯示播放列；點逐字稿的時間從那一句開始播放，播放中的句子會標示
-- [ ] 無法在程式內播放的格式（部分 MKV／MOV）：抽取音訊後自動改播音訊
-- [ ] 逐字稿「編輯逐字稿」：修改文字（自動儲存）、與下一句合併、刪除、復原；「完成編輯」後顯示「已編輯」
-- [ ] 編輯後匯出 TXT／SRT／VTT／Word 是修改後的內容；已有摘要時顯示「逐字稿已修改」提醒，重新產生摘要後消失
-- [ ] 合併或刪除後，點摘要／心智圖的時間仍能跳到正確（或最近）的句子
-- [ ] 設定 → 預設辨識語言：工作區的語言選單預先選好；重開程式後保留
-- [ ] 設定 → 推論裝置「一律使用 CPU」、記憶體「省記憶體」：「模型管理 → 這台電腦」的摘要顯示 CPU、context 4096；摘要仍可完成
-- [ ] 設定 → 暫存檔案：顯示大小，「清除暫存」不影響目前的檔案
-- [ ] 設定 → 關於：版本、資料夾；「開啟資料夾」「第三方授權」可以開啟
-
-## 英文介面驗收清單
-
-- [ ] 設定 → 介面語言「English」：整個畫面立即換成英文，正在進行的工作不受影響；重開程式後保留
-- [ ] 第一次使用（preferences.json 沒有 language）：中文 Windows 預設繁體中文
-- [ ] 英文時，後端的進度與錯誤訊息（例如抽取、辨識的步驟、模型管理、這台電腦）也是英文
-- [ ] 維持中文（刻意）：逐字稿與摘要的內容、檔名、匯出的 Word／PDF 標題
-- [ ] 切回繁體中文後一切恢復
-
-## macOS（未驗證）
-
-使用者沒有 Mac（2026-11-17）：只準備設定，**沒有實機驗證**，在 Mac 上可能需要調整。不購買簽章。
-
-- 只做 Apple Silicon（arm64）：llama.cpp 固定 `macos-arm64`（Metal）。Intel Mac 尚未提供。
-- 不內附 FFmpeg：請先 `brew install ffmpeg`（後端會到 `/opt/homebrew/bin`、`/usr/local/bin` 尋找）。
-- 組建（在 Mac 上）：
-  ```bash
-  cd apps/backend
-  python3.11 -m venv .venv && .venv/bin/pip install -r requirements/build.txt
-  .venv/bin/python -m scripts.build_backend
-  cd ../.. && npm ci && npm run dist:mac -w @mvr2t/desktop   # → apps/desktop/release/MVR2T-0.1.0-arm64.dmg
-  ```
-- 沒有簽章與公證：第一次開啟會被 Gatekeeper 擋下，請在 Finder 對 MVR2T 按右鍵 →「打開」，或到「系統設定 → 隱私權與安全性」按「強制打開」。
-- YouTube 下載元件會下載 `yt-dlp_macos`；JS 執行環境同樣使用 MVR2T 本身（ELECTRON_RUN_AS_NODE）。
-
-## 開發注意事項
-
-- `requirements/*.txt`、`pytest.ini` 等會被 pip / pytest 以「系統編碼」讀取的檔案，**必須只含 ASCII**（註解請用英文）。繁體中文 Windows 的系統編碼是 cp950，讀到 UTF-8 中文會安裝失敗。
-
-## 專案結構
-
-```text
-apps/desktop/    Electron + Vite + React + TypeScript
-  electron/      main.ts（視窗、IPC、生命週期）、backend.ts（後端行程管理）、
-                 security.ts（來源檢查）、preload.ts（安全橋接）
-  src/           components / pages / features / stores / services / hooks / types
-apps/backend/    Python + FastAPI
-  app/           api / core / services / engines(asr, llm, media) / models / schemas / session
-shared/          前後端共用的常數與型別
-```
-
-## 已知限制（專案結束時，2026-11-18，v0.1.0）
-
-之後可以考慮：
-- 前端測試環境是 node、沒有 DOM：播放器 ref、切換語言重新讀取這類問題只能靠實際操作發現 → 加入 jsdom／React Testing Library 的回歸測試
-- 「完成編輯」時短暫顯示「已儲存」；點逐字稿的句子文字也能跳到該時段播放
-- MKV／MOV 無法播放時改播音訊：尚未實測
-
-- NVIDIA CUDA 加速只有單元測試，沒有在有 NVIDIA 顯示卡的電腦上實測（使用者電腦只有內顯）
-- 英文介面：摘要內容、匯出的 Word／PDF 標題維持中文；逐字稿依影片語言
-- 沒有程式碼簽章：Windows SmartScreen 與防毒軟體（例如 Avast）第一次執行時會詢問
-- 在有 Avast 的使用者電腦上用正式版匯出 Word／PDF，驗證防毒軟體阻擋時的說明與「重新匯出失敗的項目」（Phase 08 fix2 尚未實際操作）；考慮程式碼簽章，減少防毒軟體詢問
-- macOS 實機驗證（Apple Silicon、Metal、Gatekeeper）與 Intel Mac
-- 程式碼簽章（減少 SmartScreen 與防毒軟體的提示）
+# MVR2T – Local Media Studio
+
+**把影片與錄音轉成逐字稿、摘要與心智圖，全部在你的電腦上完成。**
+
+*Your Media. Your Video. Your Record.*
+
+[![Release](https://img.shields.io/github/v/release/MocuAcqu/MVR2T?label=%E4%B8%8B%E8%BC%89&color=000000)](https://github.com/MocuAcqu/MVR2T/releases/latest)
+![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-000000)
+![Offline](https://img.shields.io/badge/AI-%E9%9B%A2%E7%B7%9A%E5%9F%B7%E8%A1%8C-000000)
+[![License: MIT](https://img.shields.io/badge/License-MIT-000000)](./LICENSE)
+
+**[⬇ 下載 Windows 安裝檔](https://github.com/MocuAcqu/MVR2T/releases/latest)** ・ [English](#english)
+
+</div>
+
+<br>
+
+<p align="center">
+  <img src="docs/images/home.png" width="860" alt="MVR2T 首頁：拖曳影片或錄音，或貼上 YouTube 網址">
+</p>
+
+## 為什麼是 MVR2T？
+
+開會錄音、課堂錄影、訪談、Podcast……整理成文字通常要花上好幾個小時。MVR2T 用本機 AI 幫你完成：
+
+- 🔒 **檔案不離開你的電腦**：語音辨識與摘要都在本機執行，不上傳到任何伺服器，也不需要帳號。
+- ✈️ **離線也能用**：AI 模型只需下載一次，之後沒有網路也能辨識、摘要、匯出。
+- 💸 **不需要付費 API**：不依賴雲端服務，也不按分鐘計費。
+- 🧹 **不保存處理紀錄**：匯入的檔案只存在本次工作階段，關閉程式就清除。
+
+## 功能
+
+| 功能 | 說明 |
+|---|---|
+| 🎬 **匯入影音** | 拖曳 MP4、MOV、MKV、WEBM 影片或 MP3、WAV、M4A、FLAC、AAC、OGG 錄音；也可以貼上 YouTube 網址（只下載音訊） |
+| 🗣️ **語音辨識** | Qwen3-ASR 辨識中文、英文、粵語、日文、韓文，並為每一句加上時間戳記；中文自動轉為繁體（台灣用語） |
+| ✏️ **逐字稿編輯** | 修改文字、合併、刪除、復原；內建播放器，點時間就從那一句開始播放 |
+| 📝 **AI 摘要** | 全文摘要、重點整理、條列筆記、主題分類、關鍵字、行動事項、問題與結論，重點可以跳回逐字稿原句 |
+| 🧠 **心智圖** | 自動整理成心智圖，可以拖曳、編輯、展開收合，匯出 PNG／SVG |
+| 📤 **匯出** | TXT、SRT、VTT、JSON、Markdown、CSV、Word、PDF，以及切段音檔 ZIP |
+| 🌏 **雙語介面** | 繁體中文／English，隨時在設定中切換 |
+
+## 畫面
+
+**逐字稿：每一句都有時間戳記，點時間就能播放，也能直接編輯**
+
+<p align="center"><img src="docs/images/transcript.png" width="860" alt="工作區的播放器與逐字稿"></p>
+
+**摘要：一次產生多種整理方式，重點附上時間，點一下回到原句**
+
+<p align="center"><img src="docs/images/summary.png" width="860" alt="摘要：全文摘要、重點整理、行動事項"></p>
+
+**心智圖：從中心主題向左右展開，可以拖曳與編輯**
+
+<p align="center"><img src="docs/images/mindmap.png" width="860" alt="可編輯的心智圖"></p>
+
+<table>
+  <tr>
+    <td width="50%"><b>模型管理</b>：一鍵下載、驗證、更新 AI 模型<br><img src="docs/images/models.png" alt="模型管理"></td>
+    <td width="50%"><b>English interface</b>：在設定中切換介面語言<br><img src="docs/images/english.png" alt="英文介面"></td>
+  </tr>
+</table>
+
+<sub>截圖中的會議錄音是以文字轉語音產生的示範內容。</sub>
+
+## 認識 Mono
+
+<img src="docs/images/mono-poses.svg" width="420" alt="Mono 的四個動作：待命、戴耳機聽音訊、捧著平板辨識、完成時歡呼">
+
+Mono 是 MVR2T 的吉祥物，一隻像麻糬的像素兔子。抽取音訊時牠會戴上耳機跟著節奏搖擺，辨識時捧著小平板認真看，完成時舉手歡呼。
+開啟「操作引導」後，Mono 會在每一步告訴你接下來要做什麼。
+
+## 下載與安裝
+
+1. 到 **[Releases](https://github.com/MocuAcqu/MVR2T/releases/latest)** 下載 `MVR2T-Setup-<版本>-x64.exe`。
+2. 執行安裝檔。這個版本**沒有數位簽章**，Windows 會顯示「Windows 已保護您的電腦」：按「**其他資訊**」→「**仍要執行**」。
+   防毒軟體（例如 Avast）可能會先掃描一次。安裝不需要系統管理員權限。
+3. 開啟 MVR2T，到「**模型管理**」下載「語音辨識」與「摘要與心智圖」（約 6 GB，只需下載一次）。
+4. 回到首頁，拖入一段影片或錄音就可以開始了。
+
+**系統需求**
+
+| 項目 | 需求 |
+|---|---|
+| 作業系統 | Windows 10／11（64 位元） |
+| 記憶體 | 8 GB 以上（建議 16 GB） |
+| 磁碟空間 | 約 10 GB（程式約 1.2 GB、AI 模型約 6 GB） |
+| 網路 | 只有第一次下載模型與使用 YouTube 功能時需要 |
+| 處理時間 | 只用 CPU 即可；以 i5 筆電為例，24 分鐘的錄音約需 30 分鐘辨識 |
+
+> 解除安裝時會保留 `%APPDATA%\MVR2T`（已下載的模型與設定），重新安裝不必再下載；要完全移除請手動刪除該資料夾。
+
+## 常見問題
+
+<details>
+<summary><b>真的完全不會上傳嗎？</b></summary>
+
+語音辨識（Qwen3-ASR）與摘要（Qwen3.5-4B，透過 llama.cpp）都在你的電腦上執行。程式只有在你下載模型、
+下載「YouTube 下載元件」或使用 YouTube 網址時才會連網。
+</details>
+
+<details>
+<summary><b>可以用 YouTube 影片嗎？</b></summary>
+
+可以，但請只用於你自己上傳、創用 CC 授權，或已取得權利人同意的影片。YouTube 的服務條款原則上不允許下載內容，
+是否符合條款與著作權規定由使用者自行負責。程式只下載音訊，存放在本次工作階段的暫存，不支援登入、會員限定、私人影片、直播與播放清單。
+</details>
+
+<details>
+<summary><b>有 Mac 版嗎？</b></summary>
+
+目前沒有。專案中已準備 Apple Silicon 的打包設定，但還沒有在 Mac 上驗證，見[開發者說明](./docs/DEVELOPMENT.md)。
+</details>
+
+<details>
+<summary><b>有 NVIDIA 顯示卡會比較快嗎？</b></summary>
+
+有 NVIDIA 顯示卡時，可以在「模型管理」下載「摘要 GPU 加速」，摘要會改用 GPU。這個功能目前只有自動化測試，還沒有在實機上驗證。
+語音辨識一律使用 CPU。
+</details>
+
+## English
+
+**MVR2T – Local Media Studio** turns videos and recordings into transcripts, summaries and mind maps **entirely on your own PC**.
+AI models are downloaded once and then run fully offline; nothing is uploaded and no account or paid API is needed.
+
+- Speech recognition with sentence timestamps (Qwen3-ASR: Chinese, English, Cantonese, Japanese, Korean)
+- Transcript editor with a built-in player, local AI summaries and an editable mind map
+- Export to TXT, SRT, VTT, JSON, Markdown, CSV, Word, PDF, PNG and SVG
+- **[Download the Windows installer](https://github.com/MocuAcqu/MVR2T/releases/latest)** (Windows 10/11 x64, 8 GB+ RAM, about 10 GB of disk).
+  The installer is unsigned: on the SmartScreen prompt choose “More info” → “Run anyway”.
+  Switch the interface in **Settings → Interface language**.
+
+## 開發者
+
+- [開發者說明](./docs/DEVELOPMENT.md)：環境設定、日常開發、打包 Windows 安裝程式、macOS（未驗證）
+- [進度與驗收紀錄](./docs/PROGRESS.md)：各階段的驗收清單與已知限制
+- [開發紀錄 DEV_LOG](./docs/DEV_LOG.md)・[產品規格 PROJECT_SPEC](./PROJECT_SPEC.md)・[設計規範](./docs/DESIGN_SYSTEM.md)
+
+技術：Electron ＋ React ＋ TypeScript（介面）、Python ＋ FastAPI（本機後端）、PyTorch ＋ Transformers（語音辨識）、llama.cpp（摘要）、FFmpeg（影音處理）。
+
+## 授權
+
+MVR2T 的程式碼以 [MIT License](./LICENSE) 釋出。內附或下載的第三方軟體與模型（FFmpeg、Electron、PyTorch、Transformers、
+llama.cpp、yt-dlp、Qwen 模型等）依各自的授權，見 [`THIRD_PARTY_NOTICES.md`](./apps/desktop/build-resources/THIRD_PARTY_NOTICES.md)。
