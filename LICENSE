@@ -19,10 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-This license covers the MVR2T source code in this repository. Third-party
-software and models used or bundled by MVR2T (for example FFmpeg, Electron,
-PyTorch, Transformers, llama.cpp, yt-dlp and the Qwen models) keep their own
-licenses; see apps/desktop/build-resources/THIRD_PARTY_NOTICES.md.
